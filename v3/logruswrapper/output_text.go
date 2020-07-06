@@ -9,11 +9,12 @@ import (
 )
 
 const (
+	grey   = 0
 	red    = 31
 	green  = 32
 	yellow = 33
 	blue   = 36
-	gray   = 37
+	white  = 37
 )
 
 type IQTextFormatter struct {
@@ -31,10 +32,7 @@ func (iqtf *IQTextFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 	}
 
 	levelText := "????"
-	preColourText := ""
-	postColourText := ""
-	_ = preColourText
-	_ = postColourText
+	traceColour := green
 
 	var levelColor int
 	switch entry.Level {
@@ -42,7 +40,8 @@ func (iqtf *IQTextFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 		levelColor = blue
 		levelText = "INFO"
 	case logrus.DebugLevel, logrus.TraceLevel:
-		levelColor = gray
+		levelColor = white
+		traceColour = grey
 		levelText = "DBUG"
 	case logrus.WarnLevel:
 		levelColor = yellow
@@ -97,7 +96,7 @@ func (iqtf *IQTextFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 
 	if originText != "" {
 		if iqtf.UseColour {
-			fmt.Fprintf(b, "\x1b[%dm%s\x1b[0m ", green, originText)
+			fmt.Fprintf(b, "\x1b[%dm%s\x1b[0m ", traceColour, originText)
 		} else {
 			fmt.Fprintf(b, "%s ", originText)
 		}

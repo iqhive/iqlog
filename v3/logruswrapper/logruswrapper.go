@@ -2,6 +2,7 @@ package logruswrapper
 
 import (
 	"os"
+	"runtime"
 	"strings"
 
 	srslog "github.com/RackSec/srslog"
@@ -52,7 +53,7 @@ func (l *LogrusWrapper) SetStructuredLogging(structured bool) {
 		return
 	}
 	l.Formatter = &IQTextFormatter{
-		UseColour: true,
+		UseColour: checkIfTerminal(l.Logger.Out) && (runtime.GOOS != "windows"),
 	}
 }
 
