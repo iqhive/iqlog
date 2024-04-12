@@ -63,7 +63,7 @@ func (l *LogrusWrapper) SetSyslogHost(newhost string) {
 		newhost = newhost + ":514"
 	}
 
-	if l.SyslogHost == newhost {
+	if l.SyslogHost == newhost && newhost != "" {
 		// no change
 		l.Debugf("Syslog host not changed to (%s) - already set to that", newhost)
 		return
