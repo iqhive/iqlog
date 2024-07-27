@@ -93,41 +93,49 @@ func KeepNumDirs(str string, lastn int) string {
 
 // Debugf is a global helper / convenience function for accessing the GlobalLogger object
 func Debugf(format string, args ...interface{}) {
+	format = strings.ReplaceAll(format, "%w", "%v")
 	GlobalLogger.WithFields(GetCallerFields()).Debugf(format, args...)
 }
 
 // Infof is a global helper / convenience function for accessing the GlobalLogger object
 func Infof(format string, args ...interface{}) {
+	format = strings.ReplaceAll(format, "%w", "%v")
 	GlobalLogger.WithFields(GetCallerFields()).Infof(format, args...)
 }
 
 // Printf is a global helper / convenience function for accessing the GlobalLogger object
 func Printf(format string, args ...interface{}) {
+	format = strings.ReplaceAll(format, "%w", "%v")
 	GlobalLogger.WithFields(GetCallerFields()).Printf(format, args...)
 }
 
 // Warnf is a global helper / convenience function for accessing the GlobalLogger object
 func Warnf(format string, args ...interface{}) {
+	format = strings.ReplaceAll(format, "%w", "%v")
 	GlobalLogger.WithFields(GetCallerFields()).Warnf(format, args...)
 }
 
 // Warningf is a global helper / convenience function for accessing the GlobalLogger object
 func Warningf(format string, args ...interface{}) {
+	format = strings.ReplaceAll(format, "%w", "%v")
 	GlobalLogger.WithFields(GetCallerFields()).Warningf(format, args...)
 }
 
 // Errorf is a global helper / convenience function for accessing the GlobalLogger object
 func Errorf(format string, args ...interface{}) {
+	format = strings.ReplaceAll(format, "%w", "%v")
 	GlobalLogger.WithFields(GetCallerFields()).Errorf(format, args...)
 }
 
 // Fatalf is a global helper / convenience function for accessing the GlobalLogger object
 func Fatalf(format string, args ...interface{}) {
+	format = strings.ReplaceAll(format, "%w", "%v")
 	GlobalLogger.WithFields(GetCallerFields()).Fatalf(format, args...)
 }
 
 // Panicf is a global helper / convenience function for accessing the GlobalLogger object
 func Panicf(format string, args ...interface{}) {
+	format = strings.ReplaceAll(format, "%w", "%v")
 	GlobalLogger.WithFields(GetCallerFields()).Panicf(format, args...)
 }
 
