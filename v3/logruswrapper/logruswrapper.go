@@ -97,3 +97,27 @@ func (l *LogrusWrapper) SetSyslogHost(newhost string) {
 		os.Exit(1)
 	}
 }
+
+func (l *LogrusWrapper) Debug(format string, args ...interface{}) {
+	l.Debugf(format, args...)
+}
+
+func (l *LogrusWrapper) Info(format string, args ...interface{}) {
+	l.Infof(format, args...)
+}
+
+func (l *LogrusWrapper) Warn(format string, args ...interface{}) {
+	l.Warnf(format, args...)
+}
+
+func (l *LogrusWrapper) Error(format string, args ...interface{}) {
+	l.Errorf(format, args...)
+}
+
+func (l *LogrusWrapper) Fatal(format string, args ...interface{}) {
+	l.Fatalf(format, args...)
+}
+
+func (l *LogrusWrapper) Panic(format string, args ...interface{}) {
+	l.Panicf(format, args...)
+}
