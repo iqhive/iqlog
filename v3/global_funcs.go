@@ -97,8 +97,20 @@ func Debugf(format string, args ...interface{}) {
 	GlobalLogger.WithFields(GetCallerFields()).Debugf(format, args...)
 }
 
+// Debug is a global helper / convenience function for accessing the GlobalLogger object
+func Debug(format string, args ...interface{}) {
+	format = strings.ReplaceAll(format, "%w", "%v")
+	GlobalLogger.WithFields(GetCallerFields()).Debugf(format, args...)
+}
+
 // Infof is a global helper / convenience function for accessing the GlobalLogger object
 func Infof(format string, args ...interface{}) {
+	format = strings.ReplaceAll(format, "%w", "%v")
+	GlobalLogger.WithFields(GetCallerFields()).Infof(format, args...)
+}
+
+// Info is a global helper / convenience function for accessing the GlobalLogger object
+func Info(format string, args ...interface{}) {
 	format = strings.ReplaceAll(format, "%w", "%v")
 	GlobalLogger.WithFields(GetCallerFields()).Infof(format, args...)
 }
@@ -109,8 +121,20 @@ func Printf(format string, args ...interface{}) {
 	GlobalLogger.WithFields(GetCallerFields()).Printf(format, args...)
 }
 
+// Print is a global helper / convenience function for accessing the GlobalLogger object
+func Print(format string, args ...interface{}) {
+	format = strings.ReplaceAll(format, "%w", "%v")
+	GlobalLogger.WithFields(GetCallerFields()).Printf(format, args...)
+}
+
 // Warnf is a global helper / convenience function for accessing the GlobalLogger object
 func Warnf(format string, args ...interface{}) {
+	format = strings.ReplaceAll(format, "%w", "%v")
+	GlobalLogger.WithFields(GetCallerFields()).Warnf(format, args...)
+}
+
+// Warn is a global helper / convenience function for accessing the GlobalLogger object
+func Warn(format string, args ...interface{}) {
 	format = strings.ReplaceAll(format, "%w", "%v")
 	GlobalLogger.WithFields(GetCallerFields()).Warnf(format, args...)
 }
@@ -121,8 +145,20 @@ func Warningf(format string, args ...interface{}) {
 	GlobalLogger.WithFields(GetCallerFields()).Warningf(format, args...)
 }
 
+// Warning is a global helper / convenience function for accessing the GlobalLogger object
+func Warning(format string, args ...interface{}) {
+	format = strings.ReplaceAll(format, "%w", "%v")
+	GlobalLogger.WithFields(GetCallerFields()).Warningf(format, args...)
+}
+
 // Errorf is a global helper / convenience function for accessing the GlobalLogger object
 func Errorf(format string, args ...interface{}) {
+	format = strings.ReplaceAll(format, "%w", "%v")
+	GlobalLogger.WithFields(GetCallerFields()).Errorf(format, args...)
+}
+
+// Error is a global helper / convenience function for accessing the GlobalLogger object
+func Error(format string, args ...interface{}) {
 	format = strings.ReplaceAll(format, "%w", "%v")
 	GlobalLogger.WithFields(GetCallerFields()).Errorf(format, args...)
 }
@@ -133,8 +169,20 @@ func Fatalf(format string, args ...interface{}) {
 	GlobalLogger.WithFields(GetCallerFields()).Fatalf(format, args...)
 }
 
+// Fatal is a global helper / convenience function for accessing the GlobalLogger object
+func Fatal(format string, args ...interface{}) {
+	format = strings.ReplaceAll(format, "%w", "%v")
+	GlobalLogger.WithFields(GetCallerFields()).Fatalf(format, args...)
+}
+
 // Panicf is a global helper / convenience function for accessing the GlobalLogger object
 func Panicf(format string, args ...interface{}) {
+	format = strings.ReplaceAll(format, "%w", "%v")
+	GlobalLogger.WithFields(GetCallerFields()).Panicf(format, args...)
+}
+
+// Panic is a global helper / convenience function for accessing the GlobalLogger object
+func Panic(format string, args ...interface{}) {
 	format = strings.ReplaceAll(format, "%w", "%v")
 	GlobalLogger.WithFields(GetCallerFields()).Panicf(format, args...)
 }
@@ -147,46 +195,6 @@ func Log(level logrus.Level, args ...interface{}) {
 // Trace is a global helper / convenience function for accessing the GlobalLogger object
 func Trace(args ...interface{}) {
 	GlobalLogger.WithFields(GetCallerFields()).Trace(args...)
-}
-
-// Debug is a global helper / convenience function for accessing the GlobalLogger object
-func Debug(args ...interface{}) {
-	GlobalLogger.WithFields(GetCallerFields()).Debug(args...)
-}
-
-// Info is a global helper / convenience function for accessing the GlobalLogger object
-func Info(args ...interface{}) {
-	GlobalLogger.WithFields(GetCallerFields()).Info(args...)
-}
-
-// Print is a global helper / convenience function for accessing the GlobalLogger object
-func Print(args ...interface{}) {
-	GlobalLogger.WithFields(GetCallerFields()).Print(args...)
-}
-
-// Warn is a global helper / convenience function for accessing the GlobalLogger object
-func Warn(args ...interface{}) {
-	GlobalLogger.WithFields(GetCallerFields()).Warn(args...)
-}
-
-// Warning is a global helper / convenience function for accessing the GlobalLogger object
-func Warning(args ...interface{}) {
-	GlobalLogger.WithFields(GetCallerFields()).Warning(args...)
-}
-
-// Error is a global helper / convenience function for accessing the GlobalLogger object
-func Error(args ...interface{}) {
-	GlobalLogger.WithFields(GetCallerFields()).Error(args...)
-}
-
-// Fatal is a global helper / convenience function for accessing the GlobalLogger object
-func Fatal(args ...interface{}) {
-	GlobalLogger.WithFields(GetCallerFields()).Fatal(args...)
-}
-
-// Panic is a global helper / convenience function for accessing the GlobalLogger object
-func Panic(args ...interface{}) {
-	GlobalLogger.WithFields(GetCallerFields()).Panic(args...)
 }
 
 // Logln is a global helper / convenience function for accessing the GlobalLogger object
