@@ -134,7 +134,8 @@ func (l logger) Handle(ctx context.Context, entry slog.Record) error {
 // both the receiver's attributes and the arguments.
 // The Handler owns the slice: it may retain, modify or discard it.
 func (l logger) WithAttrs(attrs []slog.Attr) slog.Handler {
-	return l // no structured logging
+	l.attrs = append(l.attrs, attrs...)
+	return l
 }
 
 // WithGroup returns a new Handler with the given group appended to

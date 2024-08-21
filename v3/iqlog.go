@@ -216,6 +216,7 @@ type Logger interface {
 	SetApplicationName(string)
 	SetDebugMode(bool)
 	SetSyslogHost(string)
+	WithFields(map[string]any) Logger
 
 	Tracef(format string, args ...interface{})
 	Debugf(format string, args ...interface{})
@@ -268,6 +269,8 @@ type logger struct {
 	IncludeTimePrefix bool
 	TimePrefixFormat  string
 	useColour         bool
+
+	attrs []slog.Attr
 }
 
 var _ Logger = new(logger)
@@ -454,4 +457,16 @@ func (l logger) Fatalln(args ...interface{}) {
 func (l logger) Panicln(args ...interface{}) {
 	l.slog.Log(l.ctx, levelPanic, fmt.Sprint(args...))
 	panic(fmt.Sprint(args...))
+}
+
+func (l logger) WithFields(fields map[string]any) Logger {
+	attrs := make([]slog.Attr, 0, len(fields))
+	for k, v := range fields {
+		attrs = append(attrs, slog.Attr{
+			Key:   k,
+			Value: slog.AnyValue(v),
+		})
+	}
+	l.slog = slog.New(l.WithAttrs(attrs))
+	return &l
 }
