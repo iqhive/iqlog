@@ -98,15 +98,16 @@ func (l logger) Handle(ctx context.Context, entry slog.Record) error {
 	}
 	originText := ""
 	if entry.PC != 0 {
-		var callers [4]uintptr
+		var callers [6]uintptr
 		runtime.Callers(3, callers[:])
 		var source *runtime.Func
 		var file string
 		var line int
 		for i := range callers {
 			source = runtime.FuncForPC(callers[i])
+			name := source.Name()
 			file, line = source.FileLine(callers[i])
-			if strings.HasSuffix(file, "v3/iqlog.go") {
+			if strings.HasSuffix(file, "v3/iqlog.go") || strings.HasSuffix(file, "v3/apierror.go") || strings.Contains(name, "Log") || strings.Contains(name, "APIError") {
 				continue
 			}
 			break
