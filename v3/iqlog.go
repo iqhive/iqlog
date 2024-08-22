@@ -217,6 +217,7 @@ type Logger interface {
 	SetDebugMode(bool)
 	SetSyslogHost(string)
 	WithFields(map[string]any) Logger
+	WithError(error) Logger
 
 	Tracef(format string, args ...interface{})
 	Debugf(format string, args ...interface{})
@@ -257,7 +258,9 @@ const (
 )
 
 type logger struct {
-	ctx  context.Context
+	ctx context.Context
+	err error
+
 	slog *slog.Logger
 
 	out io.Writer
@@ -468,5 +471,10 @@ func (l logger) WithFields(fields map[string]any) Logger {
 		})
 	}
 	l.slog = slog.New(l.WithAttrs(attrs))
+	return &l
+}
+
+func (l logger) WithError(err error) Logger {
+	l.err = err
 	return &l
 }
