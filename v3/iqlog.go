@@ -475,6 +475,10 @@ func (l logger) WithFields(fields map[string]any) Logger {
 }
 
 func (l logger) WithError(err error) Logger {
+	l.slog = slog.New(l.WithAttrs([]slog.Attr{{
+		Key:   "error",
+		Value: slog.AnyValue(err),
+	}}))
 	l.err = err
 	return &l
 }
