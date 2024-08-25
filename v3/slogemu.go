@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"os"
 	"time"
 )
 
@@ -149,6 +150,12 @@ func (l *slogEmu) Handle(ctx context.Context, entry slog.Record) error {
 }
 
 func (l *slogEmu) Log(ctx context.Context, level slog.Level, msg string) {
+	if l == nil {
+		return
+	}
+	if l.Handler == nil {
+		l.Handler = slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{})
+	}
 	l.Handler.Handle(ctx, slog.Record{
 		Level:   level,
 		Message: msg,
