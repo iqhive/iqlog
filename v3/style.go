@@ -30,8 +30,8 @@ const (
 // or the method does not take a context.
 // The context is passed so Enabled can use its values
 // to make a decision.
-func (l logger) Enabled(ctx context.Context, level slog.Level) bool {
-	if level == slog.LevelDebug {
+func (l logger) Enabled(ctx context.Context, level Level) bool {
+	if level == LevelDebug {
 		return l.debug
 	}
 	return true
@@ -61,24 +61,24 @@ func (l logger) Handle(ctx context.Context, entry slog.Record) error {
 		traceColour = green
 	)
 	var levelColor int
-	switch entry.Level {
-	case slog.LevelInfo:
+	switch Level(int(entry.Level)) {
+	case LevelInfo:
 		levelColor = blue
 		levelText = "INFO"
-	case slog.LevelDebug, levelTrace:
+	case LevelDebug, LevelTrace:
 		levelColor = white
 		traceColour = grey
 		levelText = "DBUG"
-	case slog.LevelWarn:
+	case LevelWarn:
 		levelColor = yellow
 		levelText = "WARN"
-	case slog.LevelError:
+	case LevelError:
 		levelColor = red
 		levelText = "ERRR"
-	case levelFatal:
+	case LevelFatal:
 		levelColor = red
 		levelText = "FATL"
-	case levelPanic:
+	case LevelPanic:
 		levelColor = red
 		levelText = "PANC"
 	default:
@@ -131,11 +131,10 @@ func (l logger) Handle(ctx context.Context, entry slog.Record) error {
 	return err
 }
 
-// WithAttrs returns a new Handler whose attributes consist of
+// WithAttrs returns a new logger whose attributes consist of
 // both the receiver's attributes and the arguments.
-// The Handler owns the slice: it may retain, modify or discard it.
-func (l logger) WithAttrs(attrs []slog.Attr) slog.Handler {
-	l.attrs = append(l.attrs, attrs...)
+func (l logger) WithAttrs(attrs []slog.Attr) logger {
+	l.slog = &slogEmu{Logger: l.slog.Logger.With()}
 	return l
 }
 
@@ -159,5 +158,6 @@ func (l logger) WithAttrs(attrs []slog.Attr) slog.Handler {
 //
 // If the name is empty, WithGroup returns the receiver.
 func (l logger) WithGroup(name string) slog.Handler {
-	return l // no structured logging
+	l.slog = &slogEmu{Logger: l.slog.Logger.WithGroup(name)}
+	return l.slog
 }

@@ -24,7 +24,12 @@ func NewGlobalIQLogger() Logger {
 		out:       os.Stderr,
 		useColour: terminal.IsTerminal(int(os.Stderr.Fd())) && (runtime.GOOS != "windows"),
 	}
-	l.slog = slog.New(l)
+
+	l.slog = &slogEmu{
+		Handler: slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{}),
+		Logger:  slog.Default(),
+	}
+
 	return l
 }
 
@@ -37,7 +42,7 @@ func Init(applicationName string, syslogHost string, debugMode bool) {
 	SetSyslogHost(syslogHost)
 	our, ok := GlobalLogger.(*logger)
 	if ok {
-		slog.SetDefault(our.slog)
+		slog.SetDefault(our.slog.Logger)
 	}
 }
 
@@ -62,12 +67,12 @@ func WithContext(ctx context.Context) Logger {
 	if !ok {
 		return &logger{
 			ctx:  ctx,
-			slog: slog.Default(),
+			slog: &slogEmu{Logger: slog.Default()},
 		}
 	} else {
 		return &logger{
 			ctx:             ctx,
-			slog:            slog.Default(),
+			slog:            &slogEmu{Logger: slog.Default()},
 			debug:           existing.debug,
 			applicationName: existing.applicationName,
 			syslogHost:      existing.syslogHost,
@@ -174,7 +179,7 @@ func Panicf(format string, args ...interface{}) { GlobalLogger.Panicf(format, ar
 func Panic(format string, args ...interface{}) { GlobalLogger.Panic(format, args...) }
 
 // Log is a global helper / convenience function for accessing the GlobalLogger object
-func Log(level slog.Level, args ...interface{}) { GlobalLogger.Log(level, args...) }
+func Log(level Level, args ...interface{}) { GlobalLogger.Log(level, args...) }
 
 // Trace is a global helper / convenience function for accessing the GlobalLogger object
 func Trace(args ...interface{}) { GlobalLogger.Trace(args) }
@@ -183,7 +188,7 @@ func Trace(args ...interface{}) { GlobalLogger.Trace(args) }
 func Tracef(format string, args ...interface{}) { GlobalLogger.Tracef(format, args...) }
 
 // Logln is a global helper / convenience function for accessing the GlobalLogger object
-func Logln(level slog.Level, args ...interface{}) { GlobalLogger.Logln(level, args) }
+func Logln(level Level, args ...interface{}) { GlobalLogger.Logln(level, args) }
 
 // Traceln is a global helper / convenience function for accessing the GlobalLogger object
 func Traceln(args ...interface{}) { GlobalLogger.Traceln(args) }
@@ -236,9 +241,9 @@ type Logger interface {
 	Fatal(format string, args ...interface{})
 	Panicf(format string, args ...interface{})
 	Panic(format string, args ...interface{})
-	Log(level slog.Level, args ...interface{})
+	Log(level Level, args ...interface{})
 	Trace(args ...interface{})
-	Logln(level slog.Level, args ...interface{})
+	Logln(level Level, args ...interface{})
 	Traceln(args ...interface{})
 	Debugln(args ...interface{})
 	Infoln(args ...interface{})
@@ -250,22 +255,31 @@ type Logger interface {
 	Panicln(args ...interface{})
 }
 
+// LogLevel is our own logging level, follows slog for now
+type Level int
+
 const (
-	levelPrint slog.Level = -1
-	levelTrace slog.Level = 1
-	levelPanic slog.Level = 9
-	levelFatal slog.Level = 10
+	LevelTrace Level = -3
+	LevelDebug Level = 0
+	LevelInfo  Level = 1
+	LevelPrint Level = 1
+	LevelWarn  Level = 2
+	LevelError Level = 3
+	LevelPanic Level = 9
+	LevelFatal Level = 10
 )
 
 type logger struct {
 	ctx context.Context
 	err error
 
-	slog *slog.Logger
+	// slog *slog.Logger
+	slog *slogEmu
 
 	out io.Writer
 
 	debug           bool
+	jsonMode        bool
 	applicationName string
 	syslogHost      string
 
@@ -300,7 +314,7 @@ func (l *logger) SetSyslogHost(newhost string) {
 	if syslogErr == nil && newSyslog != nil {
 		newSyslog.SetFormatter(srslog.RFC3164Formatter)
 		l.out = newSyslog
-		l.slog = slog.New(slog.NewJSONHandler(l.out, &slog.HandlerOptions{}))
+		l.jsonMode = true
 		if l.applicationName != "" {
 			l.Debugf("Log output for (%s) set to syslog to (%s)", l.applicationName, newhost)
 		} else {
@@ -354,12 +368,12 @@ func (l logger) Info(format string, args ...interface{}) {
 
 func (l logger) Printf(format string, args ...interface{}) {
 	format = strings.ReplaceAll(format, "%w", "%v")
-	l.slog.Log(l.ctx, levelPrint, fmt.Sprintf(format, args...))
+	l.slog.Log(l.ctx, slog.Level(LevelPrint), fmt.Sprintf(format, args...))
 }
 
 func (l logger) Print(format string, args ...interface{}) {
 	format = strings.ReplaceAll(format, "%w", "%v")
-	l.slog.Log(l.ctx, levelPrint, fmt.Sprintf(format, args...))
+	l.slog.Log(l.ctx, slog.Level(LevelPrint), fmt.Sprintf(format, args...))
 }
 
 func (l logger) Warnf(format string, args ...interface{}) {
@@ -394,42 +408,42 @@ func (l logger) Error(format string, args ...interface{}) {
 
 func (l logger) Fatalf(format string, args ...interface{}) {
 	format = strings.ReplaceAll(format, "%w", "%v")
-	l.slog.Log(l.ctx, levelFatal, fmt.Sprintf(format, args...))
+	l.slog.Log(l.ctx, slog.Level(LevelFatal), fmt.Sprintf(format, args...))
 	os.Exit(1)
 }
 
 func (l logger) Fatal(format string, args ...interface{}) {
 	format = strings.ReplaceAll(format, "%w", "%v")
-	l.slog.Log(l.ctx, levelFatal, fmt.Sprintf(format, args...))
+	l.slog.Log(l.ctx, slog.Level(LevelFatal), fmt.Sprintf(format, args...))
 	os.Exit(1)
 }
 
 func (l logger) Panicf(format string, args ...interface{}) {
 	format = strings.ReplaceAll(format, "%w", "%v")
-	l.slog.Log(l.ctx, levelPanic, fmt.Sprintf(format, args...))
+	l.slog.Log(l.ctx, slog.Level(LevelPanic), fmt.Sprintf(format, args...))
 	panic(fmt.Sprintf(format, args...))
 }
 
 func (l logger) Panic(format string, args ...interface{}) {
 	format = strings.ReplaceAll(format, "%w", "%v")
-	l.slog.Log(l.ctx, levelPanic, fmt.Sprintf(format, args...))
+	l.slog.Log(l.ctx, slog.Level(LevelPanic), fmt.Sprintf(format, args...))
 	panic(fmt.Sprintf(format, args...))
 }
 
-func (l logger) Log(level slog.Level, args ...interface{}) {
-	l.slog.Log(l.ctx, level, fmt.Sprint(args...))
+func (l logger) Log(level Level, args ...interface{}) {
+	l.slog.Log(l.ctx, slog.Level(level), fmt.Sprint(args...))
 }
 
 func (l logger) Trace(args ...interface{}) {
-	l.slog.Log(l.ctx, levelTrace, fmt.Sprint(args...))
+	l.slog.Log(l.ctx, slog.Level(LevelTrace), fmt.Sprint(args...))
 }
 
-func (l logger) Logln(level slog.Level, args ...interface{}) {
-	l.slog.Log(l.ctx, level, fmt.Sprint(args...))
+func (l logger) Logln(level Level, args ...interface{}) {
+	l.slog.Log(l.ctx, slog.Level(level), fmt.Sprint(args...))
 }
 
 func (l logger) Traceln(args ...interface{}) {
-	l.slog.Log(l.ctx, levelTrace, fmt.Sprint(args...))
+	l.slog.Log(l.ctx, slog.Level(LevelTrace), fmt.Sprint(args...))
 }
 
 func (l logger) Infoln(args ...interface{}) {
@@ -453,12 +467,12 @@ func (l logger) Errorln(args ...interface{}) {
 }
 
 func (l logger) Fatalln(args ...interface{}) {
-	l.slog.Log(l.ctx, levelFatal, fmt.Sprint(args...))
+	l.slog.Log(l.ctx, slog.Level(LevelFatal), fmt.Sprint(args...))
 	os.Exit(1)
 }
 
 func (l logger) Panicln(args ...interface{}) {
-	l.slog.Log(l.ctx, levelPanic, fmt.Sprint(args...))
+	l.slog.Log(l.ctx, slog.Level(LevelPanic), fmt.Sprint(args...))
 	panic(fmt.Sprint(args...))
 }
 
@@ -470,15 +484,14 @@ func (l logger) WithFields(fields map[string]any) Logger {
 			Value: slog.AnyValue(v),
 		})
 	}
-	l.slog = slog.New(l.WithAttrs(attrs))
+	l.slog = l.slog.WithAttrs(attrs).(*slogEmu)
 	return &l
 }
-
 func (l logger) WithError(err error) Logger {
-	l.slog = slog.New(l.WithAttrs([]slog.Attr{{
+	l.slog = l.slog.WithAttrs([]slog.Attr{{
 		Key:   "error",
 		Value: slog.AnyValue(err),
-	}}))
+	}}).(*slogEmu)
 	l.err = err
 	return &l
 }
