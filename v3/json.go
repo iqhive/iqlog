@@ -10,7 +10,7 @@ import (
 
 var hex = "0123456789abcdef"
 
-func WriteJSON(dst io.Writer, fields map[string]any) error {
+func WriteJSON(dst io.Writer, fields map[string]any, newLine bool) error {
 	buf := bytes.NewBuffer(nil)
 
 	buf.WriteByte('{')
@@ -50,7 +50,9 @@ func WriteJSON(dst io.Writer, fields map[string]any) error {
 	}
 
 	buf.WriteByte('}')
-	buf.WriteByte('\n')
+	if newLine {
+		buf.WriteByte('\n')
+	}
 	_, err := dst.Write(buf.Bytes())
 	return err
 }

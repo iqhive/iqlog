@@ -29,9 +29,10 @@ func NewGlobalIQLogger() Logger {
 	l.SetUseColour(terminal.IsTerminal(int(os.Stderr.Fd())) && (runtime.GOOS != "windows"))
 	l.SetWriter(os.Stderr)
 
+	sl := slog.NewTextHandler(l.out, &slog.HandlerOptions{})
 	l.slog = &slogEmu{
-		Handler: slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{}),
-		Logger:  slog.Default(),
+		Handler: sl,
+		Logger:  slog.New(sl),
 	}
 
 	return l
@@ -61,6 +62,9 @@ func NewIQLogger(jsonMode bool) *logger {
 func Init(applicationName string, syslogHost string, debugMode bool) {
 	SetApplicationName(applicationName)
 	SetDebugMode(debugMode)
+	SetCaptureCallers(true)
+	SetUseColour(true)
+	SetNewLine(true)
 	SetSyslogHost(syslogHost)
 	our, ok := GlobalLogger.(*logger)
 	if ok {
@@ -83,22 +87,40 @@ func SetDebugMode(debugMode bool) {
 	GlobalLogger.SetDebugMode(debugMode)
 }
 
+// sets the capture callers on the GlobalLogger
+func SetCaptureCallers(captureCallers bool) {
+	GlobalLogger.SetCaptureCallers(captureCallers)
+}
+
+// SetUseColour sets the use colour on the GlobalLogger
+func SetUseColour(useColour bool) {
+	GlobalLogger.SetUseColour(useColour)
+}
+
+// SetNewLine sets the new line on the GlobalLogger
+func SetNewLine(newLine bool) {
+	GlobalLogger.SetNewLine(newLine)
+}
+
+// SetJSONMode sets the JSON mode on the GlobalLogger
+func SetJSONMode(jsonMode bool) {
+	GlobalLogger.SetJSONMode(jsonMode)
+}
+
 // Add a context to the log entry.
-func WithContext(ctx context.Context) Logger {
-	existing, ok := GlobalLogger.(*logger)
-	if !ok {
+func WithContext(ctx context.Context) *logger {
+	if GlobalLogger == nil {
 		return &logger{
-			ctx:  ctx,
-			slog: &slogEmu{Logger: slog.Default()},
+			ctx:       ctx,
+			jsonMode:  false,
+			debug:     false,
+			out:       os.Stderr,
+			useColour: terminal.IsTerminal(int(os.Stderr.Fd())) && (runtime.GOOS != "windows"),
 		}
 	} else {
-		return &logger{
-			ctx:             ctx,
-			slog:            &slogEmu{Logger: slog.Default()},
-			debug:           existing.debug,
-			applicationName: existing.applicationName,
-			syslogHost:      existing.syslogHost,
-		}
+		nl := GlobalLogger.(*logger)
+		nl.ctx = ctx
+		return nl
 	}
 }
 
@@ -239,44 +261,6 @@ func Fatalln(args ...interface{}) { GlobalLogger.Fatalln(args) }
 // Panicln is a global helper / convenience function for accessing the GlobalLogger object
 func Panicln(args ...interface{}) { GlobalLogger.Panicln(args) }
 
-type Logger interface {
-	SetApplicationName(string)
-	SetDebugMode(bool)
-	SetSyslogHost(string)
-	WithFields(map[string]any) Logger
-	WithError(error) Logger
-
-	Tracef(format string, args ...interface{})
-	Debugf(format string, args ...interface{})
-	Debug(format string, args ...interface{})
-	Infof(format string, args ...interface{})
-	Info(format string, args ...interface{})
-	Printf(format string, args ...interface{})
-	Print(format string, args ...interface{})
-	Warnf(format string, args ...interface{})
-	Warn(format string, args ...interface{})
-	Warningf(format string, args ...interface{})
-	Warning(format string, args ...interface{})
-	Errorf(format string, args ...interface{})
-	Error(format string, args ...interface{})
-	Fatalf(format string, args ...interface{})
-	Fatal(format string, args ...interface{})
-	Panicf(format string, args ...interface{})
-	Panic(format string, args ...interface{})
-	Log(level Level, args ...interface{})
-	Trace(args ...interface{})
-	Logln(level Level, args ...interface{})
-	Traceln(args ...interface{})
-	Debugln(args ...interface{})
-	Infoln(args ...interface{})
-	Println(args ...interface{})
-	Warnln(args ...interface{})
-	Warningln(args ...interface{})
-	Errorln(args ...interface{})
-	Fatalln(args ...interface{})
-	Panicln(args ...interface{})
-}
-
 // LogLevel is our own logging level, follows slog for now
 type Level int
 
@@ -310,17 +294,27 @@ type logger struct {
 	IncludeTimePrefix bool
 	TimePrefixFormat  string
 	useColour         bool
+	captureCallers    bool
+	newLine           bool
 
 	attrs []slog.Attr
 }
 
-var _ Logger = new(logger)
-
 func (l *logger) SetApplicationName(name string) { l.applicationName = name }
 func (l *logger) SetDebugMode(d bool)            { l.debug = d }
 func (l *logger) SetUseColour(d bool)            { l.useColour = d }
-func (l *logger) SetWriter(w io.Writer)          { l.out = w }
-func (l *logger) SetJSONMode(d bool)             { l.jsonMode = d }
+func (l *logger) SetWriter(w io.Writer) {
+	l.out = w
+	sl := slog.NewTextHandler(l.out, &slog.HandlerOptions{})
+	l.slog = &slogEmu{
+		Handler: sl,
+		Logger:  slog.New(sl),
+	}
+}
+func (l *logger) SetJSONMode(d bool)       { l.jsonMode = d }
+func (l *logger) SetCaptureCallers(d bool) { l.captureCallers = d }
+func (l *logger) SetNewLine(d bool)        { l.newLine = d }
+
 func (l *logger) SetSyslogHost(newhost string) {
 	l.syslogHost = newhost
 	if newhost != "" && strings.Index(newhost, ":") == -1 {
@@ -368,7 +362,7 @@ func (l logger) Debugf(format string, args ...interface{}) {
 		fields := make(map[string]any)
 		fields["level"] = "debug"
 		fields["message"] = fmt.Sprintf(format, args...)
-		WriteJSON(l.out, fields)
+		WriteJSON(l.out, fields, l.newLine)
 		return
 	}
 	l.slog.DebugContext(l.ctx, fmt.Sprintf(format, args...))
@@ -383,7 +377,7 @@ func (l logger) Debug(format string, args ...interface{}) {
 		fields := make(map[string]any)
 		fields["level"] = "debug"
 		fields["message"] = fmt.Sprintf(format, args...)
-		WriteJSON(l.out, fields)
+		WriteJSON(l.out, fields, l.newLine)
 		return
 	}
 	l.slog.DebugContext(l.ctx, fmt.Sprintf(format, args...))
@@ -401,7 +395,7 @@ func (l logger) Infof(format string, args ...interface{}) {
 		fields := make(map[string]any)
 		fields["level"] = "info"
 		fields["message"] = fmt.Sprintf(format, args...)
-		WriteJSON(l.out, fields)
+		WriteJSON(l.out, fields, l.newLine)
 		return
 	}
 	l.slog.InfoContext(l.ctx, fmt.Sprintf(format, args...))
@@ -412,7 +406,7 @@ func (l logger) Info(format string, args ...interface{}) {
 		fields := make(map[string]any)
 		fields["level"] = "info"
 		fields["message"] = fmt.Sprintf(format, args...)
-		WriteJSON(l.out, fields)
+		WriteJSON(l.out, fields, l.newLine)
 		return
 	}
 	format = strings.ReplaceAll(format, "%w", "%v")
@@ -425,7 +419,7 @@ func (l logger) Printf(format string, args ...interface{}) {
 		fields := make(map[string]any)
 		fields["level"] = "info"
 		fields["message"] = format
-		WriteJSON(l.out, fields)
+		WriteJSON(l.out, fields, l.newLine)
 		return
 	}
 	l.slog.Log(l.ctx, slog.Level(LevelPrint), fmt.Sprintf(format, args...))
@@ -437,7 +431,7 @@ func (l logger) Print(format string, args ...interface{}) {
 		fields := make(map[string]any)
 		fields["level"] = "info"
 		fields["message"] = format
-		WriteJSON(l.out, fields)
+		WriteJSON(l.out, fields, l.newLine)
 		return
 	}
 	l.slog.Log(l.ctx, slog.Level(LevelPrint), fmt.Sprintf(format, args...))
@@ -449,7 +443,7 @@ func (l logger) Warnf(format string, args ...interface{}) {
 		fields := make(map[string]any)
 		fields["level"] = "warn"
 		fields["message"] = fmt.Sprintf(format, args...)
-		WriteJSON(l.out, fields)
+		WriteJSON(l.out, fields, l.newLine)
 		return
 	}
 	l.slog.WarnContext(l.ctx, fmt.Sprintf(format, args...))
@@ -461,7 +455,7 @@ func (l logger) Warn(format string, args ...interface{}) {
 		fields := make(map[string]any)
 		fields["level"] = "warn"
 		fields["message"] = fmt.Sprintf(format, args...)
-		WriteJSON(l.out, fields)
+		WriteJSON(l.out, fields, l.newLine)
 		return
 	}
 
@@ -474,7 +468,7 @@ func (l logger) Warningf(format string, args ...interface{}) {
 		fields := make(map[string]any)
 		fields["level"] = "warn"
 		fields["message"] = fmt.Sprintf(format, args...)
-		WriteJSON(l.out, fields)
+		WriteJSON(l.out, fields, l.newLine)
 		return
 	}
 	l.slog.WarnContext(l.ctx, fmt.Sprintf(format, args...))
@@ -486,7 +480,7 @@ func (l logger) Warning(format string, args ...interface{}) {
 		fields := make(map[string]any)
 		fields["level"] = "warn"
 		fields["message"] = fmt.Sprintf(format, args...)
-		WriteJSON(l.out, fields)
+		WriteJSON(l.out, fields, l.newLine)
 		return
 	}
 	l.slog.WarnContext(l.ctx, fmt.Sprintf(format, args...))
@@ -498,7 +492,7 @@ func (l logger) Errorf(format string, args ...interface{}) {
 		fields := make(map[string]any)
 		fields["level"] = "error"
 		fields["message"] = fmt.Sprintf(format, args...)
-		WriteJSON(l.out, fields)
+		WriteJSON(l.out, fields, l.newLine)
 		return
 	}
 	l.slog.ErrorContext(l.ctx, fmt.Sprintf(format, args...))
@@ -510,7 +504,7 @@ func (l logger) Error(format string, args ...interface{}) {
 		fields := make(map[string]any)
 		fields["level"] = "error"
 		fields["message"] = fmt.Sprintf(format, args...)
-		WriteJSON(l.out, fields)
+		WriteJSON(l.out, fields, l.newLine)
 		return
 	}
 	l.slog.ErrorContext(l.ctx, fmt.Sprintf(format, args...))
@@ -522,7 +516,7 @@ func (l logger) Fatalf(format string, args ...interface{}) {
 		fields := make(map[string]any)
 		fields["level"] = "fatal"
 		fields["message"] = fmt.Sprintf(format, args...)
-		WriteJSON(l.out, fields)
+		WriteJSON(l.out, fields, l.newLine)
 		return
 	}
 	l.slog.Log(l.ctx, slog.Level(LevelFatal), fmt.Sprintf(format, args...))
@@ -535,7 +529,7 @@ func (l logger) Fatal(format string, args ...interface{}) {
 		fields := make(map[string]any)
 		fields["level"] = "fatal"
 		fields["message"] = fmt.Sprintf(format, args...)
-		WriteJSON(l.out, fields)
+		WriteJSON(l.out, fields, l.newLine)
 		return
 	}
 	l.slog.Log(l.ctx, slog.Level(LevelFatal), fmt.Sprintf(format, args...))
@@ -548,7 +542,7 @@ func (l logger) Panicf(format string, args ...interface{}) {
 		fields := make(map[string]any)
 		fields["level"] = "panic"
 		fields["message"] = fmt.Sprintf(format, args...)
-		WriteJSON(l.out, fields)
+		WriteJSON(l.out, fields, l.newLine)
 		return
 	}
 	l.slog.Log(l.ctx, slog.Level(LevelPanic), fmt.Sprintf(format, args...))
@@ -561,7 +555,7 @@ func (l logger) Panic(format string, args ...interface{}) {
 		fields := make(map[string]any)
 		fields["level"] = "panic"
 		fields["message"] = fmt.Sprintf(format, args...)
-		WriteJSON(l.out, fields)
+		WriteJSON(l.out, fields, l.newLine)
 		return
 	}
 	l.slog.Log(l.ctx, slog.Level(LevelPanic), fmt.Sprintf(format, args...))

@@ -1,0 +1,45 @@
+package iqlog
+
+type Logger interface {
+	SetApplicationName(string)
+	SetDebugMode(bool)
+	SetUseColour(bool)
+	SetCaptureCallers(bool)
+	SetNewLine(bool)
+	SetJSONMode(bool)
+	SetSyslogHost(string)
+	WithFields(map[string]any) Logger
+	WithError(error) Logger
+
+	Tracef(format string, args ...interface{})
+	Debugf(format string, args ...interface{})
+	Debug(format string, args ...interface{})
+	Infof(format string, args ...interface{})
+	Info(format string, args ...interface{})
+	Printf(format string, args ...interface{})
+	Print(format string, args ...interface{})
+	Warnf(format string, args ...interface{})
+	Warn(format string, args ...interface{})
+	Warningf(format string, args ...interface{})
+	Warning(format string, args ...interface{})
+	Errorf(format string, args ...interface{})
+	Error(format string, args ...interface{})
+	Fatalf(format string, args ...interface{})
+	Fatal(format string, args ...interface{})
+	Panicf(format string, args ...interface{})
+	Panic(format string, args ...interface{})
+	Log(level Level, args ...interface{})
+	Trace(args ...interface{})
+	Logln(level Level, args ...interface{})
+	Traceln(args ...interface{})
+	Debugln(args ...interface{})
+	Infoln(args ...interface{})
+	Println(args ...interface{})
+	Warnln(args ...interface{})
+	Warningln(args ...interface{})
+	Errorln(args ...interface{})
+	Fatalln(args ...interface{})
+	Panicln(args ...interface{})
+}
+
+var _ Logger = new(logger)
