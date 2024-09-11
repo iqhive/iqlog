@@ -1,279 +1,21 @@
 package iqlog
 
 import (
+	"bytes"
 	"context"
-	"fmt"
 	"io"
 	"log/slog"
 	"os"
 	"runtime"
 	"strconv"
-	"strings"
+	"sync"
 	"time"
 
-	srslog "github.com/RackSec/srslog"
 	"golang.org/x/crypto/ssh/terminal"
 )
 
 // GlobalLogger is used by the Global Logging functions
-var GlobalLogger Logger = NewGlobalIQLogger()
-
-// NewIQLogger creates and return a new Logger
-func NewGlobalIQLogger() Logger {
-
-	l := NewIQLogger(false)
-	debugStr := os.Getenv("IQLOG_DEBUG")
-	if b, _ := strconv.ParseBool(debugStr); b {
-		l.SetDebugMode(true)
-	}
-	l.SetUseColour(terminal.IsTerminal(int(os.Stderr.Fd())) && (runtime.GOOS != "windows"))
-	l.SetWriter(os.Stderr)
-
-	sl := slog.NewTextHandler(l.out, &slog.HandlerOptions{})
-	l.slog = &slogEmu{
-		Handler: sl,
-		Logger:  slog.New(sl),
-	}
-
-	return l
-}
-
-func NewIQLogger(jsonMode bool) *logger {
-	logger := &logger{
-		jsonMode:          jsonMode,
-		debug:             false,
-		logFields:         NewLogFields(),
-		IncludeTimePrefix: false,
-		TimePrefixFormat:  time.StampMicro,
-		out:               os.Stderr,
-	}
-	if jsonMode {
-		logger.useColour = false
-	} else {
-		logger.useColour = terminal.IsTerminal(int(os.Stderr.Fd())) && (runtime.GOOS != "windows")
-	}
-
-	return logger
-}
-
-// Init performs all the base configuration of the GlobalLogger
-// This function is typically called when the application is starting up
-// It sets log/slog and log's default output to use the iqlog format.
-func Init(applicationName string, syslogHost string, debugMode bool) {
-	SetApplicationName(applicationName)
-	SetDebugMode(debugMode)
-	SetCaptureCallers(true)
-	SetUseColour(true)
-	SetNewLine(true)
-	SetSyslogHost(syslogHost)
-	our, ok := GlobalLogger.(*logger)
-	if ok {
-		slog.SetDefault(our.slog.Logger)
-	}
-}
-
-// SetApplicationName sets the application name on the GlobalLogger
-func SetApplicationName(applicationName string) {
-	GlobalLogger.SetApplicationName(applicationName)
-}
-
-// SetSyslogHost sets the syslog host on the GlobalLogger
-func SetSyslogHost(host string) {
-	GlobalLogger.SetSyslogHost(host)
-}
-
-// SetDebugMode sets the syslog host on the GlobalLogger
-func SetDebugMode(debugMode bool) {
-	GlobalLogger.SetDebugMode(debugMode)
-}
-
-// sets the capture callers on the GlobalLogger
-func SetCaptureCallers(captureCallers bool) {
-	GlobalLogger.SetCaptureCallers(captureCallers)
-}
-
-// SetUseColour sets the use colour on the GlobalLogger
-func SetUseColour(useColour bool) {
-	GlobalLogger.SetUseColour(useColour)
-}
-
-// SetNewLine sets the new line on the GlobalLogger
-func SetNewLine(newLine bool) {
-	GlobalLogger.SetNewLine(newLine)
-}
-
-// SetJSONMode sets the JSON mode on the GlobalLogger
-func SetJSONMode(jsonMode bool) {
-	GlobalLogger.SetJSONMode(jsonMode)
-}
-
-// Add a context to the log entry.
-func WithContext(ctx context.Context) *logger {
-	if GlobalLogger == nil {
-		return &logger{
-			ctx:       ctx,
-			jsonMode:  false,
-			debug:     false,
-			out:       os.Stderr,
-			useColour: terminal.IsTerminal(int(os.Stderr.Fd())) && (runtime.GOOS != "windows"),
-		}
-	} else {
-		nl := GlobalLogger.(*logger)
-		nl.ctx = ctx
-		return nl
-	}
-}
-
-// Maximum Number of paths to log
-var NumPathsToLog = 1
-
-// How many callers are we going back
-var CallersNum = 2
-
-// GetCallerFields returns information about the caller, specifically
-// the function name, the filename and line number in the file
-func GetCallerFields() map[string]any {
-	resp := make(map[string]any)
-
-	OriginFile := ""
-	OriginLine := 0
-	OriginFunc := ""
-
-	if pc, file, line, ok := runtime.Caller(CallersNum); ok {
-		OriginFile = file
-		OriginLine = line
-		runtimeFuncPtr := runtime.FuncForPC(pc)
-		OriginFunc = runtimeFuncPtr.Name()
-	}
-
-	OriginFunc = KeepNumDirs(OriginFunc, NumPathsToLog)
-	OriginFile = KeepNumDirs(OriginFile, NumPathsToLog)
-
-	if OriginFile != "" {
-		resp["origin_file"] = OriginFile
-	}
-	if OriginLine > 0 {
-		resp["origin_line"] = OriginLine
-	}
-	if OriginFunc != "" {
-		resp["origin_func"] = OriginFunc
-	}
-	return resp
-}
-
-func keepNumDirs(str string, lastn int, startat int) string {
-	numFound := strings.Count(str[startat:], "/")
-	if numFound > lastn {
-		return keepNumDirs(str, lastn, 1+startat+strings.Index(str[startat:], "/"))
-	}
-	return str[startat:]
-}
-
-// KeepNumDirs returns the lastn number of directories in a path+filename combo
-func KeepNumDirs(str string, lastn int) string {
-	return keepNumDirs(str, lastn, 0)
-}
-
-// Debugf is a global helper / convenience function for accessing the GlobalLogger object
-func Debugf(format string, args ...interface{}) { GlobalLogger.Debugf(format, args...) }
-
-// Debug is a global helper / convenience function for accessing the GlobalLogger object
-func Debug(format string, args ...interface{}) { GlobalLogger.Debug(format, args...) }
-
-// Infof is a global helper / convenience function for accessing the GlobalLogger object
-func Infof(format string, args ...interface{}) { GlobalLogger.Infof(format, args...) }
-
-// Info is a global helper / convenience function for accessing the GlobalLogger object
-func Info(format string, args ...interface{}) { GlobalLogger.Info(format, args...) }
-
-// Printf is a global helper / convenience function for accessing the GlobalLogger object
-func Printf(format string, args ...interface{}) { GlobalLogger.Printf(format, args...) }
-
-// Print is a global helper / convenience function for accessing the GlobalLogger object
-func Print(format string, args ...interface{}) { GlobalLogger.Print(format, args...) }
-
-// Warnf is a global helper / convenience function for accessing the GlobalLogger object
-func Warnf(format string, args ...interface{}) { GlobalLogger.Warnf(format, args...) }
-
-// Warn is a global helper / convenience function for accessing the GlobalLogger object
-func Warn(format string, args ...interface{}) { GlobalLogger.Warn(format, args...) }
-
-// Warningf is a global helper / convenience function for accessing the GlobalLogger object
-func Warningf(format string, args ...interface{}) { GlobalLogger.Warningf(format, args...) }
-
-// Warning is a global helper / convenience function for accessing the GlobalLogger object
-func Warning(format string, args ...interface{}) { GlobalLogger.Warning(format, args...) }
-
-// Errorf is a global helper / convenience function for accessing the GlobalLogger object
-func Errorf(format string, args ...interface{}) { GlobalLogger.Errorf(format, args...) }
-
-// Error is a global helper / convenience function for accessing the GlobalLogger object
-func Error(format string, args ...interface{}) { GlobalLogger.Error(format, args...) }
-
-// Fatalf is a global helper / convenience function for accessing the GlobalLogger object
-func Fatalf(format string, args ...interface{}) { GlobalLogger.Fatalf(format, args...) }
-
-// Fatal is a global helper / convenience function for accessing the GlobalLogger object
-func Fatal(format string, args ...interface{}) { GlobalLogger.Fatal(format, args...) }
-
-// Panicf is a global helper / convenience function for accessing the GlobalLogger object
-func Panicf(format string, args ...interface{}) { GlobalLogger.Panicf(format, args...) }
-
-// Panic is a global helper / convenience function for accessing the GlobalLogger object
-func Panic(format string, args ...interface{}) { GlobalLogger.Panic(format, args...) }
-
-// Log is a global helper / convenience function for accessing the GlobalLogger object
-func Log(level Level, args ...interface{}) { GlobalLogger.Log(level, args...) }
-
-// Trace is a global helper / convenience function for accessing the GlobalLogger object
-func Trace(args ...interface{}) { GlobalLogger.Trace(args) }
-
-// Tracef is a global helper / convenience function for accessing the GlobalLogger object
-func Tracef(format string, args ...interface{}) { GlobalLogger.Tracef(format, args...) }
-
-// Logln is a global helper / convenience function for accessing the GlobalLogger object
-func Logln(level Level, args ...interface{}) { GlobalLogger.Logln(level, args) }
-
-// Traceln is a global helper / convenience function for accessing the GlobalLogger object
-func Traceln(args ...interface{}) { GlobalLogger.Traceln(args) }
-
-// Debugln is a global helper / convenience function for accessing the GlobalLogger object
-func Debugln(args ...interface{}) { GlobalLogger.Debugln(args) }
-
-// Infoln is a global helper / convenience function for accessing the GlobalLogger object
-func Infoln(args ...interface{}) { GlobalLogger.Infoln(args) }
-
-// Println is a global helper / convenience function for accessing the GlobalLogger object
-func Println(args ...interface{}) { GlobalLogger.Println(args) }
-
-// Warnln is a global helper / convenience function for accessing the GlobalLogger object
-func Warnln(args ...interface{}) { GlobalLogger.Warnln(args) }
-
-// Warningln is a global helper / convenience function for accessing the GlobalLogger object
-func Warningln(args ...interface{}) { GlobalLogger.Warningln(args) }
-
-// Errorln is a global helper / convenience function for accessing the GlobalLogger object
-func Errorln(args ...interface{}) { GlobalLogger.Errorln(args) }
-
-// Fatalln is a global helper / convenience function for accessing the GlobalLogger object
-func Fatalln(args ...interface{}) { GlobalLogger.Fatalln(args) }
-
-// Panicln is a global helper / convenience function for accessing the GlobalLogger object
-func Panicln(args ...interface{}) { GlobalLogger.Panicln(args) }
-
-// LogLevel is our own logging level, follows slog for now
-type Level int
-
-const (
-	LevelTrace Level = -3
-	LevelDebug Level = 0
-	LevelInfo  Level = 1
-	LevelPrint Level = 1
-	LevelWarn  Level = 2
-	LevelError Level = 3
-	LevelPanic Level = 9
-	LevelFatal Level = 10
-)
+var GlobalLogger *logger = NewGlobalIQLogger()
 
 type logger struct {
 	ctx context.Context
@@ -296,334 +38,109 @@ type logger struct {
 	useColour         bool
 	captureCallers    bool
 	newLine           bool
+	mu                sync.Mutex
 
-	attrs []slog.Attr
+	// A sync.Pool to handle re-usable buffers to reduce allocations.
+	bufferPool sync.Pool
+
+	// TODO: consider adding a scratch buffer for type-to-string conversions here
+	// TODO: benchmark the performance of this vs the current method
+
+	// Instead of storing LogFields, store a LogRecord template
+	// for "WithField" calls:
+	baseRecord LogRecord
 }
 
-func (l *logger) SetApplicationName(name string) { l.applicationName = name }
-func (l *logger) SetDebugMode(d bool)            { l.debug = d }
-func (l *logger) SetUseColour(d bool)            { l.useColour = d }
-func (l *logger) SetWriter(w io.Writer) {
-	l.out = w
+// NewIQLogger creates and return a new Logger
+func NewGlobalIQLogger() *logger {
+
+	l := NewIQLogger(false)
+	debugStr := os.Getenv("IQLOG_DEBUG")
+	if b, _ := strconv.ParseBool(debugStr); b {
+		l.SetDebugMode(true)
+	}
+	l.SetUseColour(terminal.IsTerminal(int(os.Stderr.Fd())) && (runtime.GOOS != "windows"))
+	l.SetWriter(os.Stderr)
+
 	sl := slog.NewTextHandler(l.out, &slog.HandlerOptions{})
 	l.slog = &slogEmu{
 		Handler: sl,
 		Logger:  slog.New(sl),
 	}
-}
-func (l *logger) SetJSONMode(d bool)       { l.jsonMode = d }
-func (l *logger) SetCaptureCallers(d bool) { l.captureCallers = d }
-func (l *logger) SetNewLine(d bool)        { l.newLine = d }
 
-func (l *logger) SetSyslogHost(newhost string) {
-	l.syslogHost = newhost
-	if newhost != "" && strings.Index(newhost, ":") == -1 {
-		// make sure we have a (UDP) port in the host definition
-		newhost = newhost + ":514"
+	return l
+}
+
+func NewIQLogger(jsonMode bool) *logger {
+	logger := &logger{
+		debug:             false,
+		logFields:         NewLogFields(),
+		captureCallers:    false,
+		IncludeTimePrefix: false,
+		TimePrefixFormat:  time.StampMicro,
+		out:               os.Stderr,
+		newLine:           true,
 	}
-	if l.syslogHost == newhost && newhost == "" {
-		// no change
-		l.Debugf("Syslog host not changed to (%s) - already set to that", newhost)
-		return
+	if jsonMode {
+		logger.SetJSONMode(true)
+	} else {
+		logger.SetJSONMode(false)
+		logger.useColour = terminal.IsTerminal(int(os.Stderr.Fd())) && (runtime.GOOS != "windows")
 	}
-	if newhost == "" {
-		l.Infof("Log output changed to StdErr", newhost)
-		l.out = os.Stderr
-		return
+
+	logger.bufferPool = sync.Pool{
+		New: func() any {
+			return new(bytes.Buffer)
+		},
 	}
-	newSyslog, syslogErr := srslog.Dial("udp", newhost, srslog.LOG_DAEMON|srslog.LOG_INFO, l.applicationName)
-	if syslogErr == nil && newSyslog != nil {
-		newSyslog.SetFormatter(srslog.RFC3164Formatter)
-		l.out = newSyslog
-		l.jsonMode = true
-		if l.applicationName != "" {
-			l.Debugf("Log output for (%s) set to syslog to (%s)", l.applicationName, newhost)
-		} else {
-			l.Debugf("Log output set to syslog to (%s)", newhost)
+
+	return logger
+}
+
+// Init performs all the base configuration of the GlobalLogger
+// This function is typically called when the application is starting up
+// It sets log/slog and log's default output to use the iqlog format.
+func Init(applicationName string, syslogHost string, debugMode bool) {
+	SetApplicationName(applicationName)
+	SetDebugMode(debugMode)
+	SetCaptureCallers(true)
+	SetUseColour(true)
+	SetNewLine(true)
+	SetSyslogHost(syslogHost)
+	if GlobalLogger == nil {
+		GlobalLogger = NewGlobalIQLogger()
+		slog.SetDefault(GlobalLogger.slog.Logger)
+	}
+}
+
+// Enabled reports whether the handler handles records at the given level.
+func (l *logger) Enabled(ctx context.Context, level Level) bool {
+	if level == LevelDebug {
+		return l.debug
+	}
+	return true
+}
+
+// WithGroup returns a new Handler with the given group appended to
+// the receiver's existing groups.
+// Implementation is a no-op here:
+func (l *logger) WithGroup(name string) *logger {
+	return l
+}
+
+// Add a context to the log entry.
+func WithContext(ctx context.Context) *logger {
+	if GlobalLogger == nil {
+		return &logger{
+			ctx:       ctx,
+			jsonMode:  false,
+			debug:     false,
+			out:       os.Stderr,
+			useColour: terminal.IsTerminal(int(os.Stderr.Fd())) && (runtime.GOOS != "windows"),
 		}
 	} else {
-		l.Errorf("ERROR: Unable to init syslog to (%s): %v", newhost, syslogErr)
-		os.Exit(1)
+		nl := GlobalLogger
+		nl.ctx = ctx
+		return nl
 	}
-}
-
-func (l logger) Tracef(format string, args ...interface{}) {
-	// var pcs [1]uintptr
-	// runtime.Callers(2, pcs[:])
-	l.slog.Log(l.ctx, -1, fmt.Sprintf(format, args...))
-}
-
-func (l logger) Debugf(format string, args ...interface{}) {
-	if !l.debug {
-		return
-	}
-	format = strings.ReplaceAll(format, "%w", "%v")
-	if l.jsonMode {
-		fields := make(map[string]any)
-		fields["level"] = "debug"
-		fields["message"] = fmt.Sprintf(format, args...)
-		WriteJSON(l.out, fields, l.newLine)
-		return
-	}
-	l.slog.DebugContext(l.ctx, fmt.Sprintf(format, args...))
-}
-
-func (l logger) Debug(format string, args ...interface{}) {
-	if !l.debug {
-		return
-	}
-	format = strings.ReplaceAll(format, "%w", "%v")
-	if l.jsonMode {
-		fields := make(map[string]any)
-		fields["level"] = "debug"
-		fields["message"] = fmt.Sprintf(format, args...)
-		WriteJSON(l.out, fields, l.newLine)
-		return
-	}
-	l.slog.DebugContext(l.ctx, fmt.Sprintf(format, args...))
-}
-func (l logger) Debugln(args ...interface{}) {
-	if !l.debug {
-		return
-	}
-	l.slog.DebugContext(l.ctx, fmt.Sprint(args...))
-}
-
-func (l logger) Infof(format string, args ...interface{}) {
-	format = strings.ReplaceAll(format, "%w", "%v")
-	if l.jsonMode {
-		fields := make(map[string]any)
-		fields["level"] = "info"
-		fields["message"] = fmt.Sprintf(format, args...)
-		WriteJSON(l.out, fields, l.newLine)
-		return
-	}
-	l.slog.InfoContext(l.ctx, fmt.Sprintf(format, args...))
-}
-
-func (l logger) Info(format string, args ...interface{}) {
-	if l.jsonMode {
-		fields := make(map[string]any)
-		fields["level"] = "info"
-		fields["message"] = fmt.Sprintf(format, args...)
-		WriteJSON(l.out, fields, l.newLine)
-		return
-	}
-	format = strings.ReplaceAll(format, "%w", "%v")
-	l.slog.InfoContext(l.ctx, fmt.Sprintf(format, args...))
-}
-
-func (l logger) Printf(format string, args ...interface{}) {
-	format = strings.ReplaceAll(format, "%w", "%v")
-	if l.jsonMode {
-		fields := make(map[string]any)
-		fields["level"] = "info"
-		fields["message"] = format
-		WriteJSON(l.out, fields, l.newLine)
-		return
-	}
-	l.slog.Log(l.ctx, slog.Level(LevelPrint), fmt.Sprintf(format, args...))
-}
-
-func (l logger) Print(format string, args ...interface{}) {
-	format = strings.ReplaceAll(format, "%w", "%v")
-	if l.jsonMode {
-		fields := make(map[string]any)
-		fields["level"] = "info"
-		fields["message"] = format
-		WriteJSON(l.out, fields, l.newLine)
-		return
-	}
-	l.slog.Log(l.ctx, slog.Level(LevelPrint), fmt.Sprintf(format, args...))
-}
-
-func (l logger) Warnf(format string, args ...interface{}) {
-	format = strings.ReplaceAll(format, "%w", "%v")
-	if l.jsonMode {
-		fields := make(map[string]any)
-		fields["level"] = "warn"
-		fields["message"] = fmt.Sprintf(format, args...)
-		WriteJSON(l.out, fields, l.newLine)
-		return
-	}
-	l.slog.WarnContext(l.ctx, fmt.Sprintf(format, args...))
-}
-
-func (l logger) Warn(format string, args ...interface{}) {
-	format = strings.ReplaceAll(format, "%w", "%v")
-	if l.jsonMode {
-		fields := make(map[string]any)
-		fields["level"] = "warn"
-		fields["message"] = fmt.Sprintf(format, args...)
-		WriteJSON(l.out, fields, l.newLine)
-		return
-	}
-
-	l.slog.WarnContext(l.ctx, fmt.Sprintf(format, args...))
-}
-
-func (l logger) Warningf(format string, args ...interface{}) {
-	format = strings.ReplaceAll(format, "%w", "%v")
-	if l.jsonMode {
-		fields := make(map[string]any)
-		fields["level"] = "warn"
-		fields["message"] = fmt.Sprintf(format, args...)
-		WriteJSON(l.out, fields, l.newLine)
-		return
-	}
-	l.slog.WarnContext(l.ctx, fmt.Sprintf(format, args...))
-}
-
-func (l logger) Warning(format string, args ...interface{}) {
-	format = strings.ReplaceAll(format, "%w", "%v")
-	if l.jsonMode {
-		fields := make(map[string]any)
-		fields["level"] = "warn"
-		fields["message"] = fmt.Sprintf(format, args...)
-		WriteJSON(l.out, fields, l.newLine)
-		return
-	}
-	l.slog.WarnContext(l.ctx, fmt.Sprintf(format, args...))
-}
-
-func (l logger) Errorf(format string, args ...interface{}) {
-	format = strings.ReplaceAll(format, "%w", "%v")
-	if l.jsonMode {
-		fields := make(map[string]any)
-		fields["level"] = "error"
-		fields["message"] = fmt.Sprintf(format, args...)
-		WriteJSON(l.out, fields, l.newLine)
-		return
-	}
-	l.slog.ErrorContext(l.ctx, fmt.Sprintf(format, args...))
-}
-
-func (l logger) Error(format string, args ...interface{}) {
-	format = strings.ReplaceAll(format, "%w", "%v")
-	if l.jsonMode {
-		fields := make(map[string]any)
-		fields["level"] = "error"
-		fields["message"] = fmt.Sprintf(format, args...)
-		WriteJSON(l.out, fields, l.newLine)
-		return
-	}
-	l.slog.ErrorContext(l.ctx, fmt.Sprintf(format, args...))
-}
-
-func (l logger) Fatalf(format string, args ...interface{}) {
-	format = strings.ReplaceAll(format, "%w", "%v")
-	if l.jsonMode {
-		fields := make(map[string]any)
-		fields["level"] = "fatal"
-		fields["message"] = fmt.Sprintf(format, args...)
-		WriteJSON(l.out, fields, l.newLine)
-		return
-	}
-	l.slog.Log(l.ctx, slog.Level(LevelFatal), fmt.Sprintf(format, args...))
-	os.Exit(1)
-}
-
-func (l logger) Fatal(format string, args ...interface{}) {
-	format = strings.ReplaceAll(format, "%w", "%v")
-	if l.jsonMode {
-		fields := make(map[string]any)
-		fields["level"] = "fatal"
-		fields["message"] = fmt.Sprintf(format, args...)
-		WriteJSON(l.out, fields, l.newLine)
-		return
-	}
-	l.slog.Log(l.ctx, slog.Level(LevelFatal), fmt.Sprintf(format, args...))
-	os.Exit(1)
-}
-
-func (l logger) Panicf(format string, args ...interface{}) {
-	format = strings.ReplaceAll(format, "%w", "%v")
-	if l.jsonMode {
-		fields := make(map[string]any)
-		fields["level"] = "panic"
-		fields["message"] = fmt.Sprintf(format, args...)
-		WriteJSON(l.out, fields, l.newLine)
-		return
-	}
-	l.slog.Log(l.ctx, slog.Level(LevelPanic), fmt.Sprintf(format, args...))
-	panic(fmt.Sprintf(format, args...))
-}
-
-func (l logger) Panic(format string, args ...interface{}) {
-	format = strings.ReplaceAll(format, "%w", "%v")
-	if l.jsonMode {
-		fields := make(map[string]any)
-		fields["level"] = "panic"
-		fields["message"] = fmt.Sprintf(format, args...)
-		WriteJSON(l.out, fields, l.newLine)
-		return
-	}
-	l.slog.Log(l.ctx, slog.Level(LevelPanic), fmt.Sprintf(format, args...))
-	panic(fmt.Sprintf(format, args...))
-}
-
-func (l logger) Log(level Level, args ...interface{}) {
-	l.slog.Log(l.ctx, slog.Level(level), fmt.Sprint(args...))
-}
-
-func (l logger) Trace(args ...interface{}) {
-	l.slog.Log(l.ctx, slog.Level(LevelTrace), fmt.Sprint(args...))
-}
-
-func (l logger) Logln(level Level, args ...interface{}) {
-	l.slog.Log(l.ctx, slog.Level(level), fmt.Sprint(args...))
-}
-
-func (l logger) Traceln(args ...interface{}) {
-	l.slog.Log(l.ctx, slog.Level(LevelTrace), fmt.Sprint(args...))
-}
-
-func (l logger) Infoln(args ...interface{}) {
-	l.slog.InfoContext(l.ctx, fmt.Sprint(args...))
-}
-
-func (l logger) Println(args ...interface{}) {
-	l.slog.Log(l.ctx, -1, fmt.Sprint(args...))
-}
-
-func (l logger) Warnln(args ...interface{}) {
-	l.slog.WarnContext(l.ctx, fmt.Sprint(args...))
-}
-
-func (l logger) Warningln(args ...interface{}) {
-	l.slog.WarnContext(l.ctx, fmt.Sprint(args...))
-}
-
-func (l logger) Errorln(args ...interface{}) {
-	l.slog.ErrorContext(l.ctx, fmt.Sprint(args...))
-}
-
-func (l logger) Fatalln(args ...interface{}) {
-	l.slog.Log(l.ctx, slog.Level(LevelFatal), fmt.Sprint(args...))
-	os.Exit(1)
-}
-
-func (l logger) Panicln(args ...interface{}) {
-	l.slog.Log(l.ctx, slog.Level(LevelPanic), fmt.Sprint(args...))
-	panic(fmt.Sprint(args...))
-}
-
-func (l logger) WithFields(fields map[string]any) Logger {
-	attrs := make([]slog.Attr, 0, len(fields))
-	for k, v := range fields {
-		attrs = append(attrs, slog.Attr{
-			Key:   k,
-			Value: slog.AnyValue(v),
-		})
-	}
-	l.slog = l.slog.WithAttrs(attrs).(*slogEmu)
-	return &l
-}
-func (l logger) WithError(err error) Logger {
-	l.slog = l.slog.WithAttrs([]slog.Attr{{
-		Key:   "error",
-		Value: slog.AnyValue(err),
-	}}).(*slogEmu)
-	l.err = err
-	return &l
 }

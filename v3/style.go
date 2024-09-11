@@ -138,26 +138,26 @@ func (l logger) WithAttrs(attrs []slog.Attr) logger {
 	return l
 }
 
-// WithGroup returns a new Handler with the given group appended to
-// the receiver's existing groups.
-// The keys of all subsequent attributes, whether added by With or in a
-// Record, should be qualified by the sequence of group names.
-//
-// How this qualification happens is up to the Handler, so long as
-// this Handler's attribute keys differ from those of another Handler
-// with a different sequence of group names.
-//
-// A Handler should treat WithGroup as starting a Group of Attrs that ends
-// at the end of the log event. That is,
-//
-//	logger.WithGroup("s").LogAttrs(ctx, level, msg, slog.Int("a", 1), slog.Int("b", 2))
-//
-// should behave like
-//
-//	logger.LogAttrs(ctx, level, msg, slog.Group("s", slog.Int("a", 1), slog.Int("b", 2)))
-//
-// If the name is empty, WithGroup returns the receiver.
-func (l logger) WithGroup(name string) slog.Handler {
-	l.slog = &slogEmu{Logger: l.slog.Logger.WithGroup(name)}
-	return l.slog
-}
+// // WithGroup returns a new Handler with the given group appended to
+// // the receiver's existing groups.
+// // The keys of all subsequent attributes, whether added by With or in a
+// // Record, should be qualified by the sequence of group names.
+// //
+// // How this qualification happens is up to the Handler, so long as
+// // this Handler's attribute keys differ from those of another Handler
+// // with a different sequence of group names.
+// //
+// // A Handler should treat WithGroup as starting a Group of Attrs that ends
+// // at the end of the log event. That is,
+// //
+// //	logger.WithGroup("s").LogAttrs(ctx, level, msg, slog.Int("a", 1), slog.Int("b", 2))
+// //
+// // should behave like
+// //
+// //	logger.LogAttrs(ctx, level, msg, slog.Group("s", slog.Int("a", 1), slog.Int("b", 2)))
+// //
+// // If the name is empty, WithGroup returns the receiver.
+// func (l logger) WithGroup(name string) slog.Handler {
+// 	l.slog = &slogEmu{Logger: l.slog.Logger.WithGroup(name)}
+// 	return l.slog
+// }

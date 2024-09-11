@@ -1,5 +1,30 @@
 package iqlog
 
+import "time"
+
+// We allow a fixed maximum of fields so we can try avoid an alloc
+const maxFields = 8
+const maxStringLen = 256
+
+// LogField is used to store each field in a (pre-alloc'd) array
+type LogField struct {
+	Key    [maxStringLen]byte // fixed-size key
+	KeyLen int                // length of the key
+	VStr   [maxStringLen]byte // fixed-size string representation
+	VLen   int                // length of the "string" portion
+	Quote  bool               // whether to quote the value
+	Used   bool               // whether this slot is in use
+}
+
+type LogRecord struct {
+	Time       time.Time
+	Level      Level
+	Message    [maxStringLen]byte // fixed-size message buffer
+	MsgLen     int                // length of message
+	Fields     [maxFields]LogField
+	UsedFields int
+}
+
 type LogFields struct {
 	inlineSize    int
 	keys          [8]string
