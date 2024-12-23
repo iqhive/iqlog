@@ -11,6 +11,14 @@ var NumPathsToLog = 1
 // How many callers are we going back
 var CallersNum = 2
 
+var (
+	FunctionsToSkip = []string{
+		"/iqlog/",
+		"runtime.",
+		"testing.",
+	}
+)
+
 // GetCallerFields returns information about the caller, specifically
 // the function name, the filename and line number in the file
 func GetCallerFields() map[string]any {

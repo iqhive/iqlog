@@ -130,7 +130,7 @@ func (l *logger) WriteRecordNoAlloc(record LogRecord) error {
 	return err
 }
 
-// func (l *IQLogger) log(level Level, msg string, kvs ...KeyVal) {
+// func (l *logger) log(level Level, msg string, kvs ...KeyVal) {
 // 	// TODO: Skip if the level isn't enabled, etc
 
 // 	// Grab a buffer from the pool

@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/crypto/ssh/terminal"
+	terminal "golang.org/x/term"
 )
 
 // GlobalLogger is used by the Global Logging functions
@@ -55,12 +55,9 @@ type logger struct {
 func NewGlobalIQLogger() *logger {
 
 	l := NewIQLogger(false)
-	debugStr := os.Getenv("IQLOG_DEBUG")
-	if b, _ := strconv.ParseBool(debugStr); b {
-		l.SetDebugMode(true)
-	}
 	l.SetUseColour(terminal.IsTerminal(int(os.Stderr.Fd())) && (runtime.GOOS != "windows"))
 	l.SetWriter(os.Stderr)
+	l.SetCaptureCallers(true)
 
 	sl := slog.NewTextHandler(l.out, &slog.HandlerOptions{})
 	l.slog = &slogEmu{
@@ -81,6 +78,11 @@ func NewIQLogger(jsonMode bool) *logger {
 		out:               os.Stderr,
 		newLine:           true,
 	}
+	debugStr := os.Getenv("IQLOG_DEBUG")
+	if b, _ := strconv.ParseBool(debugStr); b {
+		logger.SetDebugMode(true)
+	}
+
 	if jsonMode {
 		logger.SetJSONMode(true)
 	} else {
@@ -113,19 +115,17 @@ func Init(applicationName string, syslogHost string, debugMode bool) {
 	}
 }
 
-// Enabled reports whether the handler handles records at the given level.
-func (l *logger) Enabled(ctx context.Context, level Level) bool {
-	if level == LevelDebug {
-		return l.debug
-	}
-	return true
-}
-
 // WithGroup returns a new Handler with the given group appended to
 // the receiver's existing groups.
 // Implementation is a no-op here:
 func (l *logger) WithGroup(name string) *logger {
 	return l
+}
+
+func (l *logger) copy() *logger {
+	nl := *l
+	nl.baseRecord = l.baseRecord
+	return &nl
 }
 
 // Add a context to the log entry.

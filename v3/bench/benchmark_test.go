@@ -52,8 +52,8 @@ func BenchmarkIQLogDisabled(b *testing.B) {
 	logger.SetDebugMode(false)
 	logger.SetWriter(io.Discard)
 	for i := 0; i < b.N; i++ {
-		// TODO: logger.Str("rate", "15").Int("low", 16).Float32("high", 123.2).Debug(msg)
-		logger.Debug(msg)
+		logger.Str("rate", "15").Int("low", 16).Float32("high", 123.2).Debug(msg)
+		// logger.Debug(msg)
 	}
 }
 
@@ -62,8 +62,8 @@ func BenchmarkIQLogSimple(b *testing.B) {
 	logger.SetDebugMode(false)
 	logger.SetWriter(io.Discard)
 	for i := 0; i < b.N; i++ {
-		// TODO: logger.Str("rate", "15").Int("low", 16).Float32("high", 123.2).Info(msg)
-		logger.Info(msg)
+		logger.Str("rate", "15").Int("low", 16).Float32("high", 123.2).Info(msg)
+		// logger.Info(msg)
 	}
 }
 
@@ -72,8 +72,8 @@ func BenchmarkIQLogPrintf(b *testing.B) {
 	logger.SetDebugMode(false)
 	logger.SetWriter(io.Discard)
 	for i := 0; i < b.N; i++ {
-		// TODO: logger.Infof("rate=%s low=%d high=%f msg=%s", "15", 16, 123.2, msg)
-		logger.Info(msg)
+		logger.Infof("rate=%s low=%d high=%f msg=%s", "15", 16, 123.2, msg)
+		// logger.Info(msg)
 	}
 }
 
@@ -82,7 +82,7 @@ func BenchmarkIQLogAny(b *testing.B) {
 	logger.SetDebugMode(false)
 	logger.SetWriter(io.Discard)
 	for i := 0; i < b.N; i++ {
-		// TODO: logger.Any("rate", "15").Any("low", 16).Any("object", &obj).Info(msg)
-		logger.Info(msg)
+		logger.Any("rate", "15").Any("low", 16).Any("object", &obj).Info(msg)
+		// logger.Info(msg)
 	}
 }

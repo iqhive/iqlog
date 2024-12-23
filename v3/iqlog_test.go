@@ -67,30 +67,26 @@ func TestDebugModeOff(t *testing.T) {
 func TestEnvironmentVariable(t *testing.T) {
 	// Hypothetical example: if iqlog can read an env var "IQLOG_DEBUG" to auto-enable debug
 	const envVarKey = "IQLOG_DEBUG"
-	originalVal, hadVal := os.LookupEnv(envVarKey)
+	originalVal, _ := os.LookupEnv(envVarKey)
 
 	// Temporarily set environment variable for this test
 	os.Setenv(envVarKey, "1") // Suppose setting it to "1" forces debug on
 	defer func() {
-		if hadVal {
-			os.Setenv(envVarKey, originalVal)
-		} else {
-			os.Unsetenv(envVarKey)
-		}
+		os.Setenv(envVarKey, originalVal)
 	}()
 
 	// Force re-read env config if your logger supports it. Example:
 	// iqlog.ReloadConfigFromEnv() // Hypothetical
-	iqlog.GlobalLogger = iqlog.NewGlobalIQLogger()
 
 	buf := &bytes.Buffer{}
 	logger := iqlog.NewIQLogger(false)
 
 	logger.SetWriter(buf)
-	logger.SetDebugMode(false)
 
 	// If the logger automatically reads environment variables, we expect debug to be on now.
 	logger.Debug("Environment debug check")
+	// logger.Flush()
+	// time.Sleep(1 * time.Second)
 
 	logOutput := buf.String()
 	if !strings.Contains(logOutput, "Environment debug check") {
@@ -110,7 +106,7 @@ func TestSequentialLogs(t *testing.T) {
 	logger.SetDebugMode(true)
 
 	for i := 0; i < 5; i++ {
-		iqlog.Info("Sequential log message:", i)
+		logger.Infof("Sequential log message: %d", i)
 	}
 
 	logOutput := buf.String()
@@ -139,7 +135,7 @@ func TestConcurrentLogs(t *testing.T) {
 		go func(goroutineID int) {
 			defer wg.Done()
 			for m := 0; m < messagesPerGoroutine; m++ {
-				iqlog.Info("ConcurrentLog", goroutineID, "message", m)
+				logger.Info("ConcurrentLog", goroutineID, "message", m)
 			}
 		}(g)
 	}

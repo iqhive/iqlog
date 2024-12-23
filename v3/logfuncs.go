@@ -1,12 +1,29 @@
 package iqlog
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"os"
 	"strings"
 	"time"
 )
+
+// Enabled reports whether the handler handles records at the given level.
+// The handler ignores records whose level is lower.
+// It is called early, before any arguments are processed,
+// to save effort if the log event should be discarded.
+// If called from a Logger method, the first argument is the context
+// passed to that method, or context.Background() if nil was passed
+// or the method does not take a context.
+// The context is passed so Enabled can use its values
+// to make a decision.
+func (l logger) Enabled(ctx context.Context, level Level) bool {
+	if level == LevelDebug {
+		return l.debug
+	}
+	return true
+}
 
 func Debugf(format string, args ...interface{}) {
 	GlobalLogger.Debugf(format, args...)
@@ -381,7 +398,7 @@ func (l *logger) Traceln(args ...interface{}) {
 func Log(level Level, args ...interface{}) { GlobalLogger.Log(level, args...) }
 
 // Logln is a global helper / convenience function for accessing the GlobalLogger object
-func Logln(level Level, args ...interface{}) { GlobalLogger.Logln(level, args) }
+func Logln(level Level, args ...interface{}) { GlobalLogger.Logln(level, args...) }
 
 func (l logger) Log(level Level, args ...interface{}) {
 	l.slog.Log(l.ctx, slog.Level(level), fmt.Sprint(args...))

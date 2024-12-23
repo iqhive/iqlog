@@ -1,6 +1,9 @@
 package iqlog
 
 func (l *logger) WithField(name string, value any) *logger {
+	if !l.Enabled(l.ctx, LevelDebug) {
+		return l
+	}
 	nl := l
 	if nl.baseRecord.UsedFields < maxFields {
 		i := nl.baseRecord.UsedFields
@@ -11,6 +14,9 @@ func (l *logger) WithField(name string, value any) *logger {
 }
 
 func (l *logger) WithFields(fields map[string]any) Logger {
+	if !l.Enabled(l.ctx, LevelDebug) {
+		return l
+	}
 	nl := l // single copy, done once
 	i := nl.baseRecord.UsedFields
 	for k, v := range fields {
@@ -25,6 +31,9 @@ func (l *logger) WithFields(fields map[string]any) Logger {
 }
 
 func (l *logger) Int(name string, val int) *logger {
+	if !l.Enabled(l.ctx, LevelDebug) {
+		return l
+	}
 	nl := l
 	if nl.baseRecord.UsedFields < maxFields {
 		i := nl.baseRecord.UsedFields
@@ -35,6 +44,9 @@ func (l *logger) Int(name string, val int) *logger {
 }
 
 func (l *logger) Str(name string, s string) *logger {
+	if !l.Enabled(l.ctx, LevelDebug) {
+		return l
+	}
 	nl := l
 	if nl.baseRecord.UsedFields < maxFields {
 		i := nl.baseRecord.UsedFields
@@ -55,6 +67,9 @@ func (l *logger) Str(name string, s string) *logger {
 // }
 
 func (l *logger) Float32(name string, f float32) *logger {
+	if !l.Enabled(l.ctx, LevelDebug) {
+		return l
+	}
 	nl := l
 	if nl.baseRecord.UsedFields < maxFields {
 		i := nl.baseRecord.UsedFields
@@ -65,6 +80,9 @@ func (l *logger) Float32(name string, f float32) *logger {
 }
 
 func (l *logger) Float64(name string, f float64) *logger {
+	if !l.Enabled(l.ctx, LevelDebug) {
+		return l
+	}
 	nl := l
 	if nl.baseRecord.UsedFields < maxFields {
 		i := nl.baseRecord.UsedFields
@@ -75,6 +93,9 @@ func (l *logger) Float64(name string, f float64) *logger {
 }
 
 func (l *logger) Bool(name string, b bool) *logger {
+	if !l.Enabled(l.ctx, LevelDebug) {
+		return l
+	}
 	nl := l
 	if nl.baseRecord.UsedFields < maxFields {
 		i := nl.baseRecord.UsedFields
@@ -85,6 +106,9 @@ func (l *logger) Bool(name string, b bool) *logger {
 }
 
 func (l *logger) Any(name string, v any) *logger {
+	if !l.Enabled(l.ctx, LevelDebug) {
+		return l
+	}
 	nl := l
 	if nl.baseRecord.UsedFields < maxFields {
 		i := nl.baseRecord.UsedFields
@@ -95,7 +119,7 @@ func (l *logger) Any(name string, v any) *logger {
 }
 
 func (l *logger) WithError(err error) Logger {
-	if err == nil {
+	if !l.Enabled(l.ctx, LevelDebug) || err == nil {
 		return l
 	}
 	return l.WithField("error", err.Error())
