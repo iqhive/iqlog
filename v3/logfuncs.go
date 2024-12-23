@@ -3,7 +3,6 @@ package iqlog
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"os"
 	"strings"
 	"time"
@@ -401,9 +400,9 @@ func Log(level Level, args ...interface{}) { GlobalLogger.Log(level, args...) }
 func Logln(level Level, args ...interface{}) { GlobalLogger.Logln(level, args...) }
 
 func (l logger) Log(level Level, args ...interface{}) {
-	l.slog.Log(l.ctx, slog.Level(level), fmt.Sprint(args...))
+	l.logMessage(level, fmt.Sprint(args...))
 }
 
 func (l logger) Logln(level Level, args ...interface{}) {
-	l.slog.Log(l.ctx, slog.Level(level), fmt.Sprint(args...))
+	l.logMessage(level, fmt.Sprintln(args...))
 }

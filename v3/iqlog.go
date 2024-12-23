@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"io"
-	"log/slog"
 	"os"
 	"runtime"
 	"strconv"
@@ -20,9 +19,6 @@ var GlobalLogger *logger = NewGlobalIQLogger()
 type logger struct {
 	ctx context.Context
 	err error
-
-	// slog *slog.Logger
-	slog *slogEmu
 
 	out io.Writer
 
@@ -58,12 +54,6 @@ func NewGlobalIQLogger() *logger {
 	l.SetUseColour(terminal.IsTerminal(int(os.Stderr.Fd())) && (runtime.GOOS != "windows"))
 	l.SetWriter(os.Stderr)
 	l.SetCaptureCallers(true)
-
-	sl := slog.NewTextHandler(l.out, &slog.HandlerOptions{})
-	l.slog = &slogEmu{
-		Handler: sl,
-		Logger:  slog.New(sl),
-	}
 
 	return l
 }
@@ -111,7 +101,6 @@ func Init(applicationName string, syslogHost string, debugMode bool) {
 	SetSyslogHost(syslogHost)
 	if GlobalLogger == nil {
 		GlobalLogger = NewGlobalIQLogger()
-		slog.SetDefault(GlobalLogger.slog.Logger)
 	}
 }
 

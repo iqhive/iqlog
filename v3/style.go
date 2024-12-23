@@ -108,7 +108,6 @@ const (
 // WithAttrs returns a new logger whose attributes consist of
 // both the receiver's attributes and the arguments.
 func (l logger) WithAttrs(attrs []slog.Attr) logger {
-	l.slog = &slogEmu{Logger: l.slog.Logger.With()}
 	return l
 }
 

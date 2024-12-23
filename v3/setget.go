@@ -2,7 +2,6 @@ package iqlog
 
 import (
 	"io"
-	"log/slog"
 	"log/syslog"
 	"os"
 	"strings"
@@ -10,11 +9,6 @@ import (
 
 func (l *logger) SetWriter(w io.Writer) {
 	l.out = w
-	sl := slog.NewTextHandler(l.out, &slog.HandlerOptions{})
-	l.slog = &slogEmu{
-		Handler: sl,
-		Logger:  slog.New(sl),
-	}
 }
 
 func (l *logger) GetWriter() io.Writer {
