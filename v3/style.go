@@ -98,25 +98,43 @@ func (l logger) Handle(ctx context.Context, entry slog.Record) error {
 	}
 	originText := ""
 	if entry.PC != 0 {
-		var callers [6]uintptr
-		runtime.Callers(3, callers[:])
-		var source *runtime.Func
-		var file string
-		var line int
-		for i := range callers {
-			source = runtime.FuncForPC(callers[i])
-			name := source.Name()
-			file, line = source.FileLine(callers[i])
-			if strings.HasSuffix(file, "v3/iqlog.go") || strings.HasSuffix(file, "v3/apierror.go") || strings.Contains(name, "Log") || strings.Contains(name, "APIError") {
+		// Get more stack frames to ensure we capture enough context
+		var callers [32]uintptr
+		n := runtime.Callers(0, callers[:]) // Start from 0 to get complete stack
+		frames := runtime.CallersFrames(callers[:n])
+
+		// Skip frames until we find the actual caller
+		var frame runtime.Frame
+		more := true
+		skipCount := 0
+		foundFrame := false
+
+		for more && skipCount < n {
+			frame, more = frames.Next()
+			// Skip internal logging packages and our wrapper
+			if strings.Contains(frame.File, "log/slog") ||
+				strings.Contains(frame.File, "v3/iqlog") ||
+				strings.Contains(frame.Function, "slog.") ||
+				strings.Contains(frame.Function, "iqlog.") ||
+				strings.Contains(frame.Function, "runtime.") ||
+				strings.Contains(frame.Function, "testing.") {
+				skipCount++
 				continue
 			}
+			foundFrame = true
 			break
 		}
-		name := path.Base(KeepNumDirs(source.Name(), NumPathsToLog))
-		file = KeepNumDirs(file, NumPathsToLog)
-		originText = fmt.Sprintf("[%v %v:%v]", name, file, line)
+
+		if foundFrame {
+			name := path.Base(KeepNumDirs(frame.Function, NumPathsToLog))
+			file := KeepNumDirs(frame.File, NumPathsToLog)
+			originText = fmt.Sprintf("[%v %v:%v]", name, file, frame.Line)
+		} else {
+			// Fallback if we couldn't find a suitable frame
+			originText = fmt.Sprintf("[%v]", l.applicationName)
+		}
 	} else {
-		originText = fmt.Sprintf("%v", l.applicationName)
+		originText = fmt.Sprintf("[%v]", l.applicationName)
 	}
 	if originText != "" {
 		if l.useColour {
