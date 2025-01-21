@@ -100,25 +100,23 @@ func (l logger) Handle(ctx context.Context, entry slog.Record) error {
 	if entry.PC != 0 {
 		// Get more stack frames to ensure we capture enough context
 		var callers [32]uintptr
-		n := runtime.Callers(0, callers[:]) // Start from 0 to get complete stack
+		n := runtime.Callers(1, callers[:]) // Changed from 0 to 1 to skip this frame
 		frames := runtime.CallersFrames(callers[:n])
 
 		// Skip frames until we find the actual caller
 		var frame runtime.Frame
 		more := true
-		skipCount := 0
 		foundFrame := false
 
-		for more && skipCount < n {
+		for more {
 			frame, more = frames.Next()
-			// Skip internal logging packages and our wrapper
+			// Skip internal logging packages and runtime frames
 			if strings.Contains(frame.File, "log/slog") ||
-				strings.Contains(frame.File, "v3/iqlog") ||
+				strings.Contains(frame.File, "/iqlog") || // Changed from v3/iqlog to just /iqlog
 				strings.Contains(frame.Function, "slog.") ||
 				strings.Contains(frame.Function, "iqlog.") ||
 				strings.Contains(frame.Function, "runtime.") ||
 				strings.Contains(frame.Function, "testing.") {
-				skipCount++
 				continue
 			}
 			foundFrame = true
