@@ -102,9 +102,6 @@ func TestSequentialLogs(t *testing.T) {
 	logger.SetWriter(buf)
 	logger.SetDebugMode(true)
 
-	logger.SetWriter(buf)
-	logger.SetDebugMode(true)
-
 	for i := 0; i < 5; i++ {
 		logger.Infof("Sequential log message: %d", i)
 	}
@@ -152,8 +149,8 @@ func TestConcurrentLogs(t *testing.T) {
 	}
 }
 
-// TestLogFormat uses a regex to validate the format of each log line if known or enforced by the iqlog package.
-func TestLogFormatString(t *testing.T) {
+// TestLogFormatStringInfo uses a regex to validate the format of each log line if known or enforced by the iqlog package.
+func TestLogFormatStringInfo(t *testing.T) {
 	buf := &bytes.Buffer{}
 	logger := iqlog.NewIQLogger(false)
 
@@ -175,8 +172,8 @@ func TestLogFormatString(t *testing.T) {
 	}
 }
 
-// TestLogFormatJSON checks json output
-func TestLogFormatJSON(t *testing.T) {
+// TestLogFormatJSONInfo checks json output
+func TestLogFormatJSONInfo(t *testing.T) {
 	buf := &bytes.Buffer{}
 	logger := iqlog.NewIQLogger(true)
 
@@ -188,7 +185,49 @@ func TestLogFormatJSON(t *testing.T) {
 
 	// Example format check: [INFO]: Format check
 	// re := regexp.MustCompile(`^\{"time":"[A-Za-z]{3}\s\d{1,2}\s\d{2}:\d{2}:\d{2}\.\d+","level":\d+,"message":"[^"]+"\}\n$`)
-	re := regexp.MustCompile(`^\{"time":"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}[+-]\d{2}:\d{2}","level":"info","message":"Format check"\}\n$`)
+	re := regexp.MustCompile(`^\{"time":"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}","level":"info","message":"Format check"\}\n$`)
+	if !re.MatchString(logOutput) {
+		t.Errorf("Log output did not match expected format. Output:\n|%s|", logOutput)
+	}
+}
+
+// TestLogFormatStringWarn uses a regex to validate the format of each log line if known or enforced by the iqlog package.
+func TestLogFormatStringWarn(t *testing.T) {
+	buf := &bytes.Buffer{}
+	logger := iqlog.NewIQLogger(false)
+
+	logger.SetWriter(buf)
+	logger.SetWriter(buf)
+	logger.SetDebugMode(true)
+	logger.SetUseColour(false)
+	logger.Warn("Format check")
+	logOutput := buf.String()
+
+	// Example format check: [WARN]: Format check
+	regexPattern := `(?m)^WARN \w.*\n$`
+	matched, err := regexp.MatchString(regexPattern, logOutput)
+	if err != nil {
+		t.Fatalf("Failed to compile regex pattern: %v", err)
+	}
+	if !matched {
+		t.Errorf("Log output did not match expected format. Output:\n|%s|", logOutput)
+	}
+}
+
+// TestLogFormatJSONWarn checks json output
+func TestLogFormatJSONWarn(t *testing.T) {
+	buf := &bytes.Buffer{}
+	logger := iqlog.NewIQLogger(true)
+
+	logger.SetWriter(buf)
+	logger.SetDebugMode(true)
+
+	logger.Warn("Format check")
+	logOutput := buf.String()
+
+	// Example format check: [INFO]: Format check
+	// re := regexp.MustCompile(`^\{"time":"[A-Za-z]{3}\s\d{1,2}\s\d{2}:\d{2}:\d{2}\.\d+","level":\d+,"message":"[^"]+"\}\n$`)
+	re := regexp.MustCompile(`^\{"time":"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}","level":"warn","message":"Format check"\}\n$`)
 	if !re.MatchString(logOutput) {
 		t.Errorf("Log output did not match expected format. Output:\n|%s|", logOutput)
 	}

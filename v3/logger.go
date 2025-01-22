@@ -1,50 +1,57 @@
 package iqlog
 
-import (
-	"fmt"
-	"strings"
-	"time"
-)
-
-// logMessageNoAlloc handles a fast path with no expansions/callers.
-func (l *logger) logMessageNoAlloc(level Level, message string) {
-	if !l.Enabled(l.ctx, level) {
-		return
-	}
-	record := l.baseRecord
-	record.Level = level
-	record.Time = time.Now()
-	record.MsgLen = safeStringCopy(&record.Message, message)
-	_ = l.WriteRecordNoAlloc(record)
+func (l *logger) Trace(msg string, args ...interface{}) {
+	l.PreAllocLineTrace(msg, args...)
 }
 
-func (l *logger) logMessage(level Level, format string, args ...interface{}) {
-	// If we want zero alloc, bail out with our specialized path
-	// *only* when captureCallers == false, jsonMode == true,
-	// and there are no args (which would require expansions).
-	if !l.captureCallers && l.jsonMode && len(args) == 0 {
-		l.logMessageNoAlloc(level, format)
-		return
-	}
+func (l *logger) Tracef(msg string, args ...interface{}) {
+	l.PreAllocLineTracef(msg, args...)
+}
 
-	if !l.Enabled(l.ctx, level) {
-		return
-	}
+func (l *logger) Debug(msg string, args ...interface{}) {
+	l.PreAllocLineDebug(msg, args...)
+}
 
-	if strings.Contains(format, "%w") {
-		format = strings.ReplaceAll(format, "%w", "%v")
-	}
+func (l *logger) Debugf(msg string, args ...interface{}) {
+	l.PreAllocLineDebugf(msg, args...)
+}
 
-	var msg string
-	if len(args) > 0 {
-		msg = fmt.Sprintf(format, args...)
-	} else {
-		msg = format
-	}
+func (l *logger) Info(msg string, args ...interface{}) {
+	l.PreAllocLineInfo(msg, args...)
+}
 
-	record := l.baseRecord
-	record.Level = level
-	record.Time = time.Now()
-	record.MsgLen = safeStringCopy(&record.Message, msg)
-	_ = l.WriteRecordNoAlloc(record)
+func (l *logger) Infof(msg string, args ...interface{}) {
+	l.PreAllocLineInfof(msg, args...)
+}
+
+func (l *logger) Warn(msg string, args ...interface{}) {
+	l.PreAllocLineWarn(msg, args...)
+}
+
+func (l *logger) Warnf(msg string, args ...interface{}) {
+	l.PreAllocLineWarnf(msg, args...)
+}
+
+func (l *logger) Error(msg string, args ...interface{}) {
+	l.PreAllocLineError(msg, args...)
+}
+
+func (l *logger) Errorf(msg string, args ...interface{}) {
+	l.PreAllocLineErrorf(msg, args...)
+}
+
+func (l *logger) Fatal(msg string, args ...interface{}) {
+	l.PreAllocLineFatal(msg, args...)
+}
+
+func (l *logger) Fatalf(msg string, args ...interface{}) {
+	l.PreAllocLineFatalf(msg, args...)
+}
+
+func (l *logger) Panic(msg string, args ...interface{}) {
+	l.PreAllocLinePanic(msg, args...)
+}
+
+func (l *logger) Panicf(msg string, args ...interface{}) {
+	l.PreAllocLinePanicf(msg, args...)
 }

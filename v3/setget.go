@@ -8,6 +8,7 @@ import (
 )
 
 func (l *logger) SetWriter(w io.Writer) {
+	// l.out = newAsyncWriter(w, 100)
 	l.out = w
 }
 
@@ -40,7 +41,13 @@ func SetSyslogHost(host string) {
 func SetDebugMode(debugMode bool) {
 	GlobalLogger.SetDebugMode(debugMode)
 }
-func (l *logger) SetDebugMode(d bool) { l.debug = d }
+func (l *logger) SetDebugMode(d bool) {
+	if d {
+		l.Level = LevelDebug
+	} else {
+		l.Level = LevelInfo
+	}
+}
 
 // SetNewLine sets the new line on the GlobalLogger
 func SetNewLine(newLine bool) {
@@ -57,18 +64,24 @@ func SetCaptureCallers(captureCallers bool) {
 func (l *logger) SetCaptureCallers(d bool) { l.captureCallers = d }
 
 func SetUseColour(useColour bool) {
-	GlobalLogger.SetUseColour(useColour)
+	useColour = useColour
 }
-func (l *logger) SetUseColour(d bool) { l.useColour = d }
+func (l *logger) SetUseColour(d bool) { useColour = d }
 
 // SetJSONMode sets the JSON mode on the GlobalLogger
 func SetJSONMode(jsonMode bool) {
 	GlobalLogger.SetJSONMode(jsonMode)
 }
-func (l *logger) SetJSONMode(d bool) {
-	l.jsonMode = d
-	l.newLine = true
-	l.useColour = false
+func (l *logger) SetJSONMode(isJSONmode bool) {
+	if isJSONmode {
+		l.jsonMode = isJSONmode
+		l.newLine = true
+		l.IncludeTime = true
+	} else {
+		l.jsonMode = isJSONmode
+		l.newLine = true
+		l.IncludeTime = false
+	}
 }
 
 func (l *logger) SetSyslogHost(newhost string) {
@@ -83,7 +96,7 @@ func (l *logger) SetSyslogHost(newhost string) {
 		return
 	}
 	if newhost == "" {
-		l.Infof("Log output changed to StdErr", newhost)
+		l.Info("Log output changed to StdErr", newhost)
 		l.out = os.Stderr
 		return
 	}
@@ -94,42 +107,4 @@ func (l *logger) SetSyslogHost(newhost string) {
 		l.Errorf("ERROR: Unable to init syslog to (%s): %v", newhost, syslogErr)
 		os.Exit(1)
 	}
-}
-
-func (r *LogRecord) SetField(i int, key string, val any) {
-	if i < 0 || i >= len(r.Fields) {
-		return
-	}
-	r.Fields[i].KeyLen = safeStringCopy(&r.Fields[i].Key, key)
-
-	r.Fields[i].Quote = false
-
-	switch v := val.(type) {
-	case nil:
-		r.Fields[i].VLen = safeStringCopy(&r.Fields[i].VStr, "null")
-	case bool:
-		if v {
-			r.Fields[i].VLen = safeStringCopy(&r.Fields[i].VStr, "true")
-		} else {
-			r.Fields[i].VLen = safeStringCopy(&r.Fields[i].VStr, "false")
-		}
-	case int:
-		r.Fields[i].VLen = writeIntDecimal(r.Fields[i].VStr[:], int64(v))
-	case int64:
-		r.Fields[i].VLen = writeIntDecimal(r.Fields[i].VStr[:], v)
-	case float64:
-		n := fastFloatFill(r.Fields[i].VStr[:], v, 6)
-		r.Fields[i].VLen = n
-	case float32:
-		n := fastFloatFill(r.Fields[i].VStr[:], float64(v), 6)
-		r.Fields[i].VLen = n
-	case string:
-		r.Fields[i].Quote = true
-		r.Fields[i].VLen = safeStringCopy(&r.Fields[i].VStr, v)
-	default:
-		r.Fields[i].Quote = true
-		r.Fields[i].VLen = safeStringCopy(&r.Fields[i].VStr, "unsupported_type")
-	}
-
-	r.Fields[i].Used = true
 }

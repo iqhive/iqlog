@@ -1,6 +1,9 @@
 package iqlog
 
-import "time"
+import (
+	"bytes"
+	"time"
+)
 
 func ansiColourPrefix(level Level) []byte {
 	switch level {
@@ -53,34 +56,51 @@ func safeStringCopy(dst *[maxStringLen]byte, s string) int {
 	return n
 }
 
+func safeOutputCopy(dst []byte, offset int, s string) int {
+	n := len(s)
+	if n > maxLineLen-offset {
+		n = maxLineLen - offset
+	}
+	copy(dst[offset:offset+n], s)
+	return n
+}
+
+func safeOutputCopyMaxLineLen(dst *[maxLineLen]byte, offset int, s string) int {
+	n := len(s)
+	if n > maxLineLen-offset {
+		n = maxLineLen - offset
+	}
+	copy(dst[offset:offset+n], s)
+	return n
+}
+
 // appendTimeRFC3339Micro encodes t as:  yyyy-mm-ddThh:mm:ss.uuuuuu
-// returning how many bytes were written.  This avoids any string
-// allocations from time.Time.Format.
+// returning how many bytes were written. trying to avoid string allocs from time.Format
 func appendTimeRFC3339Micro(t time.Time, dst []byte) int {
 	year, month, day := t.Date()
 	hour, min, sec := t.Clock()
 	usec := t.Nanosecond() / 1000
 
 	pos := 0
-	pos += appendIntBytes(dst[pos:], int64(year), 4)
+	pos += setIntBytes(dst[pos:], int64(year), 4)
 	dst[pos] = '-'
 	pos++
-	pos += appendIntBytes(dst[pos:], int64(month), 2)
+	pos += setIntBytes(dst[pos:], int64(month), 2)
 	dst[pos] = '-'
 	pos++
-	pos += appendIntBytes(dst[pos:], int64(day), 2)
+	pos += setIntBytes(dst[pos:], int64(day), 2)
 	dst[pos] = 'T'
 	pos++
-	pos += appendIntBytes(dst[pos:], int64(hour), 2)
+	pos += setIntBytes(dst[pos:], int64(hour), 2)
 	dst[pos] = ':'
 	pos++
-	pos += appendIntBytes(dst[pos:], int64(min), 2)
+	pos += setIntBytes(dst[pos:], int64(min), 2)
 	dst[pos] = ':'
 	pos++
-	pos += appendIntBytes(dst[pos:], int64(sec), 2)
+	pos += setIntBytes(dst[pos:], int64(sec), 2)
 	dst[pos] = '.'
 	pos++
-	pos += appendIntBytes(dst[pos:], int64(usec), 6)
+	pos += setIntBytes(dst[pos:], int64(usec), 6)
 	return pos
 }
 
@@ -112,6 +132,59 @@ func writeIntDecimal(dst []byte, i int64) int {
 		dst[n] = 0
 	}
 	return n
+}
+
+func appendIntDecimal(src []byte, i int64) ([]byte, int) {
+	neg := (i < 0)
+	if neg {
+		i = -i
+	}
+	var tmp [20]byte
+	pos := len(tmp)
+
+	if i == 0 {
+		pos--
+		tmp[pos] = '0'
+	} else {
+		for i > 0 {
+			pos--
+			tmp[pos] = byte('0' + (i % 10))
+			i /= 10
+		}
+	}
+	if neg {
+		pos--
+		tmp[pos] = '-'
+	}
+
+	src = append(src, tmp[pos:]...)
+	return src, len(tmp) - pos
+}
+
+func appendBufferIntDecimal(buf *bytes.Buffer, i int64) (int, error) {
+	neg := (i < 0)
+	if neg {
+		i = -i
+	}
+	var tmp [20]byte
+	pos := len(tmp)
+
+	if i == 0 {
+		pos--
+		tmp[pos] = '0'
+	} else {
+		for i > 0 {
+			pos--
+			tmp[pos] = byte('0' + (i % 10))
+			i /= 10
+		}
+	}
+	if neg {
+		pos--
+		tmp[pos] = '-'
+	}
+
+	return buf.Write(tmp[pos:])
 }
 
 func fastFloatFill(dst []byte, f float64, decimals int) int {
@@ -155,4 +228,76 @@ func fastFloatFill(dst []byte, f float64, decimals int) int {
 		dst[written] = 0
 	}
 	return written
+}
+
+func appendfastFloatFill(src []byte, f float64, decimals int) ([]byte, int) {
+	neg := (f < 0)
+	if neg {
+		f = -f
+	}
+
+	intPart := int64(f)
+	var working [32]byte // should be ok?
+	written := 0
+
+	if neg {
+		working[written] = '-'
+		written++
+	}
+
+	n := writeIntDecimal(working[written:], intPart)
+	written += n
+	frac := f - float64(intPart)
+	if frac == 0.0 {
+		return append(src, working[:written]...), written
+	}
+	working[written] = '.'
+	written++
+	for i := 0; i < decimals; i++ {
+		frac *= 10
+		d := int64(frac)
+		working[written] = byte('0' + d)
+		written++
+		frac -= float64(d)
+		if frac == 0.0 {
+			break
+		}
+	}
+	return append(src, working[:written]...), written
+}
+
+func appendBufferfastFloatFill(buf *bytes.Buffer, f float64, decimals int) (int, error) {
+	neg := (f < 0)
+	if neg {
+		f = -f
+	}
+
+	intPart := int64(f)
+	var working [32]byte // Use a predefined length byte array
+	written := 0
+
+	if neg {
+		working[written] = '-'
+		written++
+	}
+
+	n := writeIntDecimal(working[written:], intPart)
+	written += n
+	frac := f - float64(intPart)
+	if frac == 0.0 {
+		return buf.Write(working[:written])
+	}
+	working[written] = '.'
+	written++
+	for i := 0; i < decimals; i++ {
+		frac *= 10
+		d := int64(frac)
+		working[written] = byte('0' + d)
+		written++
+		frac -= float64(d)
+		if frac == 0.0 {
+			break
+		}
+	}
+	return buf.Write(working[:written])
 }

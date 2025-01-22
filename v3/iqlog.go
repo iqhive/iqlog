@@ -1,20 +1,21 @@
 package iqlog
 
 import (
-	"bytes"
 	"context"
 	"io"
 	"os"
 	"runtime"
 	"strconv"
 	"sync"
-	"time"
 
 	terminal "golang.org/x/term"
 )
 
 // GlobalLogger is used by the Global Logging functions
 var GlobalLogger *logger = NewGlobalIQLogger()
+var useColour = terminal.IsTerminal(int(os.Stderr.Fd())) && (runtime.GOOS != "windows")
+
+const maxLineLen = 256
 
 type logger struct {
 	ctx context.Context
@@ -22,37 +23,38 @@ type logger struct {
 
 	out io.Writer
 
-	debug           bool
+	Level           Level
 	jsonMode        bool
 	applicationName string
 	syslogHost      string
 
 	logFields LogFields
 
-	IncludeTimePrefix bool
-	TimePrefixFormat  string
-	useColour         bool
-	captureCallers    bool
-	newLine           bool
-	mu                sync.Mutex
+	IncludeTime     bool
+	TimestampFormat TimestampFormat
+	captureCallers  bool
+	newLine         bool
+	mu              sync.Mutex
 
 	// A sync.Pool to handle re-usable buffers to reduce allocations.
-	bufferPool sync.Pool
-
-	// TODO: consider adding a scratch buffer for type-to-string conversions here
-	// TODO: benchmark the performance of this vs the current method
-
-	// Instead of storing LogFields, store a LogRecord template
-	// for "WithField" calls:
-	baseRecord LogRecord
+	// bufferPool     sync.Pool
+	// fixedSlicePool sync.Pool
 }
+
+type TimestampFormat int
+
+const (
+	TimestampFormatRFC3339 TimestampFormat = iota
+	TimestampFormatRFC3339Milli
+	TimestampFormatRFC3339Micro
+	TimestampFormatRFC3339Nano
+)
 
 // NewIQLogger creates and return a new Logger
 func NewGlobalIQLogger() *logger {
 
 	l := NewIQLogger(false)
 	l.SetUseColour(terminal.IsTerminal(int(os.Stderr.Fd())) && (runtime.GOOS != "windows"))
-	l.SetWriter(os.Stderr)
 	l.SetCaptureCallers(true)
 
 	return l
@@ -60,14 +62,15 @@ func NewGlobalIQLogger() *logger {
 
 func NewIQLogger(jsonMode bool) *logger {
 	logger := &logger{
-		debug:             false,
-		logFields:         NewLogFields(),
-		captureCallers:    false,
-		IncludeTimePrefix: false,
-		TimePrefixFormat:  time.StampMicro,
-		out:               os.Stderr,
-		newLine:           true,
+		logFields:       NewLogFields(),
+		captureCallers:  false,
+		IncludeTime:     true,
+		TimestampFormat: TimestampFormatRFC3339Milli,
+		newLine:         true,
+		out:             io.Discard,
+		Level:           LevelInfo,
 	}
+	logger.SetWriter(os.Stderr)
 	debugStr := os.Getenv("IQLOG_DEBUG")
 	if b, _ := strconv.ParseBool(debugStr); b {
 		logger.SetDebugMode(true)
@@ -77,14 +80,32 @@ func NewIQLogger(jsonMode bool) *logger {
 		logger.SetJSONMode(true)
 	} else {
 		logger.SetJSONMode(false)
-		logger.useColour = terminal.IsTerminal(int(os.Stderr.Fd())) && (runtime.GOOS != "windows")
 	}
 
-	logger.bufferPool = sync.Pool{
-		New: func() any {
-			return new(bytes.Buffer)
-		},
-	}
+	// // Global buffer pool for all logging calls
+	// logger.bufferPool = sync.Pool{
+	// 	New: func() any {
+	// 		return bytes.NewBuffer(make([]byte, 0, maxLineLen))
+	// 	},
+	// }
+	// oneBuffer := logger.bufferPool.Get().(*bytes.Buffer)
+	// twoBuffer := logger.bufferPool.Get().(*bytes.Buffer)
+	// logger.bufferPool.Put(oneBuffer)
+	// logger.bufferPool.Put(twoBuffer)
+
+	// // Global buffer pool for all logging calls
+	// logger.fixedSlicePool = sync.Pool{
+	// 	New: func() any {
+	// 		// Preallocate a slice with capacity
+	// 		return &[maxLineLen]byte{}
+	// 		// s := [maxLineLen]byte{}
+	// 		// return &s
+	// 	},
+	// }
+	// oneSlice := logger.fixedSlicePool.Get().(*[maxLineLen]byte)
+	// twoSlice := logger.fixedSlicePool.Get().(*[maxLineLen]byte)
+	// logger.fixedSlicePool.Put(oneSlice)
+	// logger.fixedSlicePool.Put(twoSlice)
 
 	return logger
 }
@@ -113,23 +134,54 @@ func (l *logger) WithGroup(name string) *logger {
 
 func (l *logger) copy() *logger {
 	nl := *l
-	nl.baseRecord = l.baseRecord
+	// nl.baseRecord = l.baseRecord
 	return &nl
 }
 
 // Add a context to the log entry.
 func WithContext(ctx context.Context) *logger {
 	if GlobalLogger == nil {
-		return &logger{
-			ctx:       ctx,
-			jsonMode:  false,
-			debug:     false,
-			out:       os.Stderr,
-			useColour: terminal.IsTerminal(int(os.Stderr.Fd())) && (runtime.GOOS != "windows"),
-		}
+		return NewGlobalIQLogger()
 	} else {
 		nl := GlobalLogger
 		nl.ctx = ctx
 		return nl
 	}
 }
+
+// func (l *logger) HandleMsg(level Level, msg string, args ...interface{}) {
+// 	lb := &preallocLine{
+// 		logger: l,
+// 	}
+// 	if l.jsonMode {
+// 		lb.output[0] = '{'
+// 		lb.bytesUsed++
+// 	}
+// 	lb.AddTime()
+
+// 	if lb.logger.jsonMode {
+// 		lb.writeFinalJSON(msg, args...)
+// 	} else {
+// 		lb.writeFinalConsole(msg, args...)
+// 	}
+// }
+
+// func (l *logger) HandleMsgf(level Level, format string, args ...interface{}) {
+// 	lb := &preallocLine{
+// 		logger: l,
+// 	}
+// 	if l.jsonMode {
+// 		lb.output[0] = '{'
+// 		lb.bytesUsed++
+// 	}
+// 	lb.AddTime()
+
+// 	// TODO: use fmt.Appendf ?
+// 	str := fmt.Sprintf(format, args...)
+
+// 	if lb.logger.jsonMode {
+// 		lb.writeFinalJSON(str)
+// 	} else {
+// 		lb.writeFinalConsole(str)
+// 	}
+// }
