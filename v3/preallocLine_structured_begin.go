@@ -12,6 +12,7 @@ func emptypreallocLine(l *logger) *preallocLine {
 	pal.bytesUsed = 0
 	pal.jsonMode = l.jsonMode
 	pal.out = l.out
+	pal.includeTime = l.IncludeTime
 	return pal
 }
 
@@ -23,37 +24,35 @@ func (pal *preallocLine) writeInitialJSON(level Level) {
 	// Convert Level to string
 	switch level {
 	case LevelDebug:
-		pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, "\"level\":\"debug\",\"message\":\"")
+		pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, "\"level\":\"debug\"")
 	case LevelInfo:
-		pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, "\"level\":\"info\",\"message\":\"")
+		pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, "\"level\":\"info\"")
 	case LevelWarn:
-		pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, "\"level\":\"warn\",\"message\":\"")
+		pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, "\"level\":\"warn\"")
 	case LevelError:
-		pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, "\"level\":\"error\",\"message\":\"")
+		pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, "\"level\":\"error\"")
 	case LevelFatal:
-		pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, "\"level\":\"fatal\",\"message\":\"")
+		pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, "\"level\":\"fatal\"")
 	case LevelPanic:
-		pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, "\"level\":\"panic\",\"message\":\"")
+		pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, "\"level\":\"panic\"")
 	default:
-		pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, "\"level\":\"unknown\",\"message\":\"")
+		pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, "\"level\":\"unknown\"")
 	}
 }
 
 func (pal *preallocLine) writeInitialConsole(level Level) {
-	if pal.bytesUsed == 0 {
-		pal.AddTime()
-		if useColour {
-			pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, 0, string(ansiColourPrefix(level)))
-		} else {
-			pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, 0, string(levelPrefix(level)))
-		}
+	pal.AddTime()
+	if useColour {
+		pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, string(ansiColourPrefix(level)))
+	} else {
+		pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, string(levelPrefix(level)))
 	}
 }
 
 func (pal *preallocLine) AddTime() {
-	// if !pal.IncludeTime {
-	// 	return
-	// }
+	if !pal.includeTime {
+		return
+	}
 
 	timeNow := time.Now()
 	year, month, day := timeNow.Date()
@@ -75,7 +74,8 @@ func (pal *preallocLine) AddTime() {
 		setIntBytes(prefixArr[23:], int64(min), 2)
 		setIntBytes(prefixArr[26:], int64(sec), 2)
 		setIntBytes(prefixArr[29:], int64(usec), 6)
-		if len(pal.output) > 1 {
+
+		if pal.bytesUsed > 1 {
 			// Use the comma
 			copy(pal.output[pal.bytesUsed:], prefixArr[:37])
 			pal.bytesUsed += 37
@@ -86,7 +86,7 @@ func (pal *preallocLine) AddTime() {
 		}
 
 	} else {
-		var consolePrefixFull = [37]byte{
+		var consolePrefixFull = [29]byte{
 			'[', '0', '0', '0', '0', '-', '0', '0', '-', '0', '0',
 			'T', '0', '0', ':', '0', '0', ':', '0', '0', '.',
 			'0', '0', '0', '0', '0', '0', ']', ' ',
@@ -99,8 +99,8 @@ func (pal *preallocLine) AddTime() {
 		setIntBytes(consolePrefixFull[15:], int64(min), 2)
 		setIntBytes(consolePrefixFull[18:], int64(sec), 2)
 		setIntBytes(consolePrefixFull[21:], int64(usec), 6)
-		copy(pal.output[pal.bytesUsed:], consolePrefixFull[:28])
-		pal.bytesUsed += 28
+		copy(pal.output[pal.bytesUsed:], consolePrefixFull[:29])
+		pal.bytesUsed += 29
 	}
 }
 
@@ -209,10 +209,8 @@ func (l *logger) WithPreallocLineInfo() *preallocLine {
 	// pal.output = slice
 	if pal.jsonMode {
 		pal.writeInitialJSON(LevelInfo)
-		pal.writeFinalJSON("")
 	} else {
 		pal.writeInitialConsole(LevelInfo)
-		pal.writeFinalConsole("")
 	}
 	return pal
 }

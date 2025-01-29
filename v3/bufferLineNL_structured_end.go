@@ -15,12 +15,17 @@ func (bl *bufferLineNL) Msg(msg string) {
 		bl.writeFinalConsole(msg)
 	}
 }
+
 func (bl *bufferLineNL) Msgf(format string, args ...interface{}) {
 	if bl.buffer == nil {
 		return
 	}
-	msg := fmt.Sprintf(format, args...)
-	bl.Msg(msg)
+
+	if bl.jsonMode {
+		bl.writeFinalJSONF(format, args...)
+	} else {
+		bl.writeFinalConsoleF(format, args...)
+	}
 }
 
 func (bl *bufferLineNL) writeFinalConsole(msg string, args ...interface{}) {
@@ -62,9 +67,33 @@ func (bl *bufferLineNL) writeFinalConsole(msg string, args ...interface{}) {
 	bufferLineNLPool.Put(bl)
 }
 
+func (bl *bufferLineNL) writeFinalConsoleF(format string, args ...interface{}) {
+	ba := baPool.Get().(*bytesAppender)
+	ba.Bytes = ba.Bytes[:0] // Clear the slice before use
+	fmt.Fprintf(ba, format, args...)
+	bl.buffer.Grow(len(ba.Bytes))
+	bl.buffer.Write(ba.Bytes)
+	baPool.Put(ba)
+
+	// bia := biapool.Get().(*byteIndexAppender)
+	// bia.Index = 0
+	// fmt.Fprintf(bia, format, args...)
+	// bl.buffer.Grow(bia.Index)
+	// bl.buffer.Write(bia.Bytes[:bia.Index])
+	// biapool.Put(bia)
+
+	// if bl.logger.newLine {
+	bl.buffer.WriteByte('\n')
+	// }
+
+	bl.out.Write(bl.buffer.Bytes())
+	bufferLineNLPool.Put(bl)
+}
+
 func (bl *bufferLineNL) writeFinalJSON(msg string, args ...interface{}) {
 	// write JSON closer
 
+	bl.buffer.WriteString(",\"message\":\"")
 	bl.buffer.WriteString(msg)
 
 	// followed by args
@@ -103,5 +132,32 @@ func (bl *bufferLineNL) writeFinalJSON(msg string, args ...interface{}) {
 
 	bl.out.Write(bl.buffer.Bytes())
 
+	bufferLineNLPool.Put(bl)
+}
+
+func (bl *bufferLineNL) writeFinalJSONF(format string, args ...interface{}) {
+	bl.buffer.WriteString(",\"message\":\"")
+
+	ba := baPool.Get().(*bytesAppender)
+	ba.Bytes = ba.Bytes[:0] // Clear the slice before use
+	fmt.Fprintf(ba, format, args...)
+	bl.buffer.Grow(len(ba.Bytes))
+	bl.buffer.Write(ba.Bytes)
+	baPool.Put(ba)
+
+	// bia := biapool.Get().(*byteIndexAppender)
+	// bia.Index = 0
+	// fmt.Fprintf(bia, format, args...)
+	// bl.buffer.Grow(bia.Index)
+	// bl.buffer.Write(bia.Bytes[:bia.Index])
+	// biapool.Put(bia)
+
+	// if bl.logger.newLine {
+	bl.buffer.Write([]byte("\"}\n"))
+	// } else {
+	// 	bl.buffer.Write([]byte("\"}"))
+	// }
+
+	bl.out.Write(bl.buffer.Bytes())
 	bufferLineNLPool.Put(bl)
 }

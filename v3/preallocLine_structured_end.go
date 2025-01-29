@@ -19,8 +19,12 @@ func (pal *preallocLine) Msgf(format string, args ...interface{}) {
 	if pal.bytesUsed == 0 {
 		return
 	}
-	msg := fmt.Sprintf(format, args...)
-	pal.Msg(msg)
+
+	if pal.jsonMode {
+		pal.writeFinalJSONF(format, args...)
+	} else {
+		pal.writeFinalConsoleF(format, args...)
+	}
 }
 
 func (pal *preallocLine) writeFinalConsole(msg string, args ...interface{}) {
@@ -64,8 +68,35 @@ func (pal *preallocLine) writeFinalConsole(msg string, args ...interface{}) {
 	preallocLinePool.Put(pal)
 }
 
+func (pal *preallocLine) writeFinalConsoleF(format string, args ...interface{}) {
+
+	// ba := baPool.Get().(*bytesAppender)
+	// ba.Bytes = ba.Bytes[:0] // Clear the slice before use
+	// fmt.Fprintf(ba, format, args...)
+	// pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, string(bia.Bytes[:bia.Index]))
+	// baPool.Put(ba)
+
+	bia := biapool.Get().(*byteIndexAppender)
+	bia.Index = 0
+	fmt.Fprintf(bia, format, args...)
+	copy(pal.output[pal.bytesUsed:], bia.Bytes[:bia.Index])
+	pal.bytesUsed += bia.Index
+	// pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, string(bia.Bytes[:bia.Index]))
+	biapool.Put(bia)
+
+	// if pal.logger.newLine {
+	pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, "\n")
+	// }
+
+	pal.out.Write(pal.output[:pal.bytesUsed])
+
+	preallocLinePool.Put(pal)
+}
+
 func (pal *preallocLine) writeFinalJSON(msg string, args ...interface{}) {
 	// write JSON closer
+
+	pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, ",\"message\":\"")
 
 	pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, msg)
 
@@ -96,6 +127,35 @@ func (pal *preallocLine) writeFinalJSON(msg string, args ...interface{}) {
 			pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, fmt.Sprintf("%v", thisarg))
 		}
 	}
+
+	// if pal.logger.newLine {
+	pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, "\"}\n")
+	// } else {
+	// 	pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, "\"}")
+	// }
+	pal.out.Write(pal.output[:pal.bytesUsed])
+
+	preallocLinePool.Put(pal)
+}
+
+func (pal *preallocLine) writeFinalJSONF(format string, args ...interface{}) {
+	// write JSON closer
+
+	pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, ",\"message\":\"")
+
+	// ba := baPool.Get().(*bytesAppender)
+	// ba.Bytes = ba.Bytes[:0] // Clear the slice before use
+	// fmt.Fprintf(ba, format, args...)
+	// pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, string(bia.Bytes[:bia.Index]))
+	// baPool.Put(ba)
+
+	bia := biapool.Get().(*byteIndexAppender)
+	bia.Index = 0
+	fmt.Fprintf(bia, format, args...)
+	copy(pal.output[pal.bytesUsed:], bia.Bytes[:bia.Index])
+	pal.bytesUsed += bia.Index
+	// pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, string(bia.Bytes[:bia.Index]))
+	biapool.Put(bia)
 
 	// if pal.logger.newLine {
 	pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, "\"}\n")

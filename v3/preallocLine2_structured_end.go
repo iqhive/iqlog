@@ -19,8 +19,12 @@ func (pal *preallocLine2) Msgf(format string, args ...interface{}) {
 	if pal.output == nil {
 		return
 	}
-	msg := fmt.Sprintf(format, args...)
-	pal.Msg(msg)
+
+	if pal.jsonMode {
+		pal.writeFinalJSONF(format, args...)
+	} else {
+		pal.writeFinalConsoleF(format, args...)
+	}
 }
 
 func (pal *preallocLine2) writeFinalConsole(msg string, args ...interface{}) {
@@ -64,8 +68,34 @@ func (pal *preallocLine2) writeFinalConsole(msg string, args ...interface{}) {
 	preallocLine2Pool.Put(pal)
 }
 
+func (pal *preallocLine2) writeFinalConsoleF(format string, args ...interface{}) {
+
+	// ba := baPool.Get().(*bytesAppender)
+	// ba.Bytes = ba.Bytes[:0] // Clear the slice before use
+	// fmt.Fprintf(ba, format, args...)
+	// copy(pal.output[pal.bytesUsed:], bia.Bytes[:bia.Index])
+	// baPool.Put(ba)
+
+	bia := biapool.Get().(*byteIndexAppender)
+	bia.Index = 0
+	fmt.Fprintf(bia, format, args...)
+	copy(pal.output[pal.bytesUsed:], bia.Bytes[:bia.Index])
+	pal.bytesUsed += bia.Index
+	// pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, "\n")
+	biapool.Put(bia)
+
+	// if pal.logger.newLine {
+	pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, "\n")
+	// }
+
+	pal.out.Write(pal.output[:pal.bytesUsed])
+
+	preallocLine2Pool.Put(pal)
+}
+
 func (pal *preallocLine2) writeFinalJSON(msg string, args ...interface{}) {
 	// write JSON closer
+	pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, ",\"message\":\"")
 
 	pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, msg)
 
@@ -96,6 +126,34 @@ func (pal *preallocLine2) writeFinalJSON(msg string, args ...interface{}) {
 			pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, fmt.Sprintf("%v", thisarg))
 		}
 	}
+
+	// if pal.logger.newLine {
+	pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, "\"}\n")
+	// } else {
+	// 	pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, "\"}")
+	// }
+
+	pal.out.Write(pal.output[:pal.bytesUsed])
+
+	preallocLine2Pool.Put(pal)
+}
+
+func (pal *preallocLine2) writeFinalJSONF(format string, args ...interface{}) {
+	// write JSON closer
+	pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, ",\"message\":\"")
+
+	// ba := baPool.Get().(*bytesAppender)
+	// ba.Bytes = ba.Bytes[:0] // Clear the slice before use
+	// fmt.Fprintf(ba, format, args...)
+	// bsl.output = append(bsl.output, ba.Bytes...)
+	// baPool.Put(ba)
+
+	bia := biapool.Get().(*byteIndexAppender)
+	bia.Index = 0
+	fmt.Fprintf(bia, format, args...)
+	copy(pal.output[pal.bytesUsed:], bia.Bytes[:bia.Index])
+	pal.bytesUsed += bia.Index
+	biapool.Put(bia)
 
 	// if pal.logger.newLine {
 	pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, "\"}\n")

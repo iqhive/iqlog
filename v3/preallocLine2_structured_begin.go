@@ -12,6 +12,9 @@ func emptypreallocLine2(l *logger) *preallocLine2 {
 	pal.jsonMode = l.jsonMode
 	pal.out = l.out
 	pal.bytesUsed = 0
+	pal.includeTime = l.IncludeTime
+	// zero the output
+	// pal.output = pal.output[:0]
 	return pal
 }
 
@@ -23,37 +26,38 @@ func (pal *preallocLine2) writeInitialJSON(level Level) {
 	// Convert Level to string
 	switch level {
 	case LevelDebug:
-		pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, "\"level\":\"debug\",\"message\":\"")
+		pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, "\"level\":\"debug\"")
 	case LevelInfo:
-		pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, "\"level\":\"info\",\"message\":\"")
+		pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, "\"level\":\"info\"")
 	case LevelWarn:
-		pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, "\"level\":\"warn\",\"message\":\"")
+		pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, "\"level\":\"warn\"")
 	case LevelError:
-		pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, "\"level\":\"error\",\"message\":\"")
+		pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, "\"level\":\"error\"")
 	case LevelFatal:
-		pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, "\"level\":\"fatal\",\"message\":\"")
+		pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, "\"level\":\"fatal\"")
 	case LevelPanic:
-		pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, "\"level\":\"panic\",\"message\":\"")
+		pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, "\"level\":\"panic\"")
 	default:
-		pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, "\"level\":\"unknown\",\"message\":\"")
+		pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, "\"level\":\"unknown\"")
 	}
 }
 
 func (pal *preallocLine2) writeInitialConsole(level Level) {
-	if pal.bytesUsed == 0 {
-		pal.AddTime()
-		if useColour {
-			pal.bytesUsed += safeOutputCopy(pal.output, 0, string(ansiColourPrefix(level)))
-		} else {
-			pal.bytesUsed += safeOutputCopy(pal.output, 0, string(levelPrefix(level)))
-		}
+	// fmt.Printf("before time output: (%d/%d) |%s|\n", pal.bytesUsed, len(pal.output), string(pal.output))
+	pal.AddTime()
+	// fmt.Printf("after time output: (%d/%d) |%s|\n", pal.bytesUsed, len(pal.output), string(pal.output))
+	if useColour {
+		pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, string(ansiColourPrefix(level)))
+	} else {
+		pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, string(levelPrefix(level)))
 	}
+	// fmt.Printf("after writeInitialConsole: (%d/%d) |%s|\n", pal.bytesUsed, len(pal.output), string(pal.output))
 }
 
 func (pal *preallocLine2) AddTime() {
-	// if !pal.logger.IncludeTime {
-	// 	return
-	// }
+	if !pal.includeTime {
+		return
+	}
 
 	timeNow := time.Now()
 	year, month, day := timeNow.Date()
@@ -75,7 +79,7 @@ func (pal *preallocLine2) AddTime() {
 		setIntBytes(prefixArr[23:], int64(min), 2)
 		setIntBytes(prefixArr[26:], int64(sec), 2)
 		setIntBytes(prefixArr[29:], int64(usec), 6)
-		if len(pal.output) > 1 {
+		if pal.bytesUsed > 1 {
 			// Use the comma
 			copy(pal.output[pal.bytesUsed:], prefixArr[:37])
 			pal.bytesUsed += 37
@@ -86,7 +90,7 @@ func (pal *preallocLine2) AddTime() {
 		}
 
 	} else {
-		var consolePrefixFull = [37]byte{
+		var consolePrefixFull = [29]byte{
 			'[', '0', '0', '0', '0', '-', '0', '0', '-', '0', '0',
 			'T', '0', '0', ':', '0', '0', ':', '0', '0', '.',
 			'0', '0', '0', '0', '0', '0', ']', ' ',
@@ -99,8 +103,11 @@ func (pal *preallocLine2) AddTime() {
 		setIntBytes(consolePrefixFull[15:], int64(min), 2)
 		setIntBytes(consolePrefixFull[18:], int64(sec), 2)
 		setIntBytes(consolePrefixFull[21:], int64(usec), 6)
-		copy(pal.output[pal.bytesUsed:], consolePrefixFull[:28])
-		pal.bytesUsed += 28
+		copy(pal.output[pal.bytesUsed:], consolePrefixFull[:29])
+		pal.bytesUsed += 29
+
+		// fmt.Printf("during time output: (%d/%d) |%s|\n", pal.bytesUsed, len(pal.output), string(pal.output))
+
 	}
 }
 
@@ -205,13 +212,15 @@ func (l *logger) WithPreallocLine2Info() *preallocLine2 {
 		return nooppreallocLine2
 	}
 	pal := emptypreallocLine2(l)
+	// fmt.Printf("Info1 output: (%d/%d) |%s|\n", pal.bytesUsed, len(pal.output), string(pal.output))
+
 	if pal.jsonMode {
 		pal.writeInitialJSON(LevelInfo)
-		pal.writeFinalJSON("")
 	} else {
 		pal.writeInitialConsole(LevelInfo)
-		pal.writeFinalConsole("")
 	}
+	// fmt.Printf("Info2 output: (%d/%d) |%s|\n", pal.bytesUsed, len(pal.output), string(pal.output))
+
 	return pal
 }
 

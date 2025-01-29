@@ -12,29 +12,31 @@ func emptybytesliceLine(l *logger) *bytesliceLine {
 	bsl.output = make([]byte, 0)
 	bsl.out = l.out
 	bsl.jsonMode = l.jsonMode
+	bsl.includeTime = l.IncludeTime
 	return bsl
 }
 
 func (bsl *bytesliceLine) writeInitialJSON(level Level) {
 	bsl.output = append(bsl.output, '{')
+
 	bsl.AddTime() // adds a trailing comma if it outputs
 
 	// Convert Level to string
 	switch level {
 	case LevelDebug:
-		bsl.output = append(bsl.output, []byte("\"level\":\"debug\",\"message\":\"")...)
+		bsl.output = append(bsl.output, []byte("\"level\":\"debug\"")...)
 	case LevelInfo:
-		bsl.output = append(bsl.output, []byte("\"level\":\"info\",\"message\":\"")...)
+		bsl.output = append(bsl.output, []byte("\"level\":\"info\"")...)
 	case LevelWarn:
-		bsl.output = append(bsl.output, []byte("\"level\":\"warn\",\"message\":\"")...)
+		bsl.output = append(bsl.output, []byte("\"level\":\"warn\"")...)
 	case LevelError:
-		bsl.output = append(bsl.output, []byte("\"level\":\"error\",\"message\":\"")...)
+		bsl.output = append(bsl.output, []byte("\"level\":\"error\"")...)
 	case LevelFatal:
-		bsl.output = append(bsl.output, []byte("\"level\":\"fatal\",\"message\":\"")...)
+		bsl.output = append(bsl.output, []byte("\"level\":\"fatal\"")...)
 	case LevelPanic:
-		bsl.output = append(bsl.output, []byte("\"level\":\"panic\",\"message\":\"")...)
+		bsl.output = append(bsl.output, []byte("\"level\":\"panic\"")...)
 	default:
-		bsl.output = append(bsl.output, []byte("\"level\":\"unknown\",\"message\":\"")...)
+		bsl.output = append(bsl.output, []byte("\"level\":\"unknown\"")...)
 	}
 
 }
@@ -51,9 +53,9 @@ func (bsl *bytesliceLine) writeInitialConsole(level Level) {
 }
 
 func (bsl *bytesliceLine) AddTime() {
-	// if !bsl.logger.IncludeTime {
-	// 	return
-	// }
+	if !bsl.includeTime {
+		return
+	}
 
 	timeNow := time.Now()
 	year, month, day := timeNow.Date()
@@ -84,7 +86,7 @@ func (bsl *bytesliceLine) AddTime() {
 		}
 
 	} else {
-		var consolePrefixFull = [37]byte{
+		var consolePrefixFull = [29]byte{
 			'[', '0', '0', '0', '0', '-', '0', '0', '-', '0', '0',
 			'T', '0', '0', ':', '0', '0', ':', '0', '0', '.',
 			'0', '0', '0', '0', '0', '0', ']', ' ',
@@ -97,7 +99,7 @@ func (bsl *bytesliceLine) AddTime() {
 		setIntBytes(consolePrefixFull[15:], int64(min), 2)
 		setIntBytes(consolePrefixFull[18:], int64(sec), 2)
 		setIntBytes(consolePrefixFull[21:], int64(usec), 6)
-		bsl.output = append(bsl.output, consolePrefixFull[:28]...)
+		bsl.output = append(bsl.output, consolePrefixFull[:29]...)
 	}
 }
 

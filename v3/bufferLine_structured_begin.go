@@ -9,7 +9,6 @@ var noopbufferLine = &bufferLine{
 	logger: &logger{
 		Level: 999999,
 	},
-	level: -999999,
 }
 
 // var emptybufferLine = bufferLine{}
@@ -26,21 +25,21 @@ func (bl *bufferLine) writeInitialJSON(level Level) {
 	bl.AddTime() // adds a comma if it runs
 
 	// Convert Level to string
-	switch bl.level {
+	switch level {
 	case LevelDebug:
-		bl.buffer.Write([]byte("\"level\":\"debug\",\"message\":\""))
+		bl.buffer.Write([]byte("\"level\":\"debug\""))
 	case LevelInfo:
-		bl.buffer.Write([]byte("\"level\":\"info\",\"message\":\""))
+		bl.buffer.Write([]byte("\"level\":\"info\""))
 	case LevelWarn:
-		bl.buffer.Write([]byte("\"level\":\"warn\",\"message\":\""))
+		bl.buffer.Write([]byte("\"level\":\"warn\""))
 	case LevelError:
-		bl.buffer.Write([]byte("\"level\":\"error\",\"message\":\""))
+		bl.buffer.Write([]byte("\"level\":\"error\""))
 	case LevelFatal:
-		bl.buffer.Write([]byte("\"level\":\"fatal\",\"message\":\""))
+		bl.buffer.Write([]byte("\"level\":\"fatal\""))
 	case LevelPanic:
-		bl.buffer.Write([]byte("\"level\":\"panic\",\"message\":\""))
+		bl.buffer.Write([]byte("\"level\":\"panic\""))
 	default:
-		bl.buffer.Write([]byte("\"level\":\"unknown\",\"message\":\""))
+		bl.buffer.Write([]byte("\"level\":\"unknown\""))
 	}
 
 }
@@ -88,7 +87,7 @@ func (bl *bufferLine) AddTime() {
 		}
 
 	} else {
-		var consolePrefixFull = [37]byte{
+		var consolePrefixFull = [29]byte{
 			'[', '0', '0', '0', '0', '-', '0', '0', '-', '0', '0',
 			'T', '0', '0', ':', '0', '0', ':', '0', '0', '.',
 			'0', '0', '0', '0', '0', '0', ']', ' ',
@@ -101,7 +100,7 @@ func (bl *bufferLine) AddTime() {
 		setIntBytes(consolePrefixFull[15:], int64(min), 2)
 		setIntBytes(consolePrefixFull[18:], int64(sec), 2)
 		setIntBytes(consolePrefixFull[21:], int64(usec), 6)
-		bl.buffer.Write(consolePrefixFull[:28])
+		bl.buffer.Write(consolePrefixFull[:29])
 	}
 }
 
@@ -111,7 +110,6 @@ func (l *logger) WithBufferLineTrace() *bufferLine {
 	}
 	bl := emptybufferLine(l)
 	bl.logger = l
-	bl.level = LevelTrace
 	if bl.logger.jsonMode {
 		bl.writeInitialJSON(LevelTrace)
 	} else {
@@ -125,7 +123,6 @@ func (l *logger) WithBufferLineDebug() *bufferLine {
 		return noopbufferLine
 	}
 	bl := emptybufferLine(l)
-	bl.level = LevelDebug
 	if bl.logger.jsonMode {
 		bl.writeInitialJSON(LevelDebug)
 	} else {
@@ -139,7 +136,6 @@ func (l *logger) WithBufferLineInfo() *bufferLine {
 		return noopbufferLine
 	}
 	bl := emptybufferLine(l)
-	bl.level = LevelInfo
 	if bl.logger.jsonMode {
 		bl.writeInitialJSON(LevelInfo)
 	} else {
@@ -153,7 +149,6 @@ func (l *logger) WithBufferLineWarn() *bufferLine {
 		return noopbufferLine
 	}
 	bl := emptybufferLine(l)
-	bl.level = LevelWarn
 	if bl.logger.jsonMode {
 		bl.writeInitialJSON(LevelWarn)
 	} else {
@@ -167,7 +162,6 @@ func (l *logger) WithBufferLineError() *bufferLine {
 		return noopbufferLine
 	}
 	bl := emptybufferLine(l)
-	bl.level = LevelError
 	if bl.logger.jsonMode {
 		bl.writeInitialJSON(LevelError)
 	} else {
@@ -181,7 +175,6 @@ func (l *logger) WithBufferLinePanic() *bufferLine {
 		return noopbufferLine
 	}
 	bl := emptybufferLine(l)
-	bl.level = LevelPanic
 	if bl.logger.jsonMode {
 		bl.writeInitialJSON(LevelPanic)
 	} else {
@@ -197,7 +190,6 @@ func (l *logger) WithBufferLineFatal() *bufferLine {
 		return noopbufferLine
 	}
 	bl := emptybufferLine(l)
-	bl.level = LevelFatal
 	if bl.logger.jsonMode {
 		bl.writeInitialJSON(LevelFatal)
 	} else {

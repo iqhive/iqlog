@@ -7,9 +7,13 @@ import (
 
 var noopbufferLineNL = &bufferLineNL{}
 
-func emptybufferLineNL() *bufferLineNL {
+func emptybufferLineNL(l *logger) *bufferLineNL {
 	bl := bufferLineNLPool.Get().(*bufferLineNL)
 	bl.buffer.Reset()
+	bl.out = l.out
+	bl.includeTime = l.IncludeTime
+	bl.jsonMode = l.jsonMode
+
 	return bl
 }
 
@@ -20,19 +24,19 @@ func (bl *bufferLineNL) writeInitialJSON(level Level) {
 	// Convert Level to string
 	switch level {
 	case LevelDebug:
-		bl.buffer.Write([]byte("\"level\":\"debug\",\"message\":\""))
+		bl.buffer.Write([]byte("\"level\":\"debug\""))
 	case LevelInfo:
-		bl.buffer.Write([]byte("\"level\":\"info\",\"message\":\""))
+		bl.buffer.Write([]byte("\"level\":\"info\""))
 	case LevelWarn:
-		bl.buffer.Write([]byte("\"level\":\"warn\",\"message\":\""))
+		bl.buffer.Write([]byte("\"level\":\"warn\""))
 	case LevelError:
-		bl.buffer.Write([]byte("\"level\":\"error\",\"message\":\""))
+		bl.buffer.Write([]byte("\"level\":\"error\""))
 	case LevelFatal:
-		bl.buffer.Write([]byte("\"level\":\"fatal\",\"message\":\""))
+		bl.buffer.Write([]byte("\"level\":\"fatal\""))
 	case LevelPanic:
-		bl.buffer.Write([]byte("\"level\":\"panic\",\"message\":\""))
+		bl.buffer.Write([]byte("\"level\":\"panic\""))
 	default:
-		bl.buffer.Write([]byte("\"level\":\"unknown\",\"message\":\""))
+		bl.buffer.Write([]byte("\"level\":\"unknown\""))
 	}
 
 }
@@ -47,9 +51,9 @@ func (bl *bufferLineNL) writeInitialConsole(level Level) {
 }
 
 func (bl *bufferLineNL) AddTime() {
-	// if !bl.logger.IncludeTime {
-	// 	return
-	// }
+	if !bl.includeTime {
+		return
+	}
 
 	timeNow := time.Now()
 	year, month, day := timeNow.Date()
@@ -80,7 +84,7 @@ func (bl *bufferLineNL) AddTime() {
 		}
 
 	} else {
-		var consolePrefixFull = [37]byte{
+		var consolePrefixFull = [29]byte{
 			'[', '0', '0', '0', '0', '-', '0', '0', '-', '0', '0',
 			'T', '0', '0', ':', '0', '0', ':', '0', '0', '.',
 			'0', '0', '0', '0', '0', '0', ']', ' ',
@@ -93,7 +97,7 @@ func (bl *bufferLineNL) AddTime() {
 		setIntBytes(consolePrefixFull[15:], int64(min), 2)
 		setIntBytes(consolePrefixFull[18:], int64(sec), 2)
 		setIntBytes(consolePrefixFull[21:], int64(usec), 6)
-		bl.buffer.Write(consolePrefixFull[:28])
+		bl.buffer.Write(consolePrefixFull[:29])
 	}
 }
 
@@ -101,8 +105,7 @@ func (l *logger) WithBufferLineNLTrace() *bufferLineNL {
 	if l.Level > LevelTrace {
 		return noopbufferLineNL
 	}
-	bl := emptybufferLineNL()
-	bl.out = l.out
+	bl := emptybufferLineNL(l)
 	if bl.jsonMode {
 		bl.writeInitialJSON(LevelTrace)
 	} else {
@@ -115,8 +118,7 @@ func (l *logger) WithBufferLineNLDebug() *bufferLineNL {
 	if l.Level > LevelDebug {
 		return noopbufferLineNL
 	}
-	bl := emptybufferLineNL()
-	bl.out = l.out
+	bl := emptybufferLineNL(l)
 	if bl.jsonMode {
 		bl.writeInitialJSON(LevelDebug)
 	} else {
@@ -129,8 +131,7 @@ func (l *logger) WithBufferLineNLInfo() *bufferLineNL {
 	if l.Level > LevelInfo {
 		return noopbufferLineNL
 	}
-	bl := emptybufferLineNL()
-	bl.out = l.out
+	bl := emptybufferLineNL(l)
 	if bl.jsonMode {
 		bl.writeInitialJSON(LevelInfo)
 	} else {
@@ -143,8 +144,7 @@ func (l *logger) WithBufferLineNLWarn() *bufferLineNL {
 	if l.Level > LevelWarn {
 		return noopbufferLineNL
 	}
-	bl := emptybufferLineNL()
-	bl.out = l.out
+	bl := emptybufferLineNL(l)
 	if bl.jsonMode {
 		bl.writeInitialJSON(LevelWarn)
 	} else {
@@ -157,8 +157,7 @@ func (l *logger) WithBufferLineNLError() *bufferLineNL {
 	if l.Level > LevelError {
 		return noopbufferLineNL
 	}
-	bl := emptybufferLineNL()
-	bl.out = l.out
+	bl := emptybufferLineNL(l)
 	if bl.jsonMode {
 		bl.writeInitialJSON(LevelError)
 	} else {
@@ -171,8 +170,7 @@ func (l *logger) WithBufferLineNLPanic() *bufferLineNL {
 	if l.Level > LevelPanic {
 		return noopbufferLineNL
 	}
-	bl := emptybufferLineNL()
-	bl.out = l.out
+	bl := emptybufferLineNL(l)
 	if bl.jsonMode {
 		bl.writeInitialJSON(LevelPanic)
 	} else {
@@ -187,8 +185,7 @@ func (l *logger) WithBufferLineNLFatal() *bufferLineNL {
 	if l.Level > LevelFatal {
 		return noopbufferLineNL
 	}
-	bl := emptybufferLineNL()
-	bl.out = l.out
+	bl := emptybufferLineNL(l)
 	if bl.jsonMode {
 		bl.writeInitialJSON(LevelFatal)
 	} else {

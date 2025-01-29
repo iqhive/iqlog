@@ -3,7 +3,7 @@ package iqlog
 import "fmt"
 
 func (bl *bufferLine) Int(name string, val int) *bufferLine {
-	if bl.logger.Level > bl.level {
+	if bl.buffer == nil {
 		return bl
 	}
 	if bl.logger.jsonMode {
@@ -18,7 +18,7 @@ func (bl *bufferLine) Int(name string, val int) *bufferLine {
 }
 
 func (bl *bufferLine) Int64(name string, val int64) *bufferLine {
-	if bl.logger.Level > bl.level {
+	if bl.buffer == nil {
 		return bl
 	}
 	if bl.logger.jsonMode {
@@ -33,7 +33,7 @@ func (bl *bufferLine) Int64(name string, val int64) *bufferLine {
 }
 
 func (bl *bufferLine) Str(name string, s string) *bufferLine {
-	if bl.logger.Level > bl.level {
+	if bl.buffer == nil {
 		return bl
 	}
 	if bl.logger.jsonMode {
@@ -45,7 +45,7 @@ func (bl *bufferLine) Str(name string, s string) *bufferLine {
 }
 
 func (bl *bufferLine) Float32(name string, f float32) *bufferLine {
-	if bl.logger.Level > bl.level {
+	if bl.buffer == nil {
 		return bl
 	}
 	if bl.logger.jsonMode {
@@ -60,7 +60,7 @@ func (bl *bufferLine) Float32(name string, f float32) *bufferLine {
 }
 
 func (bl *bufferLine) Float64(name string, f float64) *bufferLine {
-	if bl.logger.Level > bl.level {
+	if bl.buffer == nil {
 		return bl
 	}
 	if bl.logger.jsonMode {
@@ -75,7 +75,7 @@ func (bl *bufferLine) Float64(name string, f float64) *bufferLine {
 }
 
 func (bl *bufferLine) Bool(name string, b bool) *bufferLine {
-	if bl.logger.Level > bl.level {
+	if bl.buffer == nil {
 		return bl
 	}
 	if bl.logger.jsonMode {
@@ -95,7 +95,7 @@ func (bl *bufferLine) Bool(name string, b bool) *bufferLine {
 }
 
 func (bl *bufferLine) Any(name string, v any) *bufferLine {
-	if bl.logger.Level > bl.level {
+	if bl.buffer == nil {
 		return bl
 	}
 	str := fmt.Sprintf("%v", v)

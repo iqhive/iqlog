@@ -9,7 +9,6 @@ func (bl *bufferLine) Trace(msg string) {
 	if bl.logger.Level > LevelTrace {
 		return
 	}
-	bl.level = LevelTrace
 	if bl.logger.jsonMode {
 		bl.writeFinalJSON(msg)
 	} else {
@@ -28,7 +27,6 @@ func (bl *bufferLine) Debug(msg string) {
 	if bl.logger.Level > LevelDebug {
 		return
 	}
-	bl.level = LevelDebug
 	if bl.logger.jsonMode {
 		bl.writeFinalJSON(msg)
 	} else {
@@ -47,7 +45,6 @@ func (bl *bufferLine) Info(msg string) {
 	if bl.logger.Level > LevelInfo {
 		return
 	}
-	bl.level = LevelInfo
 	if bl.logger.jsonMode {
 		bl.writeFinalJSON(msg)
 	} else {
@@ -66,7 +63,6 @@ func (bl *bufferLine) Warn(msg string) {
 	if bl.logger.Level > LevelWarn {
 		return
 	}
-	bl.level = LevelWarn
 	if bl.logger.jsonMode {
 		bl.writeFinalJSON(msg)
 	} else {
@@ -85,7 +81,6 @@ func (bl *bufferLine) Error(msg string) {
 	if bl.logger.Level > LevelError {
 		return
 	}
-	bl.level = LevelError
 	if bl.logger.jsonMode {
 		bl.writeFinalJSON(msg)
 	} else {
@@ -101,7 +96,7 @@ func (bl *bufferLine) Errorf(format string, args ...interface{}) {
 }
 
 func (bl *bufferLine) Msg(msg string) {
-	if bl.logger.Level > bl.level {
+	if bl.buffer == nil {
 		return
 	}
 	if bl.logger.jsonMode {
@@ -111,11 +106,15 @@ func (bl *bufferLine) Msg(msg string) {
 	}
 }
 func (bl *bufferLine) Msgf(format string, args ...interface{}) {
-	if bl.logger.Level > bl.level {
+	if bl.buffer == nil {
 		return
 	}
-	msg := fmt.Sprintf(format, args...)
-	bl.Msg(msg)
+
+	if bl.logger.jsonMode {
+		bl.writeFinalJSONF(format, args...)
+	} else {
+		bl.writeFinalConsoleF(format, args...)
+	}
 }
 
 func (bl *bufferLine) writeFinalConsole(msg string, args ...interface{}) {
@@ -156,7 +155,31 @@ func (bl *bufferLine) writeFinalConsole(msg string, args ...interface{}) {
 	bufferLinePool.Put(bl)
 }
 
+func (bl *bufferLine) writeFinalConsoleF(format string, args ...interface{}) {
+	ba := baPool.Get().(*bytesAppender)
+	ba.Bytes = ba.Bytes[:0] // Clear the slice before use
+	fmt.Fprintf(ba, format, args...)
+	bl.buffer.Grow(len(ba.Bytes))
+	bl.buffer.Write(ba.Bytes)
+	baPool.Put(ba)
+
+	// bia := biapool.Get().(*byteIndexAppender)
+	// bia.Index = 0
+	// fmt.Fprintf(bia, format, args...)
+	// bl.buffer.Grow(bia.Index)
+	// bl.buffer.Write(bia.Bytes[:bia.Index])
+	// biapool.Put(bia)
+
+	if bl.logger.newLine {
+		bl.buffer.WriteByte('\n')
+	}
+
+	bl.logger.out.Write(bl.buffer.Bytes())
+	bufferLinePool.Put(bl)
+}
+
 func (bl *bufferLine) writeFinalJSON(msg string, args ...interface{}) {
+	bl.buffer.WriteString(",\"message\":\"")
 	bl.buffer.WriteString(msg)
 
 	// followed by args
@@ -186,6 +209,32 @@ func (bl *bufferLine) writeFinalJSON(msg string, args ...interface{}) {
 			bl.buffer.WriteString(fmt.Sprintf("%v", thisarg))
 		}
 	}
+
+	if bl.logger.newLine {
+		bl.buffer.Write([]byte("\"}\n"))
+	} else {
+		bl.buffer.Write([]byte("\"}"))
+	}
+	bl.logger.out.Write(bl.buffer.Bytes())
+	bufferLinePool.Put(bl)
+}
+
+func (bl *bufferLine) writeFinalJSONF(format string, args ...interface{}) {
+	bl.buffer.WriteString(",\"message\":\"")
+
+	ba := baPool.Get().(*bytesAppender)
+	ba.Bytes = ba.Bytes[:0] // Clear the slice before use
+	fmt.Fprintf(ba, format, args...)
+	bl.buffer.Grow(len(ba.Bytes))
+	bl.buffer.Write(ba.Bytes)
+	baPool.Put(ba)
+
+	// bia := biapool.Get().(*byteIndexAppender)
+	// bia.Index = 0
+	// fmt.Fprintf(bia, format, args...)
+	// bl.buffer.Grow(bia.Index)
+	// bl.buffer.Write(bia.Bytes[:bia.Index])
+	// biapool.Put(bia)
 
 	if bl.logger.newLine {
 		bl.buffer.Write([]byte("\"}\n"))

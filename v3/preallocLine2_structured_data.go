@@ -14,6 +14,7 @@ func (pal *preallocLine2) Int(name string, val int) *preallocLine2 {
 	} else {
 		pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, name)
 		pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, "=")
+		// fmt.Printf("Int output: (%d/%d) |%s|\n", pal.bytesUsed, len(pal.output), string(pal.output))
 		pal.bytesUsed += writeIntDecimal(pal.output[pal.bytesUsed:], int64(val))
 		pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, " ")
 	}

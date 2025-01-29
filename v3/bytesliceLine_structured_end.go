@@ -5,22 +5,25 @@ import (
 	"strconv"
 )
 
-func (sbl *bytesliceLine) Msg(msg string) {
-	if sbl.output == nil {
+func (bsl *bytesliceLine) Msg(msg string) {
+	if bsl.output == nil {
 		return
 	}
-	if sbl.jsonMode {
-		sbl.writeFinalJSON(msg)
+	if bsl.jsonMode {
+		bsl.writeFinalJSON(msg)
 	} else {
-		sbl.writeFinalConsole(msg)
+		bsl.writeFinalConsole(msg)
 	}
 }
-func (sbl *bytesliceLine) Msgf(format string, args ...interface{}) {
-	if sbl.output == nil {
+func (bsl *bytesliceLine) Msgf(format string, args ...interface{}) {
+	if bsl.output == nil {
 		return
 	}
-	msg := fmt.Sprintf(format, args...)
-	sbl.Msg(msg)
+	if bsl.jsonMode {
+		bsl.writeFinalJSONF(format, args...)
+	} else {
+		bsl.writeFinalConsoleF(format, args...)
+	}
 }
 
 func (bsl *bytesliceLine) writeFinalConsole(msg string, args ...interface{}) {
@@ -64,8 +67,32 @@ func (bsl *bytesliceLine) writeFinalConsole(msg string, args ...interface{}) {
 	bytesliceLinePool.Put(bsl)
 }
 
+func (bsl *bytesliceLine) writeFinalConsoleF(format string, args ...interface{}) {
+
+	// ba := baPool.Get().(*bytesAppender)
+	// ba.Bytes = ba.Bytes[:0] // Clear the slice before use
+	// fmt.Fprintf(ba, format, args...)
+	// bsl.output = append(bsl.output, ba.Bytes...)
+	// baPool.Put(ba)
+
+	bia := biapool.Get().(*byteIndexAppender)
+	bia.Index = 0
+	fmt.Fprintf(bia, format, args...)
+	bsl.output = append(bsl.output, bia.Bytes[:bia.Index]...)
+	biapool.Put(bia)
+
+	// if bsl.logger.newLine {
+	bsl.output = append(bsl.output, '\n')
+	// }
+
+	bsl.out.Write(bsl.output)
+
+	bytesliceLinePool.Put(bsl)
+}
+
 func (bsl *bytesliceLine) writeFinalJSON(msg string, args ...interface{}) {
 	// write JSON closer
+	bsl.output = append(bsl.output, []byte(",\"message\":\"")...)
 
 	bsl.output = append(bsl.output, msg...)
 
@@ -102,6 +129,29 @@ func (bsl *bytesliceLine) writeFinalJSON(msg string, args ...interface{}) {
 	// } else {
 	// 	bsl.output = append(bsl.output, []byte("\"}")...)
 	// }
+
+	bsl.out.Write(bsl.output)
+
+	bytesliceLinePool.Put(bsl)
+}
+
+func (bsl *bytesliceLine) writeFinalJSONF(format string, args ...interface{}) {
+	bsl.output = append(bsl.output, []byte(",\"message\":\"")...)
+
+	ba := baPool.Get().(*bytesAppender)
+	ba.Bytes = ba.Bytes[:0] // Clear the slice before use
+	fmt.Fprintf(ba, format, args...)
+	bsl.output = append(bsl.output, ba.Bytes...)
+	baPool.Put(ba)
+
+	// bia := biapool.Get().(*byteIndexAppender)
+	// bia.Index = 0
+	// fmt.Fprintf(bia, format, args...)
+	// bsl.output = append(bsl.output, bia.Bytes[:bia.Index]...)
+	// biapool.Put(bia)
+
+	// if bsl.logger.newLine {
+	bsl.output = append(bsl.output, []byte("\"}\n")...)
 
 	bsl.out.Write(bsl.output)
 

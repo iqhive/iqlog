@@ -8,9 +8,10 @@ import (
 )
 
 type bufferLineNL struct {
-	out      io.Writer
-	buffer   *bytes.Buffer
-	jsonMode bool
+	out         io.Writer
+	buffer      *bytes.Buffer
+	jsonMode    bool
+	includeTime bool
 }
 
 func (l *logger) BufferSliceLineTrace(msg string, args ...interface{}) {
@@ -19,6 +20,8 @@ func (l *logger) BufferSliceLineTrace(msg string, args ...interface{}) {
 	}
 	bl := bufferLineNLPool.Get().(*bufferLineNL)
 	bl.out = l.out
+	bl.includeTime = l.IncludeTime
+	bl.jsonMode = l.jsonMode
 	if bl.jsonMode {
 		bl.writeInitialJSON(LevelTrace)
 		bl.writeFinalJSON(msg, args...)
@@ -42,6 +45,8 @@ func (l *logger) BufferSliceLineDebug(msg string, args ...interface{}) {
 	}
 	bl := bufferLineNLPool.Get().(*bufferLineNL)
 	bl.out = l.out
+	bl.includeTime = l.IncludeTime
+	bl.jsonMode = l.jsonMode
 	if bl.jsonMode {
 		bl.writeInitialJSON(LevelDebug)
 		bl.writeFinalJSON(msg, args...)
@@ -65,6 +70,8 @@ func (l *logger) BufferSliceLineInfo(msg string, args ...interface{}) {
 	}
 	bl := bufferLineNLPool.Get().(*bufferLineNL)
 	bl.out = l.out
+	bl.includeTime = l.IncludeTime
+	bl.jsonMode = l.jsonMode
 	if bl.jsonMode {
 		bl.writeInitialJSON(LevelInfo)
 		bl.writeFinalJSON(msg, args...)
@@ -88,6 +95,8 @@ func (l *logger) BufferSliceLinePrint(msg string, args ...interface{}) {
 	}
 	bl := bufferLineNLPool.Get().(*bufferLineNL)
 	bl.out = l.out
+	bl.includeTime = l.IncludeTime
+	bl.jsonMode = l.jsonMode
 	if bl.jsonMode {
 		bl.writeInitialJSON(LevelPrint)
 		bl.writeFinalJSON(msg, args...)
@@ -111,6 +120,8 @@ func (l *logger) BufferSliceLineWarn(msg string, args ...interface{}) {
 	}
 	bl := bufferLineNLPool.Get().(*bufferLineNL)
 	bl.out = l.out
+	bl.includeTime = l.IncludeTime
+	bl.jsonMode = l.jsonMode
 	if bl.jsonMode {
 		bl.writeInitialJSON(LevelWarn)
 		bl.writeFinalJSON(msg, args...)
@@ -134,6 +145,8 @@ func (l *logger) BufferSliceLineError(msg string, args ...interface{}) {
 	}
 	bl := bufferLineNLPool.Get().(*bufferLineNL)
 	bl.out = l.out
+	bl.includeTime = l.IncludeTime
+	bl.jsonMode = l.jsonMode
 	if bl.jsonMode {
 		bl.writeInitialJSON(LevelError)
 		bl.writeFinalJSON(msg, args...)
@@ -158,6 +171,8 @@ func (l *logger) BufferSliceLinePanic(msg string, args ...interface{}) {
 	}
 	bl := bufferLineNLPool.Get().(*bufferLineNL)
 	bl.out = l.out
+	bl.includeTime = l.IncludeTime
+	bl.jsonMode = l.jsonMode
 	if bl.jsonMode {
 		bl.writeInitialJSON(LevelPanic)
 		bl.writeFinalJSON(msg, args...)
@@ -184,6 +199,8 @@ func (l *logger) BufferSliceLineFatal(msg string, args ...interface{}) {
 	}
 	bl := bufferLineNLPool.Get().(*bufferLineNL)
 	bl.out = l.out
+	bl.includeTime = l.IncludeTime
+	bl.jsonMode = l.jsonMode
 	if bl.jsonMode {
 		bl.writeInitialJSON(LevelFatal)
 		bl.writeFinalJSON(msg, args...)
@@ -211,6 +228,8 @@ func (l *logger) BufferSliceLineLog(level Level, msg string, args ...interface{}
 	}
 	bl := bufferLineNLPool.Get().(*bufferLineNL)
 	bl.out = l.out
+	bl.includeTime = l.IncludeTime
+	bl.jsonMode = l.jsonMode
 	if bl.jsonMode {
 		bl.writeInitialJSON(level)
 		bl.writeFinalJSON(msg, args...)

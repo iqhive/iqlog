@@ -5,11 +5,51 @@ import (
 	"log/syslog"
 	"os"
 	"strings"
+
+	"bitbucket.org/iqhive/iqlog/v3/ringbuffer"
 )
 
+type ringWriter struct {
+	ringBuffer *ringbuffer.RingBuffer[[]byte]
+	writer     io.Writer
+}
+
+func (rw *ringWriter) Start() {
+	go func() {
+		for {
+			val, ok := rw.ringBuffer.Dequeue()
+			if !ok {
+				// Nothing available, maybe sleep or continue
+				// fmt.Println("Nothing available on ring!")
+				// os.Exit(1)
+				continue
+			}
+			rw.writer.Write(val)
+		}
+	}()
+}
+
+func (rw *ringWriter) Write(p []byte) (n int, err error) {
+	rw.ringBuffer.Enqueue(p)
+	return len(p), nil
+}
+
 func (l *logger) SetWriter(w io.Writer) {
-	// l.out = newAsyncWriter(w, 100)
+	// option 1 - plain old writer
 	l.out = w
+
+	// // option 2 - async writer, which should be ok, but its really not
+	// l.out = newAsyncWriter(w, 1000)
+
+	// // option 3 - ring writer, which should be better for non-stop loggings, lets see
+	// rw := &ringWriter{
+	// 	ringBuffer: ringbuffer.NewRingBuffer[[]byte](1000),
+	// 	writer:     w,
+	// }
+
+	// rw.Start()
+
+	// l.out = rw
 }
 
 func (l *logger) GetWriter() io.Writer {

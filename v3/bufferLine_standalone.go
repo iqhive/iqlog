@@ -8,7 +8,7 @@ import (
 
 type bufferLine struct {
 	logger *logger
-	level  Level
+	// level  Level
 	buffer *bytes.Buffer
 }
 
@@ -17,7 +17,6 @@ func (l *logger) BufferLineTrace(msg string, args ...interface{}) {
 		return
 	}
 	bl := emptybufferLine(l)
-	bl.level = LevelTrace
 	if bl.logger.jsonMode {
 		bl.writeInitialJSON(LevelTrace)
 		bl.writeFinalJSON(msg, args...)
@@ -40,7 +39,6 @@ func (l *logger) BufferLineDebug(msg string, args ...interface{}) {
 		return
 	}
 	bl := emptybufferLine(l)
-	bl.level = LevelDebug
 	if bl.logger.jsonMode {
 		bl.writeInitialJSON(LevelDebug)
 		bl.writeFinalJSON(msg, args...)
@@ -63,7 +61,6 @@ func (l *logger) BufferLineInfo(msg string, args ...interface{}) {
 		return
 	}
 	bl := emptybufferLine(l)
-	bl.level = LevelInfo
 	if bl.logger.jsonMode {
 		bl.writeInitialJSON(LevelInfo)
 		bl.writeFinalJSON(msg, args...)
@@ -86,7 +83,6 @@ func (l *logger) BufferLinePrint(msg string, args ...interface{}) {
 		return
 	}
 	bl := emptybufferLine(l)
-	bl.level = LevelPrint
 	if bl.logger.jsonMode {
 		bl.writeInitialJSON(LevelPrint)
 		bl.writeFinalJSON(msg, args...)
@@ -109,7 +105,6 @@ func (l *logger) BufferLineWarn(msg string, args ...interface{}) {
 		return
 	}
 	bl := emptybufferLine(l)
-	bl.level = LevelWarn
 	if bl.logger.jsonMode {
 		bl.writeInitialJSON(LevelWarn)
 		bl.writeFinalJSON(msg, args...)
@@ -132,7 +127,6 @@ func (l *logger) BufferLineError(msg string, args ...interface{}) {
 		return
 	}
 	bl := emptybufferLine(l)
-	bl.level = LevelError
 	if bl.logger.jsonMode {
 		bl.writeInitialJSON(LevelError)
 		bl.writeFinalJSON(msg, args...)
@@ -156,7 +150,6 @@ func (l *logger) BufferLinePanic(msg string, args ...interface{}) {
 		return
 	}
 	bl := emptybufferLine(l)
-	bl.level = LevelPanic
 	if bl.logger.jsonMode {
 		bl.writeInitialJSON(LevelPanic)
 		bl.writeFinalJSON(msg, args...)
@@ -182,7 +175,6 @@ func (l *logger) BufferLineFatal(msg string, args ...interface{}) {
 		return
 	}
 	bl := emptybufferLine(l)
-	bl.level = LevelFatal
 	if bl.logger.jsonMode {
 		bl.writeInitialJSON(LevelFatal)
 		bl.writeFinalJSON(msg, args...)
@@ -209,7 +201,6 @@ func (l *logger) BufferLineLog(level Level, msg string, args ...interface{}) {
 		return
 	}
 	bl := emptybufferLine(l)
-	bl.level = level
 	if bl.logger.jsonMode {
 		bl.writeInitialJSON(level)
 		bl.writeFinalJSON(msg, args...)
