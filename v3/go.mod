@@ -1,6 +1,6 @@
 module bitbucket.org/iqhive/iqlog/v3
 
-go 1.18
+go 1.23
 
 require golang.org/x/crypto v0.26.0
 

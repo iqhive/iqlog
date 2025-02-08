@@ -21,6 +21,16 @@ const (
 	white  = 37
 )
 
+var (
+	FunctionsToSkip = []string{
+		"/iqlog/",
+		"log/slog",
+		"/apierror/",
+		"runtime.",
+		"testing.",
+	}
+)
+
 // Enabled reports whether the handler handles records at the given level.
 // The handler ignores records whose level is lower.
 // It is called early, before any arguments are processed,
@@ -111,12 +121,14 @@ func (l logger) Handle(ctx context.Context, entry slog.Record) error {
 		for more {
 			frame, more = frames.Next()
 			// Skip internal logging packages and runtime frames
-			if strings.Contains(frame.File, "log/slog") ||
-				strings.Contains(frame.File, "/iqlog") || // Changed from v3/iqlog to just /iqlog
-				strings.Contains(frame.Function, "slog.") ||
-				strings.Contains(frame.Function, "iqlog.") ||
-				strings.Contains(frame.Function, "runtime.") ||
-				strings.Contains(frame.Function, "testing.") {
+			skipFrame := false
+			for _, skip := range FunctionsToSkip {
+				if strings.Contains(frame.Function, skip) {
+					skipFrame = true
+					break
+				}
+			}
+			if skipFrame {
 				continue
 			}
 			foundFrame = true

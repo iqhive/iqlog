@@ -248,11 +248,13 @@ type Logger interface {
 	Errorln(args ...interface{})
 	Fatalln(args ...interface{})
 	Panicln(args ...interface{})
+	SetWriter(w io.Writer)
+	GetWriter() io.Writer
 }
 
 const (
+	levelTrace slog.Level = -3
 	levelPrint slog.Level = -1
-	levelTrace slog.Level = 1
 	levelPanic slog.Level = 9
 	levelFatal slog.Level = 10
 )
@@ -283,7 +285,7 @@ func (l *logger) SetDebugMode(d bool)            { l.debug = d }
 
 func (l *logger) SetSyslogHost(newhost string) {
 	l.syslogHost = newhost
-	if newhost != "" && strings.Index(newhost, ":") == -1 {
+	if newhost != "" && !strings.Contains(newhost, ":") {
 		// make sure we have a (UDP) port in the host definition
 		newhost = newhost + ":514"
 	}
@@ -300,7 +302,13 @@ func (l *logger) SetSyslogHost(newhost string) {
 	newSyslog, syslogErr := syslog.Dial("udp", newhost, syslog.LOG_DAEMON|syslog.LOG_INFO, l.applicationName)
 	if syslogErr == nil && newSyslog != nil {
 		l.out = newSyslog
-		l.slog = slog.New(slog.NewJSONHandler(l.out, &slog.HandlerOptions{}))
+		l.slog = slog.New(slog.NewJSONHandler(
+			l.out,
+			&slog.HandlerOptions{
+				Level:     slog.LevelDebug,
+				AddSource: false,
+			},
+		))
 		if l.applicationName != "" {
 			l.Debugf("Log output for (%s) set to syslog to (%s)", l.applicationName, newhost)
 		} else {
@@ -315,7 +323,7 @@ func (l *logger) SetSyslogHost(newhost string) {
 func (l logger) Tracef(format string, args ...interface{}) {
 	var pcs [1]uintptr
 	runtime.Callers(2, pcs[:])
-	l.slog.Log(l.ctx, -1, fmt.Sprintf(format, args...))
+	l.slog.Log(l.ctx, levelTrace, fmt.Sprintf(format, args...))
 }
 
 func (l logger) Debugf(format string, args ...interface{}) {
@@ -471,15 +479,39 @@ func (l logger) WithFields(fields map[string]any) Logger {
 			Value: slog.AnyValue(v),
 		})
 	}
-	l.slog = slog.New(l.WithAttrs(attrs))
+	// l.slog = slog.New(l.WithAttrs(attrs))
+	l.slog = slog.New(l.slog.Handler().WithAttrs(attrs))
 	return &l
 }
 
 func (l logger) WithError(err error) Logger {
-	l.slog = slog.New(l.WithAttrs([]slog.Attr{{
+	l.slog = slog.New(l.slog.Handler().WithAttrs([]slog.Attr{{
 		Key:   "error",
 		Value: slog.AnyValue(err),
 	}}))
 	l.err = err
 	return &l
+}
+
+func (l *logger) SetWriter(w io.Writer) {
+	l.out = w
+	l.slog = slog.New(
+		slog.NewJSONHandler(
+			w,
+			&slog.HandlerOptions{
+				AddSource: false,
+			},
+		),
+	)
+}
+
+func (l *logger) GetWriter() io.Writer {
+	return l.out
+}
+
+func SetWriter(w io.Writer) {
+	GlobalLogger.SetWriter(w)
+}
+func GetWriter() io.Writer {
+	return GlobalLogger.GetWriter()
 }
