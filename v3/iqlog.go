@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"log/syslog"
 	"os"
 	"runtime"
 	"strings"
 
-	srslog "github.com/RackSec/srslog"
 	"golang.org/x/crypto/ssh/terminal"
 )
 
@@ -280,6 +280,7 @@ var _ Logger = new(logger)
 
 func (l *logger) SetApplicationName(name string) { l.applicationName = name }
 func (l *logger) SetDebugMode(d bool)            { l.debug = d }
+
 func (l *logger) SetSyslogHost(newhost string) {
 	l.syslogHost = newhost
 	if newhost != "" && strings.Index(newhost, ":") == -1 {
@@ -296,9 +297,8 @@ func (l *logger) SetSyslogHost(newhost string) {
 		l.out = os.Stderr
 		return
 	}
-	newSyslog, syslogErr := srslog.Dial("udp", newhost, srslog.LOG_DAEMON|srslog.LOG_INFO, l.applicationName)
+	newSyslog, syslogErr := syslog.Dial("udp", newhost, syslog.LOG_DAEMON|syslog.LOG_INFO, l.applicationName)
 	if syslogErr == nil && newSyslog != nil {
-		newSyslog.SetFormatter(srslog.RFC3164Formatter)
 		l.out = newSyslog
 		l.slog = slog.New(slog.NewJSONHandler(l.out, &slog.HandlerOptions{}))
 		if l.applicationName != "" {
@@ -333,6 +333,7 @@ func (l logger) Debug(format string, args ...interface{}) {
 	format = strings.ReplaceAll(format, "%w", "%v")
 	l.slog.DebugContext(l.ctx, fmt.Sprintf(format, args...))
 }
+
 func (l logger) Debugln(args ...interface{}) {
 	if !l.debug {
 		return
@@ -437,7 +438,7 @@ func (l logger) Infoln(args ...interface{}) {
 }
 
 func (l logger) Println(args ...interface{}) {
-	l.slog.Log(l.ctx, -1, fmt.Sprint(args...))
+	l.slog.Log(l.ctx, levelPrint, fmt.Sprint(args...))
 }
 
 func (l logger) Warnln(args ...interface{}) {
