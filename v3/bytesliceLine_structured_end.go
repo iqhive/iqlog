@@ -15,6 +15,16 @@ func (bsl *bytesliceLine) Msg(msg string) {
 		bsl.writeFinalConsole(msg)
 	}
 }
+func (bsl *bytesliceLine) Msgs(msg string, args ...interface{}) {
+	if bsl.output == nil {
+		return
+	}
+	if bsl.jsonMode {
+		bsl.writeFinalJSON(msg, args...)
+	} else {
+		bsl.writeFinalConsole(msg, args...)
+	}
+}
 func (bsl *bytesliceLine) Msgf(format string, args ...interface{}) {
 	if bsl.output == nil {
 		return

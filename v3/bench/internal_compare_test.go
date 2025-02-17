@@ -34,7 +34,7 @@ func BenchmarkBytesliceLine(b *testing.B) {
 	logger.SetWriter(io.Discard)
 	for i := 0; i < b.N; i++ {
 		// logger.Str("rate", "15").Int("low", 16).Float32("high", 123.2).Info(msg)
-		logger.WithPreallocLineInfo().Str("rate", "15").Int("low", 16).Float32("high", 123.2).Msg(msg)
+		logger.WithByteSliceLineInfo().Str("rate", "15").Int("low", 16).Float32("high", 123.2).Msg(msg)
 		// logger.Info(msg)
 	}
 }
@@ -58,5 +58,43 @@ func BenchmarkBufferLineNL(b *testing.B) {
 		// logger.Str("rate", "15").Int("low", 16).Float32("high", 123.2).Info(msg)
 		logger.WithBufferLineNLInfo().Str("rate", "15").Int("low", 16).Float32("high", 123.2).Msg(msg)
 		// logger.Info(msg)
+	}
+}
+
+func BenchmarkVarsTimestampMsg(b *testing.B) {
+	logger := iqlog.NewIQLogger(true)
+	logger.SetDebugMode(false)
+	logger.SetWriter(io.Discard)
+	for i := 0; i < b.N; i++ {
+		logger.InfoWith().Str("rate", "15").Int("low", 16).Float32("high", 123.2).Msg(msg)
+		// logger.WithPreallocLineInfo()
+	}
+}
+
+func BenchmarkVarsTimestampMsgInfo(b *testing.B) {
+	logger := iqlog.NewIQLogger(true)
+	logger.SetDebugMode(false)
+	logger.SetWriter(io.Discard)
+	for i := 0; i < b.N; i++ {
+		logger.Info(msg)
+		// logger.WithPreallocLineInfo()
+	}
+}
+
+func BenchmarkGlobalVarsTimestampMsg(b *testing.B) {
+	iqlog.SetDebugMode(false)
+	iqlog.SetWriter(io.Discard)
+	for i := 0; i < b.N; i++ {
+		iqlog.InfoWith().Str("rate", "15").Int("low", 16).Float32("high", 123.2).Msg(msg)
+		// logger.WithPreallocLineInfo()
+	}
+}
+
+func BenchmarkGlobalVarsTimestampMsgInfo(b *testing.B) {
+	iqlog.SetDebugMode(false)
+	iqlog.SetWriter(io.Discard)
+	for i := 0; i < b.N; i++ {
+		iqlog.Info(msg)
+		// logger.WithPreallocLineInfo()
 	}
 }

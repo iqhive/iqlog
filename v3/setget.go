@@ -17,7 +17,7 @@ type ringWriter struct {
 func (rw *ringWriter) Start() {
 	go func() {
 		for {
-			val, ok := rw.ringBuffer.Dequeue()
+			val, ok := rw.ringBuffer.DequeueBlocking()
 			if !ok {
 				// Nothing available, maybe sleep or continue
 				// fmt.Println("Nothing available on ring!")
@@ -35,21 +35,21 @@ func (rw *ringWriter) Write(p []byte) (n int, err error) {
 }
 
 func (l *logger) SetWriter(w io.Writer) {
-	// option 1 - plain old writer
-	l.out = w
+	// // option 1 - plain old writer
+	// l.out = w
 
 	// // option 2 - async writer, which should be ok, but its really not
 	// l.out = newAsyncWriter(w, 1000)
 
-	// // option 3 - ring writer, which should be better for non-stop loggings, lets see
-	// rw := &ringWriter{
-	// 	ringBuffer: ringbuffer.NewRingBuffer[[]byte](1000),
-	// 	writer:     w,
-	// }
+	// option 3 - ring writer, which should be better for non-stop loggings, lets see
+	rw := &ringWriter{
+		ringBuffer: ringbuffer.NewRingBuffer[[]byte](10000),
+		writer:     w,
+	}
 
-	// rw.Start()
+	rw.Start()
 
-	// l.out = rw
+	l.out = rw
 }
 
 func (l *logger) GetWriter() io.Writer {

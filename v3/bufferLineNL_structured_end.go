@@ -15,7 +15,16 @@ func (bl *bufferLineNL) Msg(msg string) {
 		bl.writeFinalConsole(msg)
 	}
 }
-
+func (bl *bufferLineNL) Msgs(msg string, args ...interface{}) {
+	if bl.buffer == nil {
+		return
+	}
+	if bl.jsonMode {
+		bl.writeFinalJSON(msg, args...)
+	} else {
+		bl.writeFinalConsole(msg, args...)
+	}
+}
 func (bl *bufferLineNL) Msgf(format string, args ...interface{}) {
 	if bl.buffer == nil {
 		return

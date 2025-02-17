@@ -15,6 +15,16 @@ func (pal *preallocLine2) Msg(msg string) {
 		pal.writeFinalConsole(msg)
 	}
 }
+func (pal *preallocLine2) Msgs(msg string, args ...interface{}) {
+	if pal.output == nil {
+		return
+	}
+	if pal.jsonMode {
+		pal.writeFinalJSON(msg, args...)
+	} else {
+		pal.writeFinalConsole(msg, args...)
+	}
+}
 func (pal *preallocLine2) Msgf(format string, args ...interface{}) {
 	if pal.output == nil {
 		return

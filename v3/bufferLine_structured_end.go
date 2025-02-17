@@ -5,96 +5,6 @@ import (
 	"strconv"
 )
 
-func (bl *bufferLine) Trace(msg string) {
-	if bl.logger.Level > LevelTrace {
-		return
-	}
-	if bl.logger.jsonMode {
-		bl.writeFinalJSON(msg)
-	} else {
-		bl.writeFinalConsole(msg)
-	}
-}
-func (bl *bufferLine) Tracef(format string, args ...interface{}) {
-	if bl.logger.Level > LevelTrace {
-		return
-	}
-	msg := fmt.Sprintf(format, args...)
-	bl.Trace(msg)
-}
-
-func (bl *bufferLine) Debug(msg string) {
-	if bl.logger.Level > LevelDebug {
-		return
-	}
-	if bl.logger.jsonMode {
-		bl.writeFinalJSON(msg)
-	} else {
-		bl.writeFinalConsole(msg)
-	}
-}
-func (bl *bufferLine) Debugf(format string, args ...interface{}) {
-	if bl.logger.Level > LevelDebug {
-		return
-	}
-	msg := fmt.Sprintf(format, args...)
-	bl.Debug(msg)
-}
-
-func (bl *bufferLine) Info(msg string) {
-	if bl.logger.Level > LevelInfo {
-		return
-	}
-	if bl.logger.jsonMode {
-		bl.writeFinalJSON(msg)
-	} else {
-		bl.writeFinalConsole(msg)
-	}
-}
-func (bl *bufferLine) Infof(format string, args ...interface{}) {
-	if bl.logger.Level > LevelInfo {
-		return
-	}
-	msg := fmt.Sprintf(format, args...)
-	bl.Info(msg)
-}
-
-func (bl *bufferLine) Warn(msg string) {
-	if bl.logger.Level > LevelWarn {
-		return
-	}
-	if bl.logger.jsonMode {
-		bl.writeFinalJSON(msg)
-	} else {
-		bl.writeFinalConsole(msg)
-	}
-}
-func (bl *bufferLine) Warnf(format string, args ...interface{}) {
-	if bl.logger.Level > LevelWarn {
-		return
-	}
-	msg := fmt.Sprintf(format, args...)
-	bl.Warn(msg)
-}
-
-func (bl *bufferLine) Error(msg string) {
-	if bl.logger.Level > LevelError {
-		return
-	}
-	if bl.logger.jsonMode {
-		bl.writeFinalJSON(msg)
-	} else {
-		bl.writeFinalConsole(msg)
-	}
-}
-func (bl *bufferLine) Errorf(format string, args ...interface{}) {
-	if bl.logger.Level > LevelError {
-		return
-	}
-	msg := fmt.Sprintf(format, args...)
-	bl.Error(msg)
-}
-
 func (bl *bufferLine) Msg(msg string) {
 	if bl.buffer == nil {
 		return
@@ -103,6 +13,16 @@ func (bl *bufferLine) Msg(msg string) {
 		bl.writeFinalJSON(msg)
 	} else {
 		bl.writeFinalConsole(msg)
+	}
+}
+func (bl *bufferLine) Msgs(msg string, args ...interface{}) {
+	if bl.buffer == nil {
+		return
+	}
+	if bl.logger.jsonMode {
+		bl.writeFinalJSON(msg, args...)
+	} else {
+		bl.writeFinalConsole(msg, args...)
 	}
 }
 func (bl *bufferLine) Msgf(format string, args ...interface{}) {

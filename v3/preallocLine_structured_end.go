@@ -15,6 +15,16 @@ func (pal *preallocLine) Msg(msg string) {
 		pal.writeFinalConsole(msg)
 	}
 }
+func (pal *preallocLine) Msgs(msg string, args ...interface{}) {
+	if pal.bytesUsed == 0 {
+		return
+	}
+	if pal.jsonMode {
+		pal.writeFinalJSON(msg, args...)
+	} else {
+		pal.writeFinalConsole(msg, args...)
+	}
+}
 func (pal *preallocLine) Msgf(format string, args ...interface{}) {
 	if pal.bytesUsed == 0 {
 		return
