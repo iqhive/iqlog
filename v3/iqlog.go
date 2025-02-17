@@ -39,6 +39,7 @@ type logger struct {
 	// A sync.Pool to handle re-usable buffers to reduce allocations.
 	// bufferPool     sync.Pool
 	// fixedSlicePool sync.Pool
+	CallerDepth int
 }
 
 type TimestampFormat int
@@ -63,7 +64,8 @@ func NewGlobalIQLogger() *logger {
 func NewIQLogger(jsonMode bool) *logger {
 	logger := &logger{
 		logFields:       NewLogFields(),
-		captureCallers:  false,
+		captureCallers:  true,
+		CallerDepth:     2,
 		IncludeTime:     true,
 		TimestampFormat: TimestampFormatRFC3339Milli,
 		newLine:         true,
