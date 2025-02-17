@@ -35,12 +35,19 @@ func (rw *ringWriter) Write(p []byte) (n int, err error) {
 }
 
 func (l *logger) SetWriter(w io.Writer) {
+	// option 1 - plain old writer
+	l.out = w
+}
+
+func (l *logger) SetAsyncWriter(w io.Writer) {
 	// // option 1 - plain old writer
 	// l.out = w
 
-	// // option 2 - async writer, which should be ok, but its really not
-	// l.out = newAsyncWriter(w, 1000)
+	// option 2 - async writer, which should be ok, but its really not
+	l.out = newAsyncWriter(w, 1000)
+}
 
+func (l *logger) SetRingbufferWriter(w io.Writer) {
 	// option 3 - ring writer, which should be better for non-stop loggings, lets see
 	rw := &ringWriter{
 		ringBuffer: ringbuffer.NewRingBuffer[[]byte](10000),

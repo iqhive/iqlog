@@ -7,11 +7,12 @@ import (
 )
 
 type preallocLine2 struct {
-	out         io.Writer
-	output      []byte
-	bytesUsed   int
-	jsonMode    bool
-	includeTime bool
+	out            io.Writer
+	output         []byte
+	bytesUsed      int
+	jsonMode       bool
+	includeTime    bool
+	captureCallers bool
 }
 
 func (l *logger) PreAllocLine2Trace(msg string, args ...interface{}) {

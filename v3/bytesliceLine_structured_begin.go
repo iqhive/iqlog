@@ -2,6 +2,8 @@ package iqlog
 
 import (
 	"os"
+	"runtime"
+	"strings"
 	"time"
 )
 
@@ -14,6 +16,7 @@ func emptybytesliceLine(l *logger) *bytesliceLine {
 	bsl.out = l.out
 	bsl.jsonMode = l.jsonMode
 	bsl.includeTime = l.IncludeTime
+	bsl.captureCallers = l.captureCallers
 	return bsl
 }
 
@@ -40,17 +43,87 @@ func (bsl *bytesliceLine) writeInitialJSON(level Level) {
 		bsl.output = append(bsl.output, []byte("\"level\":\"unknown\"")...)
 	}
 
+	bsl.AddCallers()
+}
+
+func (bsl *bytesliceLine) AddCallers() {
+	if !bsl.captureCallers {
+		return
+	}
+	// Get more stack frames to ensure we capture enough context
+	var callers [32]uintptr
+	n := runtime.Callers(1, callers[:]) // Changed from 0 to 1 to skip this frame
+	frames := runtime.CallersFrames(callers[:n])
+
+	// Skip frames until we find the actual caller
+	var frame runtime.Frame
+	more := true
+	foundFrame := false
+
+	for more {
+		frame, more = frames.Next()
+		// Skip internal logging packages and runtime frames
+		skipFrame := false
+		for _, skip := range FunctionsToSkip {
+			if strings.Contains(frame.Function, skip) {
+				skipFrame = true
+				break
+			}
+		}
+		if skipFrame {
+			continue
+		}
+		foundFrame = true
+		break
+	}
+
+	if foundFrame {
+		fileOffsetLast := 0
+		fileOffset2ndLast := 0
+		for i := range frame.File {
+			if frame.File[i] == '/' {
+				fileOffset2ndLast = fileOffsetLast
+				fileOffsetLast = i
+			}
+		}
+		if bsl.jsonMode {
+			// json mode
+			bsl.output = append(bsl.output, []byte(`,"func":"`)...)
+			bsl.output = append(bsl.output, []byte(frame.Function)...)
+			bsl.output = append(bsl.output, []byte(`","file":"`)...)
+			bsl.output = append(bsl.output, []byte(frame.File[fileOffset2ndLast:])...)
+			bsl.output = append(bsl.output, []byte(`"`)...)
+		} else {
+			// console mode
+			if useColour {
+				bsl.output = append(bsl.output, []byte("\x1b[32m[")...)
+			} else {
+				bsl.output = append(bsl.output, []byte(`[`)...)
+			}
+			bsl.output = append(bsl.output, []byte(frame.Function)...)
+			bsl.output = append(bsl.output, []byte(` `)...)
+			bsl.output = append(bsl.output, []byte(frame.File[fileOffset2ndLast:])...)
+			if useColour {
+				bsl.output = append(bsl.output, []byte("]\x1b[0m ")...)
+			} else {
+				bsl.output = append(bsl.output, []byte(`] `)...)
+			}
+		}
+	} else {
+		// Fallback if we couldn't find a suitable frame
+		// originText = fmt.Sprintf("[%v]", l.applicationName)
+		// fmt.Printf("[%v %v:%v]\n", name, file, frame.Line)
+	}
 }
 
 func (bsl *bytesliceLine) writeInitialConsole(level Level) {
-	if len(bsl.output) == 0 {
-		bsl.AddTime()
-		if useColour {
-			bsl.output = append(bsl.output, ansiColourPrefix(level)...)
-		} else {
-			bsl.output = append(bsl.output, levelPrefix(level)...)
-		}
+	bsl.AddTime()
+	if useColour {
+		bsl.output = append(bsl.output, ansiColourPrefix(level)...)
+	} else {
+		bsl.output = append(bsl.output, levelPrefix(level)...)
 	}
+	bsl.AddCallers()
 }
 
 func (bsl *bytesliceLine) AddTime() {

@@ -64,7 +64,7 @@ func NewGlobalIQLogger() *logger {
 func NewIQLogger(jsonMode bool) *logger {
 	logger := &logger{
 		logFields:       NewLogFields(),
-		captureCallers:  true,
+		captureCallers:  false,
 		CallerDepth:     2,
 		IncludeTime:     true,
 		TimestampFormat: TimestampFormatRFC3339Milli,

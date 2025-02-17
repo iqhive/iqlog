@@ -2,6 +2,8 @@ package iqlog
 
 import (
 	"os"
+	"runtime"
+	"strings"
 	"time"
 )
 
@@ -13,6 +15,7 @@ func emptypreallocLine2(l *logger) *preallocLine2 {
 	pal.out = l.out
 	pal.bytesUsed = 0
 	pal.includeTime = l.IncludeTime
+	pal.captureCallers = l.captureCallers
 	// zero the output
 	// pal.output = pal.output[:0]
 	return pal
@@ -40,6 +43,77 @@ func (pal *preallocLine2) writeInitialJSON(level Level) {
 	default:
 		pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, "\"level\":\"unknown\"")
 	}
+	pal.AddCallers()
+}
+
+func (pal *preallocLine2) AddCallers() {
+	if !pal.captureCallers {
+		return
+	}
+	// Get more stack frames to ensure we capture enough context
+	var callers [32]uintptr
+	n := runtime.Callers(1, callers[:]) // Changed from 0 to 1 to skip this frame
+	frames := runtime.CallersFrames(callers[:n])
+
+	// Skip frames until we find the actual caller
+	var frame runtime.Frame
+	more := true
+	foundFrame := false
+
+	for more {
+		frame, more = frames.Next()
+		// Skip internal logging packages and runtime frames
+		skipFrame := false
+		for _, skip := range FunctionsToSkip {
+			if strings.Contains(frame.Function, skip) {
+				skipFrame = true
+				break
+			}
+		}
+		if skipFrame {
+			continue
+		}
+		foundFrame = true
+		break
+	}
+
+	if foundFrame {
+		fileOffsetLast := 0
+		fileOffset2ndLast := 0
+		for i := range frame.File {
+			if frame.File[i] == '/' {
+				fileOffset2ndLast = fileOffsetLast
+				fileOffsetLast = i
+			}
+		}
+		if pal.jsonMode {
+			// json mode
+			pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, `,"func":"`)
+			pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, frame.Function)
+			pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, `","file":"`)
+			pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, frame.File[fileOffset2ndLast:])
+			pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, `"`)
+		} else {
+			// console mode
+			if useColour {
+				pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, "\x1b[32m[")
+			} else {
+				pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, `[`)
+			}
+			pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, frame.Function)
+			pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, ` `)
+			pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, frame.File[fileOffset2ndLast:])
+			if useColour {
+				pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, "]\x1b[0m ")
+			} else {
+				pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, `] `)
+			}
+		}
+	} else {
+		// Fallback if we couldn't find a suitable frame
+		// originText = fmt.Sprintf("[%v]", l.applicationName)
+		// fmt.Printf("[%v %v:%v]\n", name, file, frame.Line)
+	}
 }
 
 func (pal *preallocLine2) writeInitialConsole(level Level) {
@@ -52,6 +126,7 @@ func (pal *preallocLine2) writeInitialConsole(level Level) {
 		pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, string(levelPrefix(level)))
 	}
 	// fmt.Printf("after writeInitialConsole: (%d/%d) |%s|\n", pal.bytesUsed, len(pal.output), string(pal.output))
+	pal.AddCallers()
 }
 
 func (pal *preallocLine2) AddTime() {

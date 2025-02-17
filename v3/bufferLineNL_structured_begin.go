@@ -2,6 +2,8 @@ package iqlog
 
 import (
 	"os"
+	"runtime"
+	"strings"
 	"time"
 )
 
@@ -13,6 +15,7 @@ func emptybufferLineNL(l *logger) *bufferLineNL {
 	bl.out = l.out
 	bl.includeTime = l.IncludeTime
 	bl.jsonMode = l.jsonMode
+	bl.captureCallers = l.captureCallers
 
 	return bl
 }
@@ -39,6 +42,77 @@ func (bl *bufferLineNL) writeInitialJSON(level Level) {
 		bl.buffer.Write([]byte("\"level\":\"unknown\""))
 	}
 
+	bl.AddCallers()
+}
+
+func (bl *bufferLineNL) AddCallers() {
+	if !bl.captureCallers {
+		return
+	}
+	// Get more stack frames to ensure we capture enough context
+	var callers [32]uintptr
+	n := runtime.Callers(1, callers[:]) // Changed from 0 to 1 to skip this frame
+	frames := runtime.CallersFrames(callers[:n])
+
+	// Skip frames until we find the actual caller
+	var frame runtime.Frame
+	more := true
+	foundFrame := false
+
+	for more {
+		frame, more = frames.Next()
+		// Skip internal logging packages and runtime frames
+		skipFrame := false
+		for _, skip := range FunctionsToSkip {
+			if strings.Contains(frame.Function, skip) {
+				skipFrame = true
+				break
+			}
+		}
+		if skipFrame {
+			continue
+		}
+		foundFrame = true
+		break
+	}
+
+	if foundFrame {
+		fileOffsetLast := 0
+		fileOffset2ndLast := 0
+		for i := range frame.File {
+			if frame.File[i] == '/' {
+				fileOffset2ndLast = fileOffsetLast
+				fileOffsetLast = i
+			}
+		}
+		if bl.jsonMode {
+			// json mode
+			bl.buffer.Write([]byte(`,"func":"`))
+			bl.buffer.Write([]byte(frame.Function))
+			bl.buffer.Write([]byte(`","file":"`))
+			bl.buffer.Write([]byte(frame.File[fileOffset2ndLast:]))
+			bl.buffer.Write([]byte(`"`))
+		} else {
+			// console mode
+			if useColour {
+				bl.buffer.Write([]byte("\x1b[32m["))
+			} else {
+				bl.buffer.Write([]byte(`[`))
+			}
+			bl.buffer.Write([]byte(frame.Function))
+			bl.buffer.Write([]byte(` `))
+			bl.buffer.Write([]byte(frame.File[fileOffset2ndLast:]))
+			if useColour {
+				bl.buffer.Write([]byte("]\x1b[0m "))
+			} else {
+				bl.buffer.Write([]byte(`] `))
+			}
+		}
+	} else {
+		// Fallback if we couldn't find a suitable frame
+		// originText = fmt.Sprintf("[%v]", l.applicationName)
+		// fmt.Printf("[%v %v:%v]\n", name, file, frame.Line)
+	}
 }
 
 func (bl *bufferLineNL) writeInitialConsole(level Level) {
@@ -48,6 +122,7 @@ func (bl *bufferLineNL) writeInitialConsole(level Level) {
 	} else {
 		bl.buffer.Write(levelPrefix(level))
 	}
+	bl.AddCallers()
 }
 
 func (bl *bufferLineNL) AddTime() {

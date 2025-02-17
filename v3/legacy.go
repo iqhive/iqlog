@@ -127,7 +127,7 @@ func (h *legacyHandler) Log(level Level, msg string) {
 }
 
 func (h *legacyHandler) Logf(level Level, format string, args ...interface{}) {
-	GlobalLogger.LogFWithFields(level, h.fields, format, args)
+	GlobalLogger.LogFWithFields(level, h.fields, format, args...)
 }
 
 func (l *logger) WithFields(fields map[string]any) *legacyHandler {

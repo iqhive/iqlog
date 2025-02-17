@@ -8,9 +8,6 @@ import (
 // Maximum Number of paths to log
 var NumPathsToLog = 1
 
-// How many callers are we going back
-var CallersNum = 2
-
 var (
 	FunctionsToSkip = []string{
 		"/iqlog/",
@@ -21,14 +18,16 @@ var (
 
 // GetCallerFields returns information about the caller, specifically
 // the function name, the filename and line number in the file
-func GetCallerFields() map[string]any {
+func (l *logger) CallerFields() {
+
+	return
 	resp := make(map[string]any)
 
 	OriginFile := ""
 	OriginLine := 0
 	OriginFunc := ""
 
-	if pc, file, line, ok := runtime.Caller(CallersNum); ok {
+	if pc, file, line, ok := runtime.Caller(l.CallerDepth); ok {
 		OriginFile = file
 		OriginLine = line
 		runtimeFuncPtr := runtime.FuncForPC(pc)
@@ -47,7 +46,7 @@ func GetCallerFields() map[string]any {
 	if OriginFunc != "" {
 		resp["origin_func"] = OriginFunc
 	}
-	return resp
+	return
 }
 
 func keepNumDirs(str string, lastn int, startat int) string {
