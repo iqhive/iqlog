@@ -29,8 +29,8 @@ func (l *logger) Logf(ctx context.Context, level Level, format string, args ...i
 	msg := fmt.Sprintf(format, args...)
 	l.Log(ctx, level, msg)
 }
-func Logf(level Level, format string, args ...interface{}) {
-	GlobalLogger.Logf(level, format, args...)
+func Logf(ctx context.Context, level Level, format string, args ...interface{}) {
+	GlobalLogger.Logf(ctx, level, format, args...)
 }
 
 func (l *logger) LogFWithFields(ctx context.Context, level Level, fields map[string]any, format string, args ...interface{}) {
@@ -123,11 +123,11 @@ func (h *legacyHandler) Fatalf(format string, args ...interface{}) {
 }
 
 func (h *legacyHandler) Log(level Level, msg string) {
-	GlobalLogger.LogWithFields(level, h.fields, msg)
+	GlobalLogger.LogWithFields(context.Background(), level, h.fields, msg)
 }
 
 func (h *legacyHandler) Logf(level Level, format string, args ...interface{}) {
-	GlobalLogger.LogFWithFields(level, h.fields, format, args...)
+	GlobalLogger.LogFWithFields(context.Background(), level, h.fields, format, args...)
 }
 
 func (l *logger) WithFields(fields map[string]any) *legacyHandler {
