@@ -9,7 +9,8 @@ import (
 type bufferLine struct {
 	logger *logger
 	// level  Level
-	buffer *bytes.Buffer
+	buffer     *bytes.Buffer
+	callerData callerData
 }
 
 func (l *logger) BufferLineTrace(msg string, args ...interface{}) {

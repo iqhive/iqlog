@@ -1,36 +1,38 @@
 package iqlog
 
+import "context"
+
 type Logger interface {
-	SetApplicationName(string)
-	SetDebugMode(bool)
-	SetUseColour(bool)
-	SetCaptureCallers(bool)
-	SetNewLine(bool)
-	SetJSONMode(bool)
-	SetSyslogHost(string)
+	// SetApplicationName(string)
+	// SetDebugMode(bool)
+	// SetUseColour(bool)
+	// SetCaptureCallers(bool)
+	// SetNewLine(bool)
+	// SetJSONMode(bool)
+	// SetSyslogHost(string)
 
 	// TODO: implement these
 	// WithFields(map[string]any) Logger
 	// WithError(error) Logger
 
-	Tracef(format string, args ...interface{})
-	Trace(msg string, args ...interface{})
-	Debugf(format string, args ...interface{})
-	Debug(msg string, args ...interface{})
-	Infof(format string, args ...interface{})
-	Info(msg string, args ...interface{})
-	Printf(format string, args ...interface{})
-	Print(msg string, args ...interface{})
-	Warnf(format string, args ...interface{})
-	Warn(msg string, args ...interface{})
-	Errorf(format string, args ...interface{})
-	Error(msg string, args ...interface{})
-	Fatalf(format string, args ...interface{})
-	Fatal(msg string, args ...interface{})
-	Panicf(format string, args ...interface{})
-	Panic(msg string, args ...interface{})
-	Log(level Level, msg string, args ...interface{})
-	Logf(level Level, format string, args ...interface{})
+	Tracef(format string, args ...any)
+	Trace(msg string, args ...any)
+	Debugf(format string, args ...any)
+	Debug(msg string, args ...any)
+	Infof(format string, args ...any)
+	Info(msg string, args ...any)
+	Printf(format string, args ...any)
+	Print(msg string, args ...any)
+	Warnf(format string, args ...any)
+	Warn(msg string, args ...any)
+	Errorf(format string, args ...any)
+	Error(msg string, args ...any)
+	Fatalf(format string, args ...any)
+	Fatal(msg string, args ...any)
+	Panicf(format string, args ...any)
+	Panic(msg string, args ...any)
+	Log(ctx context.Context, level Level, msg string, args ...any)
+	Logf(ctx context.Context, level Level, format string, args ...any)
 }
 
 // var _ Logger = new(logger)

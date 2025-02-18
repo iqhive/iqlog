@@ -16,6 +16,7 @@ var GlobalLogger *logger = NewGlobalIQLogger()
 var useColour = terminal.IsTerminal(int(os.Stderr.Fd())) && (runtime.GOOS != "windows")
 
 const maxLineLen = 256
+const maxStringLen = 256
 
 type logger struct {
 	ctx context.Context
@@ -28,11 +29,10 @@ type logger struct {
 	applicationName string
 	syslogHost      string
 
-	logFields LogFields
+	// logFields LogFields
 
 	IncludeTime     bool
 	TimestampFormat TimestampFormat
-	captureCallers  bool
 	newLine         bool
 	mu              sync.Mutex
 
@@ -56,16 +56,15 @@ func NewGlobalIQLogger() *logger {
 
 	l := NewIQLogger(false)
 	l.SetUseColour(terminal.IsTerminal(int(os.Stderr.Fd())) && (runtime.GOOS != "windows"))
-	l.SetCaptureCallers(true)
+	l.SetCallerDepth(1)
 
 	return l
 }
 
 func NewIQLogger(jsonMode bool) *logger {
 	logger := &logger{
-		logFields:       NewLogFields(),
-		captureCallers:  false,
-		CallerDepth:     2,
+		// logFields:       NewLogFields(),
+		CallerDepth:     0, // >0 = Capture callers
 		IncludeTime:     true,
 		TimestampFormat: TimestampFormatRFC3339Milli,
 		newLine:         true,
@@ -118,7 +117,7 @@ func NewIQLogger(jsonMode bool) *logger {
 func Init(applicationName string, syslogHost string, debugMode bool) {
 	SetApplicationName(applicationName)
 	SetDebugMode(debugMode)
-	SetCaptureCallers(true)
+	SetCallerDepth(1)
 	SetUseColour(true)
 	SetNewLine(true)
 	SetSyslogHost(syslogHost)

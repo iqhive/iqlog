@@ -104,11 +104,11 @@ func (l *logger) SetNewLine(d bool) {
 	l.newLine = d
 }
 
-// SetCaptureCallers sets the capture callers on the GlobalLogger
-func SetCaptureCallers(captureCallers bool) {
-	GlobalLogger.SetCaptureCallers(captureCallers)
+// SetCallerDepth sets the capture callers on the GlobalLogger
+func SetCallerDepth(captureCaller int) {
+	GlobalLogger.SetCallerDepth(captureCaller)
 }
-func (l *logger) SetCaptureCallers(d bool) { l.captureCallers = d }
+func (l *logger) SetCallerDepth(d int) { l.CallerDepth = d }
 
 func SetUseColour(useColour bool) {
 	useColour = useColour

@@ -1,9 +1,11 @@
 package iqlog
 
+const maxFields = 8
+
 type LogFields struct {
 	inlineSize    int
-	keys          [8]string
-	values        [8]any
+	keys          [maxFields]string
+	values        [maxFields]any
 	usedInline    int
 	dynamicKeys   []string
 	dynamicValues []any
@@ -11,7 +13,7 @@ type LogFields struct {
 
 func NewLogFields() LogFields {
 	return LogFields{
-		inlineSize: 8,
+		inlineSize: maxFields,
 	}
 }
 

@@ -8,11 +8,12 @@ import (
 )
 
 type bufferLineNL struct {
-	out            io.Writer
-	buffer         *bytes.Buffer
-	jsonMode       bool
-	includeTime    bool
-	captureCallers bool
+	out           io.Writer
+	buffer        *bytes.Buffer
+	jsonMode      bool
+	includeTime   bool
+	captureCaller int
+	callerData    callerData
 }
 
 func (l *logger) BufferSliceLineTrace(msg string, args ...interface{}) {

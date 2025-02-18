@@ -2,8 +2,6 @@ package iqlog
 
 import (
 	"os"
-	"runtime"
-	"strings"
 	"time"
 )
 
@@ -16,14 +14,18 @@ func emptybytesliceLine(l *logger) *bytesliceLine {
 	bsl.out = l.out
 	bsl.jsonMode = l.jsonMode
 	bsl.includeTime = l.IncludeTime
-	bsl.captureCallers = l.captureCallers
+	bsl.captureCaller = l.CallerDepth
+	bsl.callerData.callerFuncLen = 0
+	bsl.callerData.callerFileLen = 0
 	return bsl
 }
 
 func (bsl *bytesliceLine) writeInitialJSON(level Level) {
-	bsl.output = append(bsl.output, '{')
-
-	bsl.AddTime() // adds a trailing comma if it outputs
+	if bsl.includeTime {
+		AddTimeJSONAppend(time.Now(), &bsl.output)
+	} else {
+		bsl.output = append(bsl.output, '{')
+	}
 
 	// Convert Level to string
 	switch level {
@@ -47,77 +49,39 @@ func (bsl *bytesliceLine) writeInitialJSON(level Level) {
 }
 
 func (bsl *bytesliceLine) AddCallers() {
-	if !bsl.captureCallers {
+	if bsl.captureCaller == 0 || bsl.callerData.callerFuncLen == 0 {
 		return
 	}
-	// Get more stack frames to ensure we capture enough context
-	var callers [32]uintptr
-	n := runtime.Callers(1, callers[:]) // Changed from 0 to 1 to skip this frame
-	frames := runtime.CallersFrames(callers[:n])
 
-	// Skip frames until we find the actual caller
-	var frame runtime.Frame
-	more := true
-	foundFrame := false
-
-	for more {
-		frame, more = frames.Next()
-		// Skip internal logging packages and runtime frames
-		skipFrame := false
-		for _, skip := range FunctionsToSkip {
-			if strings.Contains(frame.Function, skip) {
-				skipFrame = true
-				break
-			}
-		}
-		if skipFrame {
-			continue
-		}
-		foundFrame = true
-		break
-	}
-
-	if foundFrame {
-		fileOffsetLast := 0
-		fileOffset2ndLast := 0
-		for i := range frame.File {
-			if frame.File[i] == '/' {
-				fileOffset2ndLast = fileOffsetLast
-				fileOffsetLast = i
-			}
-		}
-		if bsl.jsonMode {
-			// json mode
-			bsl.output = append(bsl.output, []byte(`,"func":"`)...)
-			bsl.output = append(bsl.output, []byte(frame.Function)...)
-			bsl.output = append(bsl.output, []byte(`","file":"`)...)
-			bsl.output = append(bsl.output, []byte(frame.File[fileOffset2ndLast:])...)
-			bsl.output = append(bsl.output, []byte(`"`)...)
-		} else {
-			// console mode
-			if useColour {
-				bsl.output = append(bsl.output, []byte("\x1b[32m[")...)
-			} else {
-				bsl.output = append(bsl.output, []byte(`[`)...)
-			}
-			bsl.output = append(bsl.output, []byte(frame.Function)...)
-			bsl.output = append(bsl.output, []byte(` `)...)
-			bsl.output = append(bsl.output, []byte(frame.File[fileOffset2ndLast:])...)
-			if useColour {
-				bsl.output = append(bsl.output, []byte("]\x1b[0m ")...)
-			} else {
-				bsl.output = append(bsl.output, []byte(`] `)...)
-			}
-		}
+	if bsl.jsonMode {
+		// json mode
+		bsl.output = append(bsl.output, []byte(`,"func":"`)...)
+		bsl.output = append(bsl.output, bsl.callerData.callerFunc[:bsl.callerData.callerFuncLen]...)
+		bsl.output = append(bsl.output, []byte(`","file":"`)...)
+		bsl.output = append(bsl.output, bsl.callerData.callerFile[:bsl.callerData.callerFileLen]...)
+		bsl.output = append(bsl.output, []byte(`"`)...)
 	} else {
-		// Fallback if we couldn't find a suitable frame
-		// originText = fmt.Sprintf("[%v]", l.applicationName)
-		// fmt.Printf("[%v %v:%v]\n", name, file, frame.Line)
+		// console mode
+		if useColour {
+			bsl.output = append(bsl.output, []byte("\x1b[32m[")...)
+		} else {
+			bsl.output = append(bsl.output, []byte(`[`)...)
+		}
+		bsl.output = append(bsl.output, bsl.callerData.callerFunc[:bsl.callerData.callerFuncLen]...)
+		bsl.output = append(bsl.output, []byte(` `)...)
+		bsl.output = append(bsl.output, bsl.callerData.callerFile[:bsl.callerData.callerFileLen]...)
+		if useColour {
+			bsl.output = append(bsl.output, []byte("]\x1b[0m ")...)
+		} else {
+			bsl.output = append(bsl.output, []byte(`] `)...)
+		}
 	}
 }
 
 func (bsl *bytesliceLine) writeInitialConsole(level Level) {
-	bsl.AddTime()
+	if bsl.includeTime {
+		AddTimeConsoleAppend(time.Now(), &bsl.output)
+	}
 	if useColour {
 		bsl.output = append(bsl.output, ansiColourPrefix(level)...)
 	} else {
@@ -126,62 +90,18 @@ func (bsl *bytesliceLine) writeInitialConsole(level Level) {
 	bsl.AddCallers()
 }
 
-func (bsl *bytesliceLine) AddTime() {
-	if !bsl.includeTime {
-		return
-	}
-
-	timeNow := time.Now()
-	year, month, day := timeNow.Date()
-	hour, min, sec := timeNow.Clock()
-	usec := timeNow.Nanosecond() / 1000
-
-	if bsl.jsonMode {
-		var prefixArr = [37]byte{
-			',', '"', 't', 'i', 'm', 'e', '"', ':', '"',
-			'0', '0', '0', '0', '-', '0', '0', '-', '0', '0',
-			'T', '0', '0', ':', '0', '0', ':', '0', '0', '.',
-			'0', '0', '0', '0', '0', '0', '"', ',',
-		}
-
-		setIntBytes(prefixArr[9:], int64(year), 4)
-		setIntBytes(prefixArr[14:], int64(month), 2)
-		setIntBytes(prefixArr[17:], int64(day), 2)
-		setIntBytes(prefixArr[20:], int64(hour), 2)
-		setIntBytes(prefixArr[23:], int64(min), 2)
-		setIntBytes(prefixArr[26:], int64(sec), 2)
-		setIntBytes(prefixArr[29:], int64(usec), 6)
-		if len(bsl.output) > 1 {
-			// Use the comma
-			bsl.output = append(bsl.output, prefixArr[:37]...)
-		} else {
-			// Skip the comma
-			bsl.output = append(bsl.output, prefixArr[1:37]...)
-		}
-
-	} else {
-		var consolePrefixFull = [29]byte{
-			'[', '0', '0', '0', '0', '-', '0', '0', '-', '0', '0',
-			'T', '0', '0', ':', '0', '0', ':', '0', '0', '.',
-			'0', '0', '0', '0', '0', '0', ']', ' ',
-		}
-
-		setIntBytes(consolePrefixFull[1:], int64(year), 4)
-		setIntBytes(consolePrefixFull[6:], int64(month), 2)
-		setIntBytes(consolePrefixFull[9:], int64(day), 2)
-		setIntBytes(consolePrefixFull[12:], int64(hour), 2)
-		setIntBytes(consolePrefixFull[15:], int64(min), 2)
-		setIntBytes(consolePrefixFull[18:], int64(sec), 2)
-		setIntBytes(consolePrefixFull[21:], int64(usec), 6)
-		bsl.output = append(bsl.output, consolePrefixFull[:29]...)
-	}
-}
-
 func (l *logger) WithByteSliceLineTrace() *bytesliceLine {
 	if l.Level > LevelTrace {
 		return noopbytesliceLine
 	}
 	bsl := emptybytesliceLine(l)
+
+	if l.CallerDepth > 0 {
+		var pc PC
+		caller1(l.CallerDepth+1, &pc, 1, 1)
+		fillCallerData(pc, &bsl.callerData)
+	}
+
 	if bsl.jsonMode {
 		bsl.writeInitialJSON(LevelTrace)
 	} else {
@@ -195,6 +115,13 @@ func (l *logger) WithByteSliceLineDebug() *bytesliceLine {
 		return noopbytesliceLine
 	}
 	bsl := emptybytesliceLine(l)
+
+	if l.CallerDepth > 0 {
+		var pc PC
+		caller1(l.CallerDepth+1, &pc, 1, 1)
+		fillCallerData(pc, &bsl.callerData)
+	}
+
 	if bsl.jsonMode {
 		bsl.writeInitialJSON(LevelDebug)
 	} else {
@@ -207,7 +134,15 @@ func (l *logger) WithByteSliceLineInfo() *bytesliceLine {
 	if l.Level > LevelInfo {
 		return noopbytesliceLine
 	}
+
 	bsl := emptybytesliceLine(l)
+
+	if l.CallerDepth > 0 {
+		var pc PC
+		caller1(l.CallerDepth+1, &pc, 1, 1)
+		fillCallerData(pc, &bsl.callerData)
+	}
+
 	if bsl.jsonMode {
 		bsl.writeInitialJSON(LevelInfo)
 	} else {
@@ -221,6 +156,13 @@ func (l *logger) WithByteSliceLineWarn() *bytesliceLine {
 		return noopbytesliceLine
 	}
 	bsl := emptybytesliceLine(l)
+
+	if l.CallerDepth > 0 {
+		var pc PC
+		caller1(l.CallerDepth+1, &pc, 1, 1)
+		fillCallerData(pc, &bsl.callerData)
+	}
+
 	if bsl.jsonMode {
 		bsl.writeInitialJSON(LevelWarn)
 	} else {
@@ -234,6 +176,13 @@ func (l *logger) WithByteSliceLineError() *bytesliceLine {
 		return noopbytesliceLine
 	}
 	bsl := emptybytesliceLine(l)
+
+	if l.CallerDepth > 0 {
+		var pc PC
+		caller1(l.CallerDepth+1, &pc, 1, 1)
+		fillCallerData(pc, &bsl.callerData)
+	}
+
 	if bsl.jsonMode {
 		bsl.writeInitialJSON(LevelError)
 	} else {
@@ -247,6 +196,13 @@ func (l *logger) WithByteSliceLinePanic() *bytesliceLine {
 		return noopbytesliceLine
 	}
 	bsl := emptybytesliceLine(l)
+
+	if l.CallerDepth > 0 {
+		var pc PC
+		caller1(l.CallerDepth+1, &pc, 1, 1)
+		fillCallerData(pc, &bsl.callerData)
+	}
+
 	if bsl.jsonMode {
 		bsl.writeInitialJSON(LevelPanic)
 	} else {
@@ -262,6 +218,13 @@ func (l *logger) WithByteSliceLineFatal() *bytesliceLine {
 		return noopbytesliceLine
 	}
 	bsl := emptybytesliceLine(l)
+
+	if l.CallerDepth > 0 {
+		var pc PC
+		caller1(l.CallerDepth+1, &pc, 1, 1)
+		fillCallerData(pc, &bsl.callerData)
+	}
+
 	if bsl.jsonMode {
 		bsl.writeInitialJSON(LevelFatal)
 	} else {

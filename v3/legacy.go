@@ -6,39 +6,39 @@ import (
 )
 
 // LogInterface support from viper
-func (l *logger) Print(msg string) {
-	l.LogWithFields(LevelPrint, nil, msg)
+func (l *logger) Print(msg string, args ...any) {
+	l.LogWithFields(context.Background(), LevelPrint, nil, msg, args...)
 }
 func (l *logger) Printf(format string, args ...interface{}) {
 	msg := fmt.Sprintf(format, args...)
-	l.LogWithFields(LevelPrint, nil, msg)
+	l.LogWithFields(context.Background(), LevelPrint, nil, msg)
 }
 func (l *logger) Println(args ...interface{}) {
 	msg := fmt.Sprintln(args...)
-	l.LogWithFields(LevelPrint, nil, msg)
+	l.LogWithFields(context.Background(), LevelPrint, nil, msg)
 }
 
-func (l *logger) Log(level Level, msg string) {
-	l.LogWithFields(level, nil, msg)
+func (l *logger) Log(ctx context.Context, level Level, msg string, args ...any) {
+	l.LogWithFields(ctx, level, nil, msg, args...)
 }
-func Log(level Level, msg string) {
-	GlobalLogger.Log(level, msg)
+func Log(ctx context.Context, level Level, msg string) {
+	GlobalLogger.Log(ctx, level, msg)
 }
 
-func (l *logger) Logf(level Level, format string, args ...interface{}) {
+func (l *logger) Logf(ctx context.Context, level Level, format string, args ...interface{}) {
 	msg := fmt.Sprintf(format, args...)
-	l.Log(level, msg)
+	l.Log(ctx, level, msg)
 }
 func Logf(level Level, format string, args ...interface{}) {
 	GlobalLogger.Logf(level, format, args...)
 }
 
-func (l *logger) LogFWithFields(level Level, fields map[string]any, format string, args ...interface{}) {
+func (l *logger) LogFWithFields(ctx context.Context, level Level, fields map[string]any, format string, args ...interface{}) {
 	msg := fmt.Sprintf(format, args...)
-	l.LogWithFields(level, fields, msg)
+	l.LogWithFields(ctx, level, fields, msg)
 }
 
-func (l *logger) LogWithFields(level Level, fields map[string]any, msg string) {
+func (l *logger) LogWithFields(ctx context.Context, level Level, fields map[string]any, msg string, args ...any) {
 	var logger *bytesliceLine
 	switch level {
 	case LevelTrace:
@@ -64,7 +64,7 @@ func (l *logger) LogWithFields(level Level, fields map[string]any, msg string) {
 		// TODO: handle different types
 		logger = logger.Str(k, fmt.Sprintf("%v", v))
 	}
-	logger.Msg(msg)
+	logger.Msgs(msg, args...)
 }
 
 type legacyHandler struct {

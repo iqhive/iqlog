@@ -161,6 +161,30 @@ func appendIntDecimal(src []byte, i int64) ([]byte, int) {
 	return src, len(tmp) - pos
 }
 
+func writeIntToBuffer(buf *bytes.Buffer, num int) {
+	// Pre-allocate a byte slice with enough space for the largest int
+	var b [20]byte // 20 bytes is enough for a 64-bit integer
+	i := len(b)
+
+	// Convert the integer to a string in reverse order
+	for num >= 10 || num <= -10 {
+		i--
+		b[i] = byte('0' + num%10)
+		num /= 10
+	}
+	i--
+	b[i] = byte('0' + num%10)
+
+	// If the number is negative, add the minus sign
+	if num < 0 {
+		i--
+		b[i] = '-'
+	}
+
+	// Write the slice to the buffer
+	buf.Write(b[i:])
+}
+
 func appendBufferIntDecimal(buf *bytes.Buffer, i int64) (int, error) {
 	neg := (i < 0)
 	if neg {
