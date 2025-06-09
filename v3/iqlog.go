@@ -126,91 +126,91 @@ func KeepNumDirs(str string, lastn int) string {
 }
 
 // Debugf is a global helper / convenience function for accessing the GlobalLogger object
-func Debugf(format string, args ...interface{}) { GlobalLogger.Debugf(format, args...) }
+func Debugf(format string, args ...any) { GlobalLogger.Debugf(format, args...) }
 
 // Debug is a global helper / convenience function for accessing the GlobalLogger object
-func Debug(format string, args ...interface{}) { GlobalLogger.Debug(format, args...) }
+func Debug(args ...any) { GlobalLogger.Debug(args...) }
 
 // Infof is a global helper / convenience function for accessing the GlobalLogger object
-func Infof(format string, args ...interface{}) { GlobalLogger.Infof(format, args...) }
+func Infof(format string, args ...any) { GlobalLogger.Infof(format, args...) }
 
 // Info is a global helper / convenience function for accessing the GlobalLogger object
-func Info(format string, args ...interface{}) { GlobalLogger.Info(format, args...) }
+func Info(args ...any) { GlobalLogger.Info(args...) }
 
 // Printf is a global helper / convenience function for accessing the GlobalLogger object
-func Printf(format string, args ...interface{}) { GlobalLogger.Printf(format, args...) }
+func Printf(format string, args ...any) { GlobalLogger.Printf(format, args...) }
 
 // Print is a global helper / convenience function for accessing the GlobalLogger object
-func Print(format string, args ...interface{}) { GlobalLogger.Print(format, args...) }
+func Print(args ...any) { GlobalLogger.Print(args...) }
 
 // Warnf is a global helper / convenience function for accessing the GlobalLogger object
-func Warnf(format string, args ...interface{}) { GlobalLogger.Warnf(format, args...) }
+func Warnf(format string, args ...any) { GlobalLogger.Warnf(format, args...) }
 
 // Warn is a global helper / convenience function for accessing the GlobalLogger object
-func Warn(format string, args ...interface{}) { GlobalLogger.Warn(format, args...) }
+func Warn(args ...any) { GlobalLogger.Warn(args...) }
 
 // Warningf is a global helper / convenience function for accessing the GlobalLogger object
-func Warningf(format string, args ...interface{}) { GlobalLogger.Warningf(format, args...) }
+func Warningf(format string, args ...any) { GlobalLogger.Warningf(format, args...) }
 
 // Warning is a global helper / convenience function for accessing the GlobalLogger object
-func Warning(format string, args ...interface{}) { GlobalLogger.Warning(format, args...) }
+func Warning(args ...any) { GlobalLogger.Warning(args...) }
 
 // Errorf is a global helper / convenience function for accessing the GlobalLogger object
-func Errorf(format string, args ...interface{}) { GlobalLogger.Errorf(format, args...) }
+func Errorf(format string, args ...any) { GlobalLogger.Errorf(format, args...) }
 
 // Error is a global helper / convenience function for accessing the GlobalLogger object
-func Error(format string, args ...interface{}) { GlobalLogger.Error(format, args...) }
+func Error(args ...any) { GlobalLogger.Error(args...) }
 
 // Fatalf is a global helper / convenience function for accessing the GlobalLogger object
-func Fatalf(format string, args ...interface{}) { GlobalLogger.Fatalf(format, args...) }
+func Fatalf(format string, args ...any) { GlobalLogger.Fatalf(format, args...) }
 
 // Fatal is a global helper / convenience function for accessing the GlobalLogger object
-func Fatal(format string, args ...interface{}) { GlobalLogger.Fatal(format, args...) }
+func Fatal(args ...any) { GlobalLogger.Fatal(args...) }
 
 // Panicf is a global helper / convenience function for accessing the GlobalLogger object
-func Panicf(format string, args ...interface{}) { GlobalLogger.Panicf(format, args...) }
+func Panicf(format string, args ...any) { GlobalLogger.Panicf(format, args...) }
 
 // Panic is a global helper / convenience function for accessing the GlobalLogger object
-func Panic(format string, args ...interface{}) { GlobalLogger.Panic(format, args...) }
+func Panic(args ...any) { GlobalLogger.Panic(args...) }
 
 // Log is a global helper / convenience function for accessing the GlobalLogger object
-func Log(level slog.Level, args ...interface{}) { GlobalLogger.Log(level, args...) }
+func Log(level slog.Level, args ...any) { GlobalLogger.Log(level, args...) }
 
 // Trace is a global helper / convenience function for accessing the GlobalLogger object
-func Trace(args ...interface{}) { GlobalLogger.Trace(args) }
+func Trace(args ...any) { GlobalLogger.Trace(args) }
 
 // Tracef is a global helper / convenience function for accessing the GlobalLogger object
-func Tracef(format string, args ...interface{}) { GlobalLogger.Tracef(format, args...) }
+func Tracef(format string, args ...any) { GlobalLogger.Tracef(format, args...) }
 
 // Logln is a global helper / convenience function for accessing the GlobalLogger object
-func Logln(level slog.Level, args ...interface{}) { GlobalLogger.Logln(level, args) }
+func Logln(level slog.Level, args ...any) { GlobalLogger.Logln(level, args) }
 
 // Traceln is a global helper / convenience function for accessing the GlobalLogger object
-func Traceln(args ...interface{}) { GlobalLogger.Traceln(args) }
+func Traceln(args ...any) { GlobalLogger.Traceln(args) }
 
 // Debugln is a global helper / convenience function for accessing the GlobalLogger object
-func Debugln(args ...interface{}) { GlobalLogger.Debugln(args) }
+func Debugln(args ...any) { GlobalLogger.Debugln(args) }
 
 // Infoln is a global helper / convenience function for accessing the GlobalLogger object
-func Infoln(args ...interface{}) { GlobalLogger.Infoln(args) }
+func Infoln(args ...any) { GlobalLogger.Infoln(args) }
 
 // Println is a global helper / convenience function for accessing the GlobalLogger object
-func Println(args ...interface{}) { GlobalLogger.Println(args) }
+func Println(args ...any) { GlobalLogger.Println(args) }
 
 // Warnln is a global helper / convenience function for accessing the GlobalLogger object
-func Warnln(args ...interface{}) { GlobalLogger.Warnln(args) }
+func Warnln(args ...any) { GlobalLogger.Warnln(args) }
 
 // Warningln is a global helper / convenience function for accessing the GlobalLogger object
-func Warningln(args ...interface{}) { GlobalLogger.Warningln(args) }
+func Warningln(args ...any) { GlobalLogger.Warningln(args) }
 
 // Errorln is a global helper / convenience function for accessing the GlobalLogger object
-func Errorln(args ...interface{}) { GlobalLogger.Errorln(args) }
+func Errorln(args ...any) { GlobalLogger.Errorln(args) }
 
 // Fatalln is a global helper / convenience function for accessing the GlobalLogger object
-func Fatalln(args ...interface{}) { GlobalLogger.Fatalln(args) }
+func Fatalln(args ...any) { GlobalLogger.Fatalln(args) }
 
 // Panicln is a global helper / convenience function for accessing the GlobalLogger object
-func Panicln(args ...interface{}) { GlobalLogger.Panicln(args) }
+func Panicln(args ...any) { GlobalLogger.Panicln(args) }
 
 type Logger interface {
 	SetApplicationName(string)
@@ -219,35 +219,35 @@ type Logger interface {
 	WithFields(map[string]any) Logger
 	WithError(error) Logger
 
-	Tracef(format string, args ...interface{})
-	Debugf(format string, args ...interface{})
-	Debug(format string, args ...interface{})
-	Infof(format string, args ...interface{})
-	Info(format string, args ...interface{})
-	Printf(format string, args ...interface{})
-	Print(format string, args ...interface{})
-	Warnf(format string, args ...interface{})
-	Warn(format string, args ...interface{})
-	Warningf(format string, args ...interface{})
-	Warning(format string, args ...interface{})
-	Errorf(format string, args ...interface{})
-	Error(format string, args ...interface{})
-	Fatalf(format string, args ...interface{})
-	Fatal(format string, args ...interface{})
-	Panicf(format string, args ...interface{})
-	Panic(format string, args ...interface{})
-	Log(level slog.Level, args ...interface{})
-	Trace(args ...interface{})
-	Logln(level slog.Level, args ...interface{})
-	Traceln(args ...interface{})
-	Debugln(args ...interface{})
-	Infoln(args ...interface{})
-	Println(args ...interface{})
-	Warnln(args ...interface{})
-	Warningln(args ...interface{})
-	Errorln(args ...interface{})
-	Fatalln(args ...interface{})
-	Panicln(args ...interface{})
+	Tracef(format string, args ...any)
+	Debugf(format string, args ...any)
+	Debug(args ...any)
+	Infof(format string, args ...any)
+	Info(args ...any)
+	Printf(format string, args ...any)
+	Print(args ...any)
+	Warnf(format string, args ...any)
+	Warn(args ...any)
+	Warningf(format string, args ...any)
+	Warning(args ...any)
+	Errorf(format string, args ...any)
+	Error(args ...any)
+	Fatalf(format string, args ...any)
+	Fatal(args ...any)
+	Panicf(format string, args ...any)
+	Panic(args ...any)
+	Log(level slog.Level, args ...any)
+	Trace(args ...any)
+	Logln(level slog.Level, args ...any)
+	Traceln(args ...any)
+	Debugln(args ...any)
+	Infoln(args ...any)
+	Println(args ...any)
+	Warnln(args ...any)
+	Warningln(args ...any)
+	Errorln(args ...any)
+	Fatalln(args ...any)
+	Panicln(args ...any)
 	SetWriter(w io.Writer)
 	GetWriter() io.Writer
 }
@@ -320,13 +320,13 @@ func (l *logger) SetSyslogHost(newhost string) {
 	}
 }
 
-func (l logger) Tracef(format string, args ...interface{}) {
+func (l logger) Tracef(format string, args ...any) {
 	var pcs [1]uintptr
 	runtime.Callers(2, pcs[:])
 	l.slog.Log(l.ctx, levelTrace, fmt.Sprintf(format, args...))
 }
 
-func (l logger) Debugf(format string, args ...interface{}) {
+func (l logger) Debugf(format string, args ...any) {
 	if !l.debug {
 		return
 	}
@@ -334,139 +334,129 @@ func (l logger) Debugf(format string, args ...interface{}) {
 	l.slog.DebugContext(l.ctx, fmt.Sprintf(format, args...))
 }
 
-func (l logger) Debug(format string, args ...interface{}) {
-	if !l.debug {
-		return
-	}
-	format = strings.ReplaceAll(format, "%w", "%v")
-	l.slog.DebugContext(l.ctx, fmt.Sprintf(format, args...))
-}
-
-func (l logger) Debugln(args ...interface{}) {
+func (l logger) Debug(args ...any) {
 	if !l.debug {
 		return
 	}
 	l.slog.DebugContext(l.ctx, fmt.Sprint(args...))
 }
 
-func (l logger) Infof(format string, args ...interface{}) {
+func (l logger) Debugln(args ...any) {
+	if !l.debug {
+		return
+	}
+	l.slog.DebugContext(l.ctx, fmt.Sprint(args...))
+}
+
+func (l logger) Infof(format string, args ...any) {
 	format = strings.ReplaceAll(format, "%w", "%v")
 	l.slog.InfoContext(l.ctx, fmt.Sprintf(format, args...))
 }
 
-func (l logger) Info(format string, args ...interface{}) {
-	var pcs [1]uintptr
-	runtime.Callers(2, pcs[:])
-	format = strings.ReplaceAll(format, "%w", "%v")
-	l.slog.InfoContext(l.ctx, fmt.Sprintf(format, args...))
-}
-
-func (l logger) Printf(format string, args ...interface{}) {
-	format = strings.ReplaceAll(format, "%w", "%v")
-	l.slog.Log(l.ctx, levelPrint, fmt.Sprintf(format, args...))
-}
-
-func (l logger) Print(format string, args ...interface{}) {
-	format = strings.ReplaceAll(format, "%w", "%v")
-	l.slog.Log(l.ctx, levelPrint, fmt.Sprintf(format, args...))
-}
-
-func (l logger) Warnf(format string, args ...interface{}) {
-	format = strings.ReplaceAll(format, "%w", "%v")
-	l.slog.WarnContext(l.ctx, fmt.Sprintf(format, args...))
-}
-
-func (l logger) Warn(format string, args ...interface{}) {
-	format = strings.ReplaceAll(format, "%w", "%v")
-	l.slog.WarnContext(l.ctx, fmt.Sprintf(format, args...))
-}
-
-func (l logger) Warningf(format string, args ...interface{}) {
-	format = strings.ReplaceAll(format, "%w", "%v")
-	l.slog.WarnContext(l.ctx, fmt.Sprintf(format, args...))
-}
-
-func (l logger) Warning(format string, args ...interface{}) {
-	format = strings.ReplaceAll(format, "%w", "%v")
-	l.slog.WarnContext(l.ctx, fmt.Sprintf(format, args...))
-}
-
-func (l logger) Errorf(format string, args ...interface{}) {
-	format = strings.ReplaceAll(format, "%w", "%v")
-	l.slog.ErrorContext(l.ctx, fmt.Sprintf(format, args...))
-}
-
-func (l logger) Error(format string, args ...interface{}) {
-	format = strings.ReplaceAll(format, "%w", "%v")
-	l.slog.ErrorContext(l.ctx, fmt.Sprintf(format, args...))
-}
-
-func (l logger) Fatalf(format string, args ...interface{}) {
-	format = strings.ReplaceAll(format, "%w", "%v")
-	l.slog.Log(l.ctx, levelFatal, fmt.Sprintf(format, args...))
-	os.Exit(1)
-}
-
-func (l logger) Fatal(format string, args ...interface{}) {
-	format = strings.ReplaceAll(format, "%w", "%v")
-	l.slog.Log(l.ctx, levelFatal, fmt.Sprintf(format, args...))
-	os.Exit(1)
-}
-
-func (l logger) Panicf(format string, args ...interface{}) {
-	format = strings.ReplaceAll(format, "%w", "%v")
-	l.slog.Log(l.ctx, levelPanic, fmt.Sprintf(format, args...))
-	panic(fmt.Sprintf(format, args...))
-}
-
-func (l logger) Panic(format string, args ...interface{}) {
-	format = strings.ReplaceAll(format, "%w", "%v")
-	l.slog.Log(l.ctx, levelPanic, fmt.Sprintf(format, args...))
-	panic(fmt.Sprintf(format, args...))
-}
-
-func (l logger) Log(level slog.Level, args ...interface{}) {
-	l.slog.Log(l.ctx, level, fmt.Sprint(args...))
-}
-
-func (l logger) Trace(args ...interface{}) {
-	l.slog.Log(l.ctx, levelTrace, fmt.Sprint(args...))
-}
-
-func (l logger) Logln(level slog.Level, args ...interface{}) {
-	l.slog.Log(l.ctx, level, fmt.Sprint(args...))
-}
-
-func (l logger) Traceln(args ...interface{}) {
-	l.slog.Log(l.ctx, levelTrace, fmt.Sprint(args...))
-}
-
-func (l logger) Infoln(args ...interface{}) {
+func (l logger) Info(args ...any) {
 	l.slog.InfoContext(l.ctx, fmt.Sprint(args...))
 }
 
-func (l logger) Println(args ...interface{}) {
+func (l logger) Printf(format string, args ...any) {
+	format = strings.ReplaceAll(format, "%w", "%v")
+	l.slog.Log(l.ctx, levelPrint, fmt.Sprintf(format, args...))
+}
+
+func (l logger) Print(args ...any) {
 	l.slog.Log(l.ctx, levelPrint, fmt.Sprint(args...))
 }
 
-func (l logger) Warnln(args ...interface{}) {
+func (l logger) Warnf(format string, args ...any) {
+	format = strings.ReplaceAll(format, "%w", "%v")
+	l.slog.WarnContext(l.ctx, fmt.Sprintf(format, args...))
+}
+
+func (l logger) Warn(args ...any) {
 	l.slog.WarnContext(l.ctx, fmt.Sprint(args...))
 }
 
-func (l logger) Warningln(args ...interface{}) {
+func (l logger) Warningf(format string, args ...any) {
+	format = strings.ReplaceAll(format, "%w", "%v")
+	l.slog.WarnContext(l.ctx, fmt.Sprintf(format, args...))
+}
+
+func (l logger) Warning(args ...any) {
 	l.slog.WarnContext(l.ctx, fmt.Sprint(args...))
 }
 
-func (l logger) Errorln(args ...interface{}) {
+func (l logger) Errorf(format string, args ...any) {
+	format = strings.ReplaceAll(format, "%w", "%v")
+	l.slog.ErrorContext(l.ctx, fmt.Sprintf(format, args...))
+}
+
+func (l logger) Error(args ...any) {
 	l.slog.ErrorContext(l.ctx, fmt.Sprint(args...))
 }
 
-func (l logger) Fatalln(args ...interface{}) {
+func (l logger) Fatalf(format string, args ...any) {
+	format = strings.ReplaceAll(format, "%w", "%v")
+	l.slog.Log(l.ctx, levelFatal, fmt.Sprintf(format, args...))
+	os.Exit(1)
+}
+
+func (l logger) Fatal(args ...any) {
 	l.slog.Log(l.ctx, levelFatal, fmt.Sprint(args...))
 	os.Exit(1)
 }
 
-func (l logger) Panicln(args ...interface{}) {
+func (l logger) Panicf(format string, args ...any) {
+	format = strings.ReplaceAll(format, "%w", "%v")
+	l.slog.Log(l.ctx, levelPanic, fmt.Sprintf(format, args...))
+	panic(fmt.Sprintf(format, args...))
+}
+
+func (l logger) Panic(args ...any) {
+	l.slog.Log(l.ctx, levelPanic, fmt.Sprint(args...))
+	panic(fmt.Sprint(args...))
+}
+
+func (l logger) Log(level slog.Level, args ...any) {
+	l.slog.Log(l.ctx, level, fmt.Sprint(args...))
+}
+
+func (l logger) Trace(args ...any) {
+	l.slog.Log(l.ctx, levelTrace, fmt.Sprint(args...))
+}
+
+func (l logger) Logln(level slog.Level, args ...any) {
+	l.slog.Log(l.ctx, level, fmt.Sprint(args...))
+}
+
+func (l logger) Traceln(args ...any) {
+	l.slog.Log(l.ctx, levelTrace, fmt.Sprint(args...))
+}
+
+func (l logger) Infoln(args ...any) {
+	l.slog.InfoContext(l.ctx, fmt.Sprint(args...))
+}
+
+func (l logger) Println(args ...any) {
+	l.slog.Log(l.ctx, levelPrint, fmt.Sprint(args...))
+}
+
+func (l logger) Warnln(args ...any) {
+	l.slog.WarnContext(l.ctx, fmt.Sprint(args...))
+}
+
+func (l logger) Warningln(args ...any) {
+	l.slog.WarnContext(l.ctx, fmt.Sprint(args...))
+}
+
+func (l logger) Errorln(args ...any) {
+	l.slog.ErrorContext(l.ctx, fmt.Sprint(args...))
+}
+
+func (l logger) Fatalln(args ...any) {
+	l.slog.Log(l.ctx, levelFatal, fmt.Sprint(args...))
+	os.Exit(1)
+}
+
+func (l logger) Panicln(args ...any) {
 	l.slog.Log(l.ctx, levelPanic, fmt.Sprint(args...))
 	panic(fmt.Sprint(args...))
 }
