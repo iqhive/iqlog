@@ -248,8 +248,9 @@ type Logger interface {
 	Errorln(args ...any)
 	Fatalln(args ...any)
 	Panicln(args ...any)
+
 	SetWriter(w io.Writer)
-	GetWriter() io.Writer
+	Writer() io.Writer
 }
 
 const (
