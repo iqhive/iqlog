@@ -496,9 +496,7 @@ func (l *logger) SetWriter(w io.Writer) {
 	)
 }
 
-func (l *logger) GetWriter() io.Writer {
-	return l.out
-}
+func (l *logger) Writer() io.Writer { return l.out }
 
 func SetWriter(w io.Writer) {
 	GlobalLogger.SetWriter(w)
