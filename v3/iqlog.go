@@ -501,6 +501,6 @@ func (l *logger) Writer() io.Writer { return l.out }
 func SetWriter(w io.Writer) {
 	GlobalLogger.SetWriter(w)
 }
-func GetWriter() io.Writer {
-	return GlobalLogger.GetWriter()
+func Writer() io.Writer {
+	return GlobalLogger.Writer()
 }
