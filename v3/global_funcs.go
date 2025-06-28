@@ -3,6 +3,30 @@ package iqlog
 // ------------------------------------------------------------
 // Common with getter
 // ------------------------------------------------------------
+// func (*logger) getWith(level Level) *preallocLine {
+// 	if GlobalLogger.Level > level {
+// 		return nooppreallocLine
+// 	}
+// 	l := emptypreallocLine(GlobalLogger)
+
+// 	callerData := callerData{}
+// 	if GlobalLogger.CallerDepth > 0 {
+// 		var pc PC
+// 		// +1 caller depth for the caller of the caller
+// 		caller1(GlobalLogger.CallerDepth+1, &pc, 1, 1)
+// 		fillCallerData(pc, &callerData)
+// 	}
+// 	l.callerData = callerData
+
+// 	if l.jsonMode {
+// 		l.writeInitialJSON(level)
+// 	} else {
+// 		l.writeInitialConsole(level)
+// 	}
+
+// 	return l
+// }
+
 func (*logger) getWith(level Level) *bytesliceLine {
 	if GlobalLogger.Level > level {
 		return noopbytesliceLine

@@ -15,7 +15,7 @@ import (
 var GlobalLogger *logger = NewGlobalIQLogger()
 var useColour = terminal.IsTerminal(int(os.Stderr.Fd())) && (runtime.GOOS != "windows")
 
-const maxLineLen = 256
+const maxLineLen = 1024
 const maxStringLen = 256
 
 type logger struct {
