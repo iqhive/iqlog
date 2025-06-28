@@ -27,28 +27,29 @@ package iqlog
 // 	return l
 // }
 
-func (*logger) getWith(level Level) *bytesliceLine {
-	if GlobalLogger.Level > level {
+func (l *logger) getWith(level Level) *bytesliceLine {
+	// Use the receiver logger instance, not GlobalLogger
+	if l.Level > level {
 		return noopbytesliceLine
 	}
-	l := emptybytesliceLine(GlobalLogger)
+	bl := emptybytesliceLine(l)
 
 	callerData := callerData{}
-	if GlobalLogger.CallerDepth > 0 {
+	if l.CallerDepth > 0 {
 		var pc PC
 		// +1 caller depth for the caller of the caller
-		caller1(GlobalLogger.CallerDepth+1, &pc, 1, 1)
+		caller1(l.CallerDepth+1, &pc, 1, 1)
 		fillCallerData(pc, &callerData)
 	}
-	l.callerData = callerData
+	bl.callerData = callerData
 
-	if l.jsonMode {
-		l.writeInitialJSON(level)
+	if bl.jsonMode {
+		bl.writeInitialJSON(level)
 	} else {
-		l.writeInitialConsole(level)
+		bl.writeInitialConsole(level)
 	}
 
-	return l
+	return bl
 }
 
 // ------------------------------------------------------------

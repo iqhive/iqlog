@@ -127,15 +127,21 @@ func TestConcurrentLogs(t *testing.T) {
 	numGoroutines := 10
 	messagesPerGoroutine := 10
 
+	var syncLock sync.RWMutex
+	syncLock.Lock()
+
 	wg.Add(numGoroutines)
 	for g := 0; g < numGoroutines; g++ {
 		go func(goroutineID int) {
 			defer wg.Done()
+			syncLock.RLock()
+			defer syncLock.RUnlock()
 			for m := 0; m < messagesPerGoroutine; m++ {
 				logger.Info("ConcurrentLog", goroutineID, "message", m)
 			}
 		}(g)
 	}
+	syncLock.Unlock()
 	wg.Wait()
 
 	logger.Flush()
