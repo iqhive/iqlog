@@ -11,16 +11,6 @@ const (
 	white  = 37
 )
 
-var (
-	FunctionsToSkip = []string{
-		"/iqlog/",
-		"log/slog",
-		"/apierror/",
-		"runtime.",
-		"testing.",
-	}
-)
-
 // // Handle handles the Record.
 // // It will only be called when Enabled returns true.
 // // The Context argument is as for Enabled.

@@ -1,171 +1,316 @@
 package iqlog
 
+import (
+	"fmt"
+	"strconv"
+	"time"
+)
+
 func (vs *varStack) writeFinalConsole(msg string, args ...interface{}) {
-	// vs.AddTime()
-	// if useColour {
-	// 	vs.output = append(vs.output, ansiColourPrefix(level)...)
-	// } else {
-	// 	vs.output = append(vs.output, levelPrefix(level)...)
-	// }
-	// vs.AddCallers()
+	var output []byte
 
-	// //put the message
-	// vs.output = append(vs.output, msg...)
+	// Add time if enabled
+	if vs.includeTime {
+		AddTimeConsoleAppend(time.Now(), &output)
+	}
 
-	// // followed by args
-	// for _, thisarg := range args {
-	// 	vs.output = append(vs.output, ' ')
+	// Add level prefix
+	if useColour {
+		output = append(output, ansiColourPrefix(vs.level)...)
+	} else {
+		output = append(output, levelPrefix(vs.level)...)
+	}
 
-	// 	switch thisarg := thisarg.(type) {
-	// 	case string:
-	// 		vs.output = append(vs.output, thisarg...)
-	// 	case int:
-	// 		vs.output = append(vs.output, strconv.Itoa(thisarg)...)
-	// 	case int32:
-	// 		vs.output = append(vs.output, strconv.Itoa(int(thisarg))...)
-	// 	case uint32:
-	// 		vs.output = append(vs.output, strconv.FormatUint(uint64(thisarg), 10)...)
-	// 	case int64:
-	// 		vs.output = append(vs.output, strconv.FormatInt(thisarg, 10)...)
-	// 	case uint64:
-	// 		vs.output = append(vs.output, strconv.FormatUint(thisarg, 10)...)
-	// 	case float32:
-	// 		vs.output = append(vs.output, strconv.FormatFloat(float64(thisarg), 'f', -1, 32)...)
-	// 	case float64:
-	// 		vs.output = append(vs.output, strconv.FormatFloat(thisarg, 'f', -1, 64)...)
-	// 	case bool:
-	// 		vs.output = append(vs.output, strconv.FormatBool(thisarg)...)
-	// 	default:
-	// 		vs.output = append(vs.output, fmt.Sprintf("%v", thisarg)...)
-	// 	}
-	// }
-	// // if vs.logger.newLine {
-	// vs.output = append(vs.output, '\n')
-	// // }
+	// Add caller info if configured
+	// vs.AddCallers() - skipping for now as it's not in the structure
 
-	// vs.out.Write(vs.output)
+	// Add variable key=value pairs first
+	for i := 0; i < vs.varCount; i++ {
+		switch v := vs.varValue[i].(type) {
+		case string:
+			output = append(output, vs.varName[i]...)
+			output = append(output, '=')
+			output = append(output, v...)
+			output = append(output, ' ')
+		case int:
+			output = append(output, vs.varName[i]...)
+			output = append(output, '=')
+			output = append(output, strconv.Itoa(v)...)
+			output = append(output, ' ')
+		case float32:
+			output = append(output, vs.varName[i]...)
+			output = append(output, '=')
+			output = append(output, strconv.FormatFloat(float64(v), 'f', 6, 32)...)
+			output = append(output, ' ')
+		case float64:
+			output = append(output, vs.varName[i]...)
+			output = append(output, '=')
+			output = append(output, strconv.FormatFloat(v, 'f', 6, 64)...)
+			output = append(output, ' ')
+		default:
+			output = append(output, vs.varName[i]...)
+			output = append(output, '=')
+			output = append(output, fmt.Sprintf("%v", v)...)
+			output = append(output, ' ')
+		}
+	}
+
+	// Add the message
+	output = append(output, msg...)
+
+	// Add any additional args
+	for _, thisarg := range args {
+		output = append(output, ' ')
+
+		switch thisarg := thisarg.(type) {
+		case string:
+			output = append(output, thisarg...)
+		case int:
+			output = append(output, strconv.Itoa(thisarg)...)
+		case int32:
+			output = append(output, strconv.Itoa(int(thisarg))...)
+		case uint32:
+			output = append(output, strconv.FormatUint(uint64(thisarg), 10)...)
+		case int64:
+			output = append(output, strconv.FormatInt(thisarg, 10)...)
+		case uint64:
+			output = append(output, strconv.FormatUint(thisarg, 10)...)
+		case float32:
+			output = append(output, strconv.FormatFloat(float64(thisarg), 'f', -1, 32)...)
+		case float64:
+			output = append(output, strconv.FormatFloat(thisarg, 'f', -1, 64)...)
+		case bool:
+			output = append(output, strconv.FormatBool(thisarg)...)
+		default:
+			output = append(output, fmt.Sprintf("%v", thisarg)...)
+		}
+	}
+
+	// Add newline
+	output = append(output, '\n')
+
+	// Write to output
+	vs.out.Write(output)
 
 	varStackPool.Put(vs)
 }
 
 func (vs *varStack) writeFinalConsoleF(format string, args ...interface{}) {
-	// vs.AddTime()
-	// if useColour {
-	// 	vs.output = append(vs.output, ansiColourPrefix(level)...)
-	// } else {
-	// 	vs.output = append(vs.output, levelPrefix(level)...)
-	// }
-	// vs.AddCallers()
+	var output []byte
 
-	// // ba := baPool.Get().(*bytesAppender)
-	// // ba.Bytes = ba.Bytes[:0] // Clear the slice before use
-	// // fmt.Fprintf(ba, format, args...)
-	// // vs.output = append(vs.output, ba.Bytes...)
-	// // baPool.Put(ba)
+	// Add time if enabled
+	if vs.includeTime {
+		AddTimeConsoleAppend(time.Now(), &output)
+	}
 
-	// bia := biapool.Get().(*byteIndexAppender)
-	// bia.Index = 0
-	// fmt.Fprintf(bia, format, args...)
-	// vs.output = append(vs.output, bia.Bytes[:bia.Index]...)
-	// biapool.Put(bia)
+	// Add level prefix
+	if useColour {
+		output = append(output, ansiColourPrefix(vs.level)...)
+	} else {
+		output = append(output, levelPrefix(vs.level)...)
+	}
 
-	// // if vs.logger.newLine {
-	// vs.output = append(vs.output, '\n')
-	// // }
+	// Add variable key=value pairs first
+	for i := 0; i < vs.varCount; i++ {
+		switch v := vs.varValue[i].(type) {
+		case string:
+			output = append(output, vs.varName[i]...)
+			output = append(output, '=')
+			output = append(output, v...)
+			output = append(output, ' ')
+		case int:
+			output = append(output, vs.varName[i]...)
+			output = append(output, '=')
+			output = append(output, strconv.Itoa(v)...)
+			output = append(output, ' ')
+		case float32:
+			output = append(output, vs.varName[i]...)
+			output = append(output, '=')
+			output = append(output, strconv.FormatFloat(float64(v), 'f', 6, 32)...)
+			output = append(output, ' ')
+		case float64:
+			output = append(output, vs.varName[i]...)
+			output = append(output, '=')
+			output = append(output, strconv.FormatFloat(v, 'f', 6, 64)...)
+			output = append(output, ' ')
+		default:
+			output = append(output, vs.varName[i]...)
+			output = append(output, '=')
+			output = append(output, fmt.Sprintf("%v", v)...)
+			output = append(output, ' ')
+		}
+	}
 
-	// vs.out.Write(vs.output)
+	// Format the message
+	formatted := fmt.Sprintf(format, args...)
+	output = append(output, formatted...)
+
+	// Add newline
+	output = append(output, '\n')
+
+	// Write to output
+	vs.out.Write(output)
 
 	varStackPool.Put(vs)
 }
 
 func (vs *varStack) writeFinalJSON(msg string, args ...interface{}) {
-	// vs.output = append(vs.output, '{')
+	var output []byte
 
-	// vs.AddTime() // adds a trailing comma if it outputs
+	// Add time if enabled (AddTimeJSONAppend includes opening brace)
+	if vs.includeTime {
+		AddTimeJSONAppend(time.Now(), &output)
+	} else {
+		output = append(output, '{')
+	}
 
-	// // Convert Level to string
-	// switch level {
-	// case LevelDebug:
-	// 	vs.output = append(vs.output, []byte("\"level\":\"debug\"")...)
-	// case LevelInfo:
-	// 	vs.output = append(vs.output, []byte("\"level\":\"info\"")...)
-	// case LevelWarn:
-	// 	vs.output = append(vs.output, []byte("\"level\":\"warn\"")...)
-	// case LevelError:
-	// 	vs.output = append(vs.output, []byte("\"level\":\"error\"")...)
-	// case LevelFatal:
-	// 	vs.output = append(vs.output, []byte("\"level\":\"fatal\"")...)
-	// case LevelPanic:
-	// 	vs.output = append(vs.output, []byte("\"level\":\"panic\"")...)
-	// default:
-	// 	vs.output = append(vs.output, []byte("\"level\":\"unknown\"")...)
-	// }
+	// Add level
+	switch vs.level {
+	case LevelDebug:
+		output = append(output, []byte("\"level\":\"debug\"")...)
+	case LevelInfo:
+		output = append(output, []byte("\"level\":\"info\"")...)
+	case LevelWarn:
+		output = append(output, []byte("\"level\":\"warn\"")...)
+	case LevelError:
+		output = append(output, []byte("\"level\":\"error\"")...)
+	case LevelFatal:
+		output = append(output, []byte("\"level\":\"fatal\"")...)
+	case LevelPanic:
+		output = append(output, []byte("\"level\":\"panic\"")...)
+	default:
+		output = append(output, []byte("\"level\":\"unknown\"")...)
+	}
 
-	// vs.AddCallers()
+	// Add variable key=value pairs
+	for i := 0; i < vs.varCount; i++ {
+		output = append(output, ',')
+		output = append(output, '"')
+		output = append(output, vs.varName[i]...)
+		output = append(output, '"', ':')
 
-	// // write JSON closer
-	// vs.output = append(vs.output, []byte(",\"message\":\"")...)
+		switch v := vs.varValue[i].(type) {
+		case string:
+			output = append(output, '"')
+			output = append(output, v...)
+			output = append(output, '"')
+		case int:
+			output = append(output, strconv.Itoa(v)...)
+		case float32:
+			output = append(output, strconv.FormatFloat(float64(v), 'f', 6, 32)...)
+		case float64:
+			output = append(output, strconv.FormatFloat(v, 'f', 6, 64)...)
+		default:
+			output = append(output, '"')
+			output = append(output, fmt.Sprintf("%v", v)...)
+			output = append(output, '"')
+		}
+	}
 
-	// vs.output = append(vs.output, msg...)
+	// Add message
+	output = append(output, []byte(",\"message\":\"")...)
+	output = append(output, msg...)
 
-	// // followed by args
-	// for _, thisarg := range args {
-	// 	vs.output = append(vs.output, ' ')
+	// Add any additional args
+	for _, thisarg := range args {
+		output = append(output, ' ')
 
-	// 	switch thisarg := thisarg.(type) {
-	// 	case string:
-	// 		vs.output = append(vs.output, thisarg...)
-	// 	case int:
-	// 		vs.output = append(vs.output, strconv.Itoa(thisarg)...)
-	// 	case int32:
-	// 		vs.output = append(vs.output, strconv.Itoa(int(thisarg))...)
-	// 	case uint32:
-	// 		vs.output = append(vs.output, strconv.FormatUint(uint64(thisarg), 10)...)
-	// 	case int64:
-	// 		vs.output = append(vs.output, strconv.FormatInt(thisarg, 10)...)
-	// 	case uint64:
-	// 		vs.output = append(vs.output, strconv.FormatUint(thisarg, 10)...)
-	// 	case float32:
-	// 		vs.output, _ = appendfastFloatFill(vs.output, float64(thisarg), 6)
-	// 	case float64:
-	// 		vs.output, _ = appendfastFloatFill(vs.output, thisarg, 6)
-	// 	case bool:
-	// 		vs.output = append(vs.output, strconv.FormatBool(thisarg)...)
-	// 	default:
-	// 		vs.output = append(vs.output, fmt.Sprintf("%v", thisarg)...)
-	// 	}
-	// }
+		switch thisarg := thisarg.(type) {
+		case string:
+			output = append(output, thisarg...)
+		case int:
+			output = append(output, strconv.Itoa(thisarg)...)
+		case int32:
+			output = append(output, strconv.Itoa(int(thisarg))...)
+		case uint32:
+			output = append(output, strconv.FormatUint(uint64(thisarg), 10)...)
+		case int64:
+			output = append(output, strconv.FormatInt(thisarg, 10)...)
+		case uint64:
+			output = append(output, strconv.FormatUint(thisarg, 10)...)
+		case float32:
+			output, _ = appendfastFloatFill(output, float64(thisarg), 6)
+		case float64:
+			output, _ = appendfastFloatFill(output, thisarg, 6)
+		case bool:
+			output = append(output, strconv.FormatBool(thisarg)...)
+		default:
+			output = append(output, fmt.Sprintf("%v", thisarg)...)
+		}
+	}
 
-	// // if vs.newLine {
-	// vs.output = append(vs.output, []byte("\"}\n")...)
-	// // } else {
-	// // 	vs.output = append(vs.output, []byte("\"}")...)
-	// // }
+	// Close JSON and add newline
+	output = append(output, []byte("\"}\n")...)
 
-	// vs.out.Write(vs.output)
+	// Write to output
+	vs.out.Write(output)
 
 	varStackPool.Put(vs)
 }
 
 func (vs *varStack) writeFinalJSONF(format string, args ...interface{}) {
-	// vs.output = append(vs.output, []byte(",\"message\":\"")...)
+	var output []byte
 
-	// ba := baPool.Get().(*bytesAppender)
-	// ba.Bytes = ba.Bytes[:0] // Clear the slice before use
-	// fmt.Fprintf(ba, format, args...)
-	// vs.output = append(vs.output, ba.Bytes...)
-	// baPool.Put(ba)
+	// Add time if enabled (AddTimeJSONAppend includes opening brace)
+	if vs.includeTime {
+		AddTimeJSONAppend(time.Now(), &output)
+	} else {
+		output = append(output, '{')
+	}
 
-	// // bia := biapool.Get().(*byteIndexAppender)
-	// // bia.Index = 0
-	// // fmt.Fprintf(bia, format, args...)
-	// // vs.output = append(vs.output, bia.Bytes[:bia.Index]...)
-	// // biapool.Put(bia)
+	// Add level
+	switch vs.level {
+	case LevelDebug:
+		output = append(output, []byte("\"level\":\"debug\"")...)
+	case LevelInfo:
+		output = append(output, []byte("\"level\":\"info\"")...)
+	case LevelWarn:
+		output = append(output, []byte("\"level\":\"warn\"")...)
+	case LevelError:
+		output = append(output, []byte("\"level\":\"error\"")...)
+	case LevelFatal:
+		output = append(output, []byte("\"level\":\"fatal\"")...)
+	case LevelPanic:
+		output = append(output, []byte("\"level\":\"panic\"")...)
+	default:
+		output = append(output, []byte("\"level\":\"unknown\"")...)
+	}
 
-	// // if vs.logger.newLine {
-	// vs.output = append(vs.output, []byte("\"}\n")...)
+	// Add variable key=value pairs
+	for i := 0; i < vs.varCount; i++ {
+		output = append(output, ',')
+		output = append(output, '"')
+		output = append(output, vs.varName[i]...)
+		output = append(output, '"', ':')
 
-	// vs.out.Write(vs.output)
+		switch v := vs.varValue[i].(type) {
+		case string:
+			output = append(output, '"')
+			output = append(output, v...)
+			output = append(output, '"')
+		case int:
+			output = append(output, strconv.Itoa(v)...)
+		case float32:
+			output = append(output, strconv.FormatFloat(float64(v), 'f', 6, 32)...)
+		case float64:
+			output = append(output, strconv.FormatFloat(v, 'f', 6, 64)...)
+		default:
+			output = append(output, '"')
+			output = append(output, fmt.Sprintf("%v", v)...)
+			output = append(output, '"')
+		}
+	}
+
+	// Add message with formatting
+	output = append(output, []byte(",\"message\":\"")...)
+	formatted := fmt.Sprintf(format, args...)
+	output = append(output, formatted...)
+
+	// Close JSON and add newline
+	output = append(output, []byte("\"}\n")...)
+
+	// Write to output
+	vs.out.Write(output)
 
 	varStackPool.Put(vs)
 }
