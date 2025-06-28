@@ -16,20 +16,18 @@ func TestBasicLogs(t *testing.T) {
 	buf := &bytes.Buffer{}
 
 	// Replace the internal writer for capturing logs (if your iqlog package supports it)
-	originalWriter := iqlog.GetWriter() // Hypothetical method to get the current writer.
-	defer iqlog.SetWriter(originalWriter)
+	logger := iqlog.NewIQLogger(false)
 
-	iqlog.SetWriter(buf)
-	iqlog.SetDebugMode(true)
+	logger.SetWriter(buf)
+	logger.SetDebugMode(true)
 
-	iqlog.Info("Test Info")
-	iqlog.Warn("Test Warn")
-	iqlog.Error("Test Error")
-	iqlog.Debug("Test Debug")
-	iqlog.Debugf("Test Debugf %s", "test")
+	logger.Info("Test Info")
+	logger.Warn("Test Warn")
+	logger.Error("Test Error")
+	logger.Debug("Test Debug")
+	logger.Debugf("Test Debugf %s", "test")
 
 	logOutput := buf.String()
-
 	if !strings.Contains(logOutput, "Test Info") {
 		t.Errorf("Expected 'Test Info' in log output, got: %s", logOutput)
 	}
@@ -47,14 +45,13 @@ func TestBasicLogs(t *testing.T) {
 // TestDebugModeOff ensures that Debug logs are suppressed when debug mode is disabled.
 func TestDebugModeOff(t *testing.T) {
 	buf := &bytes.Buffer{}
-	originalWriter := iqlog.GetWriter()
-	defer iqlog.SetWriter(originalWriter)
+	logger := iqlog.NewIQLogger(false)
 
-	iqlog.SetWriter(buf)
-	iqlog.SetDebugMode(false)
+	logger.SetWriter(buf)
+	logger.SetDebugMode(false)
 
-	iqlog.Info("Info with DebugMode disabled")
-	iqlog.Debug("Debug with DebugMode disabled")
+	logger.Info("Info with DebugMode disabled")
+	logger.Debug("Debug with DebugMode disabled")
 
 	logOutput := buf.String()
 
@@ -70,29 +67,26 @@ func TestDebugModeOff(t *testing.T) {
 func TestEnvironmentVariable(t *testing.T) {
 	// Hypothetical example: if iqlog can read an env var "IQLOG_DEBUG" to auto-enable debug
 	const envVarKey = "IQLOG_DEBUG"
-	originalVal, hadVal := os.LookupEnv(envVarKey)
+	originalVal, _ := os.LookupEnv(envVarKey)
 
 	// Temporarily set environment variable for this test
 	os.Setenv(envVarKey, "1") // Suppose setting it to "1" forces debug on
 	defer func() {
-		if hadVal {
-			os.Setenv(envVarKey, originalVal)
-		} else {
-			os.Unsetenv(envVarKey)
-		}
+		os.Setenv(envVarKey, originalVal)
 	}()
 
 	// Force re-read env config if your logger supports it. Example:
 	// iqlog.ReloadConfigFromEnv() // Hypothetical
 
 	buf := &bytes.Buffer{}
-	originalWriter := iqlog.GetWriter()
-	defer iqlog.SetWriter(originalWriter)
+	logger := iqlog.NewIQLogger(false)
 
-	iqlog.SetWriter(buf)
+	logger.SetWriter(buf)
 
 	// If the logger automatically reads environment variables, we expect debug to be on now.
-	iqlog.Debug("Environment debug check")
+	logger.Debug("Environment debug check")
+	// logger.Flush()
+	// time.Sleep(1 * time.Second)
 
 	logOutput := buf.String()
 	if !strings.Contains(logOutput, "Environment debug check") {
@@ -103,14 +97,13 @@ func TestEnvironmentVariable(t *testing.T) {
 // TestSequentialLogs ensures that multiple consecutive logs don't conflict.
 func TestSequentialLogs(t *testing.T) {
 	buf := &bytes.Buffer{}
-	originalWriter := iqlog.GetWriter()
-	defer iqlog.SetWriter(originalWriter)
+	logger := iqlog.NewIQLogger(false)
 
-	iqlog.SetWriter(buf)
-	iqlog.SetDebugMode(true)
+	logger.SetWriter(buf)
+	logger.SetDebugMode(true)
 
 	for i := 0; i < 5; i++ {
-		iqlog.Info("Sequential log message:", i)
+		logger.Infof("Sequential log message: %d", i)
 	}
 
 	logOutput := buf.String()
@@ -125,11 +118,10 @@ func TestSequentialLogs(t *testing.T) {
 // TestConcurrentLogs checks if concurrent logging behaves as expected without races or corruption.
 func TestConcurrentLogs(t *testing.T) {
 	buf := &bytes.Buffer{}
-	originalWriter := iqlog.GetWriter()
-	defer iqlog.SetWriter(originalWriter)
+	logger := iqlog.NewIQLogger(false)
 
-	iqlog.SetWriter(buf)
-	iqlog.SetDebugMode(true)
+	logger.SetWriter(buf)
+	logger.SetDebugMode(true)
 
 	var wg sync.WaitGroup
 	numGoroutines := 10
@@ -140,11 +132,13 @@ func TestConcurrentLogs(t *testing.T) {
 		go func(goroutineID int) {
 			defer wg.Done()
 			for m := 0; m < messagesPerGoroutine; m++ {
-				iqlog.Info("ConcurrentLog", goroutineID, "message", m)
+				logger.Info("ConcurrentLog", goroutineID, "message", m)
 			}
 		}(g)
 	}
 	wg.Wait()
+
+	logger.Flush()
 
 	logOutput := buf.String()
 	// Verify that we see the correct count of messages
@@ -155,25 +149,86 @@ func TestConcurrentLogs(t *testing.T) {
 	}
 }
 
-// TestLogFormat uses a regex to validate the format of each log line if known or enforced by the iqlog package.
-func TestLogFormat(t *testing.T) {
+// TestLogFormatStringInfo uses a regex to validate the format of each log line if known or enforced by the iqlog package.
+func TestLogFormatStringInfo(t *testing.T) {
 	buf := &bytes.Buffer{}
-	originalWriter := iqlog.GetWriter()
-	defer iqlog.SetWriter(originalWriter)
+	logger := iqlog.NewIQLogger(false)
 
-	iqlog.SetWriter(buf)
-	iqlog.SetDebugMode(true)
-
-	iqlog.Info("Format check")
+	logger.SetWriter(buf)
+	logger.SetWriter(buf)
+	logger.SetDebugMode(true)
+	logger.SetUseColour(false)
+	logger.Info("Format check")
 	logOutput := buf.String()
 
 	// Example format check: [INFO]: Format check
-	regexPattern := `(?m)^\[INFO\]:\s.*$`
+	regexPattern := `(?m)^INFO \w.*\n$`
 	matched, err := regexp.MatchString(regexPattern, logOutput)
 	if err != nil {
 		t.Fatalf("Failed to compile regex pattern: %v", err)
 	}
 	if !matched {
-		t.Errorf("Log output did not match expected format. Output:\n%s", logOutput)
+		t.Errorf("Log output did not match expected format. Output:\n|%s|", logOutput)
+	}
+}
+
+// TestLogFormatJSONInfo checks json output
+func TestLogFormatJSONInfo(t *testing.T) {
+	buf := &bytes.Buffer{}
+	logger := iqlog.NewIQLogger(true)
+
+	logger.SetWriter(buf)
+	logger.SetDebugMode(true)
+
+	logger.Info("Format check")
+	logOutput := buf.String()
+
+	// Example format check: [INFO]: Format check
+	// re := regexp.MustCompile(`^\{"time":"[A-Za-z]{3}\s\d{1,2}\s\d{2}:\d{2}:\d{2}\.\d+","level":\d+,"message":"[^"]+"\}\n$`)
+	re := regexp.MustCompile(`^\{"time":"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}","level":"info","message":"Format check"\}\n$`)
+	if !re.MatchString(logOutput) {
+		t.Errorf("Log output did not match expected format. Output:\n|%s|", logOutput)
+	}
+}
+
+// TestLogFormatStringWarn uses a regex to validate the format of each log line if known or enforced by the iqlog package.
+func TestLogFormatStringWarn(t *testing.T) {
+	buf := &bytes.Buffer{}
+	logger := iqlog.NewIQLogger(false)
+
+	logger.SetWriter(buf)
+	logger.SetWriter(buf)
+	logger.SetDebugMode(true)
+	logger.SetUseColour(false)
+	logger.Warn("Format check")
+	logOutput := buf.String()
+
+	// Example format check: [WARN]: Format check
+	regexPattern := `(?m)^WARN \w.*\n$`
+	matched, err := regexp.MatchString(regexPattern, logOutput)
+	if err != nil {
+		t.Fatalf("Failed to compile regex pattern: %v", err)
+	}
+	if !matched {
+		t.Errorf("Log output did not match expected format. Output:\n|%s|", logOutput)
+	}
+}
+
+// TestLogFormatJSONWarn checks json output
+func TestLogFormatJSONWarn(t *testing.T) {
+	buf := &bytes.Buffer{}
+	logger := iqlog.NewIQLogger(true)
+
+	logger.SetWriter(buf)
+	logger.SetDebugMode(true)
+
+	logger.Warn("Format check")
+	logOutput := buf.String()
+
+	// Example format check: [INFO]: Format check
+	// re := regexp.MustCompile(`^\{"time":"[A-Za-z]{3}\s\d{1,2}\s\d{2}:\d{2}:\d{2}\.\d+","level":\d+,"message":"[^"]+"\}\n$`)
+	re := regexp.MustCompile(`^\{"time":"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}","level":"warn","message":"Format check"\}\n$`)
+	if !re.MatchString(logOutput) {
+		t.Errorf("Log output did not match expected format. Output:\n|%s|", logOutput)
 	}
 }
