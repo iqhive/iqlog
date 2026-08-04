@@ -15,6 +15,8 @@ import (
 type ringWriter struct {
 	ringBuffer *ringbuffer.RingBuffer[[]byte]
 	writer     io.Writer
+	// onErr, when set, is called with errors from background writes
+	onErr func(error)
 	// writeMu serializes writes to writer between the consumer goroutine
 	// and the synchronous fallback path in Write
 	writeMu sync.Mutex
@@ -35,8 +37,11 @@ func (rw *ringWriter) Start() {
 				return
 			}
 			rw.writeMu.Lock()
-			rw.writer.Write(val)
+			_, err := rw.writer.Write(val)
 			rw.writeMu.Unlock()
+			if err != nil && rw.onErr != nil {
+				rw.onErr(err)
+			}
 		}
 	}()
 }
@@ -106,7 +111,7 @@ func (l *logger) SetWriter(w io.Writer) {
 
 func (l *logger) SetAsyncWriter(w io.Writer) {
 	// option 2 - async writer with a background flusher goroutine
-	l.replaceWriter(newAsyncWriter(w, 1000))
+	l.replaceWriter(newAsyncWriter(w, 1000, l.recordWriteErr))
 }
 
 func (l *logger) SetRingbufferWriter(w io.Writer) {
@@ -114,6 +119,7 @@ func (l *logger) SetRingbufferWriter(w io.Writer) {
 	rw := &ringWriter{
 		ringBuffer: ringbuffer.NewRingBuffer[[]byte](10000),
 		writer:     w,
+		onErr:      l.recordWriteErr,
 	}
 
 	rw.Start()

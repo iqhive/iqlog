@@ -104,8 +104,13 @@ and file:line, resolved through an optimised runtime-based lookup with a
 PC cache (much cheaper than `runtime.Caller`). The main module path prefix
 is trimmed from function names for readability. The global logger created
 by `Init`/`NewGlobalIQLogger` enables caller capture at depth 1. All line
-builders (including `preallocLine`, `preallocLine2`, and `bufferLineNL`)
-emit `func` and `file` fields when caller capture is enabled.
+builders (including `preallocLine`, `preallocLine2`, `bufferLineNL`, and
+`varStack`) emit `func` and `file` fields when caller capture is enabled.
+
+The fast caller lookup decodes runtime function metadata directly. Building
+with `-tags iqlog_safe_callers` switches to a slower implementation based on
+`runtime.CallersFrames` that does not depend on runtime internals (useful if
+a future Go release changes those internals before this library is updated).
 
 ### Output writers
 
@@ -125,7 +130,8 @@ its background goroutine exits, so writers can be swapped repeatedly
 without leaking goroutines.
 
 Write errors from the output writer are recorded and can be inspected with
-`LastWriteError()` (also available as a method on logger instances).
+`LastWriteError()` (also available as a method on logger instances). This
+includes errors from async and ring-buffer background writes.
 
 ### Syslog (non-Windows)
 
@@ -154,7 +160,8 @@ and the current writer is kept. On Windows, `SetSyslogHost` is a no-op.
 - `Log(ctx, level, msg)`, `Logf(ctx, level, format, args...)`, and
   `LogWithFields(ctx, level, fields, msg, args...)` provide a
   level-parameterised API (fields are a `map[string]any`; iteration order
-  is not deterministic).
+  is not deterministic). Unknown levels are logged at error level rather
+  than dropped.
 - `Print`, `Printf`, `Println` log at info level (Viper-style interface).
 - `WithFields(map[string]any)` returns a handler with per-level methods
   (`Info`, `Errorf`, ...) that attach the fields to every line.
@@ -190,4 +197,6 @@ go vet ./...
 
 `go vet` reports two known `unsafe`/`reflect.SliceHeader` warnings in
 `loc_fmt.go` and `loc_name_file_line_unsafe.go`; these are intentional
-(performance-critical runtime introspection).
+(performance-critical runtime introspection). Building and testing with
+`-tags iqlog_safe_callers` avoids the runtime-internal caller decoding
+(`go test -race -tags iqlog_safe_callers ./...`).

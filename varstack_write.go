@@ -17,6 +17,36 @@ func (vs *varStack) finish(output []byte) {
 	varStackPool.Put(vs)
 }
 
+// appendCallers appends the captured caller func/file info to the line, in
+// the same format as the other builders.
+func (vs *varStack) appendCallers(output []byte) []byte {
+	if vs.captureCaller == 0 || vs.callerData.callerFuncLen == 0 {
+		return output
+	}
+	if vs.jsonMode {
+		output = append(output, `,"func":"`...)
+		output = appendJSONEscaped(output, unsafeString(vs.callerData.callerFunc[:vs.callerData.callerFuncLen]))
+		output = append(output, `","file":"`...)
+		output = appendJSONEscaped(output, unsafeString(vs.callerData.callerFile[:vs.callerData.callerFileLen]))
+		output = append(output, '"')
+		return output
+	}
+	if useColour.Load() {
+		output = append(output, "\x1b[32m["...)
+	} else {
+		output = append(output, '[')
+	}
+	output = append(output, vs.callerData.callerFunc[:vs.callerData.callerFuncLen]...)
+	output = append(output, ' ')
+	output = append(output, vs.callerData.callerFile[:vs.callerData.callerFileLen]...)
+	if useColour.Load() {
+		output = append(output, "]\x1b[0m "...)
+	} else {
+		output = append(output, "] "...)
+	}
+	return output
+}
+
 func (vs *varStack) writeFinalConsole(msg string, args ...interface{}) {
 	var output []byte
 
@@ -32,8 +62,7 @@ func (vs *varStack) writeFinalConsole(msg string, args ...interface{}) {
 		output = append(output, levelPrefix(vs.level)...)
 	}
 
-	// Add caller info if configured
-	// vs.AddCallers() - skipping for now as it's not in the structure
+	output = vs.appendCallers(output)
 
 	// Add variable key=value pairs first
 	for i := 0; i < vs.varCount; i++ {
@@ -119,6 +148,8 @@ func (vs *varStack) writeFinalConsoleF(format string, args ...interface{}) {
 		output = append(output, levelPrefix(vs.level)...)
 	}
 
+	output = vs.appendCallers(output)
+
 	// Add variable key=value pairs first
 	for i := 0; i < vs.varCount; i++ {
 		switch v := vs.varValue[i].(type) {
@@ -188,6 +219,8 @@ func (vs *varStack) writeFinalJSON(msg string, args ...interface{}) {
 	default:
 		output = append(output, []byte("\"level\":\"unknown\"")...)
 	}
+
+	output = vs.appendCallers(output)
 
 	// Add variable key=value pairs
 	for i := 0; i < vs.varCount; i++ {
@@ -280,6 +313,8 @@ func (vs *varStack) writeFinalJSONF(format string, args ...interface{}) {
 	default:
 		output = append(output, []byte("\"level\":\"unknown\"")...)
 	}
+
+	output = vs.appendCallers(output)
 
 	// Add variable key=value pairs
 	for i := 0; i < vs.varCount; i++ {

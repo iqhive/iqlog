@@ -15,6 +15,7 @@ type varStack struct {
 	varName       [maxVars]string
 	varValue      [maxVars]any
 	varCount      int
+	callerData    callerData
 	// varValueStr    [maxVars]string
 }
 
@@ -30,12 +31,25 @@ var varStackPool = sync.Pool{
 
 var noopvarStack = &varStack{varCount: maxVars, level: LevelUnknown}
 
+// emptyvarStack must not be inlined: the caller-capture skip count relies
+// on it occupying its own stack frame between caller1 and the public entry
+// point.
+//
+//go:noinline
 func emptyvarStack(l *logger, level Level) *varStack {
 	if l.Level() > level {
 		return noopvarStack
 	}
 	vs := varStackPool.Get().(*varStack)
 	vs.applyDefaults(l, level)
+	if vs.captureCaller > 0 {
+		var pc PC
+		// skip counts from emptyvarStack's frame: +1 skips the public
+		// entry point, leaving depth 1 = the entry point's caller (same
+		// convention as the other builders)
+		caller1(vs.captureCaller+1, &pc, 1, 1)
+		fillCallerData(pc, &vs.callerData)
+	}
 	// vs.level = level
 	// vs.out = l.out
 	// vs.jsonMode = l.jsonMode.Load()
@@ -56,4 +70,5 @@ func (vs *varStack) applyDefaults(l *logger, level Level) {
 	// garbage collected
 	vs.varName = [maxVars]string{}
 	vs.varValue = [maxVars]any{}
+	vs.callerData.callerFuncLen = 0
 }

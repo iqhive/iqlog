@@ -56,8 +56,9 @@ func (l *logger) LogWithFields(ctx context.Context, level Level, fields map[stri
 	case LevelFatal:
 		logger = l.WithByteSliceLineFatal()
 	default:
-		fmt.Println("Invalid log level")
-		return
+		// unknown level: log at error level rather than silently dropping
+		// the record (or printing to stdout)
+		logger = l.WithByteSliceLineError()
 	}
 
 	for k, v := range fields {

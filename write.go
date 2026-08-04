@@ -27,6 +27,8 @@ type asyncWriter struct {
 	ch  chan asyncItem
 	wg  sync.WaitGroup
 	out io.Writer
+	// onErr, when set, is called with errors from background writes
+	onErr func(error)
 
 	// mu guards closed so Write/Flush never send on a closed channel
 	mu     sync.RWMutex
@@ -48,10 +50,11 @@ func (l *logger) Flush() {
 }
 
 // spawn 1 writer goroutine
-func newAsyncWriter(out io.Writer, bufferCount int) *asyncWriter {
+func newAsyncWriter(out io.Writer, bufferCount int, onErr func(error)) *asyncWriter {
 	aw := &asyncWriter{
-		ch:  make(chan asyncItem, bufferCount),
-		out: out,
+		ch:    make(chan asyncItem, bufferCount),
+		out:   out,
+		onErr: onErr,
 	}
 	aw.wg.Add(1)
 	go aw.loop()
@@ -68,7 +71,9 @@ func (aw *asyncWriter) loop() {
 			continue
 		}
 		// Finally, do the I/O
-		aw.out.Write(item.buf.Bytes())
+		if _, err := aw.out.Write(item.buf.Bytes()); err != nil && aw.onErr != nil {
+			aw.onErr(err)
+		}
 		// Put buffer back for reuse
 		asyncBufferPool.Put(item.buf)
 	}
