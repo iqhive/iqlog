@@ -2,9 +2,18 @@ package iqlog
 
 import (
 	"runtime"
+	"runtime/debug"
 	"strings"
 	"unsafe"
 )
+
+var mainModulePath string
+
+func init() {
+	if info, ok := debug.ReadBuildInfo(); ok {
+		mainModulePath = info.Main.Path
+	}
+}
 
 // Maximum Number of paths to log
 var NumPathsToLog = 1
@@ -61,13 +70,37 @@ func fillCallerData(pc PC, callerData *callerData) {
 
 	// Get the function name
 	zstr := &f.datap.funcnametab[f.nameOff]
-	callerData.callerFuncLen = uint(findnull(zstr))
-	if callerData.callerFuncLen > callerDataMaxLen {
-		callerData.callerFuncLen = callerDataMaxLen
+	funcLen := findnull(zstr)
+
+	// Strip the main module path so callers show package paths relative to the
+	// module root (e.g. servers/datetime/pkg/datetime.loadCities instead of
+	// github.com/iqhive/mcp/servers/datetime/pkg/datetime.loadCities).
+	start := 0
+	if prefixLen := len(mainModulePath); prefixLen > 0 && funcLen > prefixLen {
+		nameBytes := unsafe.Slice((*byte)(unsafe.Pointer(zstr)), funcLen)
+		match := true
+		for i := 0; i < prefixLen; i++ {
+			if nameBytes[i] != mainModulePath[i] {
+				match = false
+				break
+			}
+		}
+		if match {
+			next := nameBytes[prefixLen]
+			if next == '/' || next == '.' {
+				start = prefixLen + 1
+			}
+		}
 	}
 
-	zstrSlice := (*[callerDataMaxLen]byte)(unsafe.Pointer(zstr))[:callerData.callerFuncLen:callerData.callerFuncLen]
-	copy(callerData.callerFunc[:], zstrSlice[:callerData.callerFuncLen])
+	copyLen := funcLen - start
+	if copyLen > callerDataMaxLen {
+		copyLen = callerDataMaxLen
+	}
+
+	callerData.callerFuncLen = uint(copyLen)
+	zstrSlice := unsafe.Slice((*byte)(unsafe.Pointer(zstr)), funcLen)[start : start+copyLen]
+	copy(callerData.callerFunc[:], zstrSlice)
 
 	// callerData.callerFunc = [50]byte(name)
 	// callerData.callerFile = [50]byte(file)

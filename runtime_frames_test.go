@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 	"testing"
 )
@@ -444,6 +445,27 @@ func abs(x int) int {
 		return -x
 	}
 	return x
+}
+
+// TestFillCallerDataTrimsMainModule verifies that the main module path is
+// stripped from the caller function name, leaving a module-relative path.
+func TestFillCallerDataTrimsMainModule(t *testing.T) {
+	pc := Caller(0)
+	var data callerData
+	fillCallerData(pc, &data)
+
+	funcName := string(data.callerFunc[:data.callerFuncLen])
+
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		t.Skip("build info unavailable")
+	}
+
+	prefixDot := info.Main.Path + "."
+	prefixSlash := info.Main.Path + "/"
+	if strings.HasPrefix(funcName, prefixDot) || strings.HasPrefix(funcName, prefixSlash) {
+		t.Errorf("caller function name still contains main module prefix: %s", funcName)
+	}
 }
 
 // Benchmark tests for performance verification
