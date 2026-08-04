@@ -48,8 +48,11 @@ func NewRingBuffer[T any](capacity uint64) *RingBuffer[T] {
 	}
 	if capacity&(capacity-1) != 0 {
 		p := uint64(1)
-		for p < capacity {
+		for p < capacity && p != 0 {
 			p <<= 1
+		}
+		if p == 0 {
+			p = 1 << 63
 		}
 		capacity = p
 	}

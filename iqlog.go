@@ -34,7 +34,9 @@ type logger struct {
 	IncludeTime     bool
 	TimestampFormat TimestampFormat
 	newLine         bool
-	mu              sync.Mutex
+	// mu serializes writes to out; it is a pointer so copies of the
+	// logger (e.g. from WithContext) share the same lock for a shared writer
+	mu *sync.Mutex
 
 	// A sync.Pool to handle re-usable buffers to reduce allocations.
 	// bufferPool     sync.Pool
@@ -70,6 +72,7 @@ func NewIQLogger(jsonMode bool) *logger {
 		newLine:         true,
 		out:             io.Discard,
 		Level:           LevelInfo,
+		mu:              &sync.Mutex{},
 	}
 	logger.SetWriter(os.Stderr)
 	debugStr := os.Getenv("IQLOG_DEBUG")
@@ -134,7 +137,8 @@ func (l *logger) WithGroup(name string) *logger {
 }
 
 func (l *logger) copy() *logger {
-	// copy fields individually so the sync.Mutex is not copied
+	// copy fields individually, sharing the mutex pointer so copies
+	// serialize writes against the original logger
 	return &logger{
 		ctx:             l.ctx,
 		err:             l.err,
@@ -146,6 +150,7 @@ func (l *logger) copy() *logger {
 		IncludeTime:     l.IncludeTime,
 		TimestampFormat: l.TimestampFormat,
 		newLine:         l.newLine,
+		mu:              l.mu,
 		CallerDepth:     l.CallerDepth,
 	}
 }
