@@ -73,22 +73,32 @@ func fillCallerData(pc PC, callerData *callerData) {
 	funcLen := findnull(zstr)
 
 	// Strip the main module path so callers show package paths relative to the
-	// module root (e.g. servers/datetime/pkg/datetime.loadCities instead of
-	// github.com/iqhive/mcp/servers/datetime/pkg/datetime.loadCities).
+	// module or workspace root (e.g. servers/datetime/pkg/datetime.loadCities
+	// instead of github.com/iqhive/mcp/servers/datetime/pkg/datetime.loadCities).
+	// We use the longest common prefix between the function name and the main
+	// module path so nested Go workspaces/submodules still produce short paths.
 	start := 0
-	if prefixLen := len(mainModulePath); prefixLen > 0 && funcLen > prefixLen {
+	if prefixLen := len(mainModulePath); prefixLen > 0 && funcLen > 0 {
 		nameBytes := unsafe.Slice((*byte)(unsafe.Pointer(zstr)), funcLen)
-		match := true
-		for i := 0; i < prefixLen; i++ {
-			if nameBytes[i] != mainModulePath[i] {
-				match = false
-				break
-			}
+
+		common := 0
+		maxCommon := prefixLen
+		if funcLen < maxCommon {
+			maxCommon = funcLen
 		}
-		if match {
-			next := nameBytes[prefixLen]
-			if next == '/' || next == '.' {
-				start = prefixLen + 1
+		for common < maxCommon && nameBytes[common] == mainModulePath[common] {
+			common++
+		}
+
+		if common > 0 {
+			if common < funcLen && (nameBytes[common] == '/' || nameBytes[common] == '.') {
+				// Common prefix is a whole module/package component; strip the
+				// separator too.
+				start = common + 1
+			} else if nameBytes[common-1] == '/' {
+				// Common prefix ended right after a slash (diverging components
+				// in the same parent workspace); strip up to that slash.
+				start = common
 			}
 		}
 	}
