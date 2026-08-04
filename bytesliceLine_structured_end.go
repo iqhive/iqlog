@@ -72,7 +72,9 @@ func (bsl *bytesliceLine) writeFinalConsole(msg string, args ...interface{}) {
 	bsl.output = append(bsl.output, '\n')
 	// }
 
+	bsl.mu.Lock()
 	bsl.out.Write(bsl.output)
+	bsl.mu.Unlock()
 
 	bytesliceLinePool.Put(bsl)
 }
@@ -95,7 +97,9 @@ func (bsl *bytesliceLine) writeFinalConsoleF(format string, args ...interface{})
 	bsl.output = append(bsl.output, '\n')
 	// }
 
+	bsl.mu.Lock()
 	bsl.out.Write(bsl.output)
+	bsl.mu.Unlock()
 
 	bytesliceLinePool.Put(bsl)
 }
@@ -104,7 +108,7 @@ func (bsl *bytesliceLine) writeFinalJSON(msg string, args ...interface{}) {
 	// write JSON closer
 	bsl.output = append(bsl.output, []byte(",\"message\":\"")...)
 
-	bsl.output = append(bsl.output, msg...)
+	bsl.output = appendJSONEscaped(bsl.output, msg)
 
 	// followed by args
 	for _, thisarg := range args {
@@ -112,7 +116,7 @@ func (bsl *bytesliceLine) writeFinalJSON(msg string, args ...interface{}) {
 
 		switch thisarg := thisarg.(type) {
 		case string:
-			bsl.output = append(bsl.output, thisarg...)
+			bsl.output = appendJSONEscaped(bsl.output, thisarg)
 		case int:
 			bsl.output = append(bsl.output, strconv.Itoa(thisarg)...)
 		case int32:
@@ -130,7 +134,7 @@ func (bsl *bytesliceLine) writeFinalJSON(msg string, args ...interface{}) {
 		case bool:
 			bsl.output = append(bsl.output, strconv.FormatBool(thisarg)...)
 		default:
-			bsl.output = append(bsl.output, fmt.Sprintf("%v", thisarg)...)
+			bsl.output = appendJSONEscaped(bsl.output, fmt.Sprintf("%v", thisarg))
 		}
 	}
 
@@ -140,7 +144,9 @@ func (bsl *bytesliceLine) writeFinalJSON(msg string, args ...interface{}) {
 	// 	bsl.output = append(bsl.output, []byte("\"}")...)
 	// }
 
+	bsl.mu.Lock()
 	bsl.out.Write(bsl.output)
+	bsl.mu.Unlock()
 
 	bytesliceLinePool.Put(bsl)
 }
@@ -151,7 +157,7 @@ func (bsl *bytesliceLine) writeFinalJSONF(format string, args ...interface{}) {
 	ba := baPool.Get().(*bytesAppender)
 	ba.Bytes = ba.Bytes[:0] // Clear the slice before use
 	fmt.Fprintf(ba, format, args...)
-	bsl.output = append(bsl.output, ba.Bytes...)
+	bsl.output = appendJSONEscaped(bsl.output, unsafeString(ba.Bytes))
 	baPool.Put(ba)
 
 	// bia := biapool.Get().(*byteIndexAppender)
@@ -163,7 +169,9 @@ func (bsl *bytesliceLine) writeFinalJSONF(format string, args ...interface{}) {
 	// if bsl.logger.newLine {
 	bsl.output = append(bsl.output, []byte("\"}\n")...)
 
+	bsl.mu.Lock()
 	bsl.out.Write(bsl.output)
+	bsl.mu.Unlock()
 
 	bytesliceLinePool.Put(bsl)
 }

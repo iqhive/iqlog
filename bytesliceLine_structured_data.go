@@ -37,7 +37,11 @@ func (bsl *bytesliceLine) Str(name string, s string) *bytesliceLine {
 		return bsl
 	}
 	if bsl.jsonMode {
-		bsl.output = append(bsl.output, []byte(",\""+name+"\":\""+s+"\"")...)
+		bsl.output = append(bsl.output, ',', '"')
+		bsl.output = appendJSONEscaped(bsl.output, name)
+		bsl.output = append(bsl.output, '"', ':', '"')
+		bsl.output = appendJSONEscaped(bsl.output, s)
+		bsl.output = append(bsl.output, '"')
 	} else {
 		bsl.output = append(bsl.output, []byte(name+"="+s+" ")...)
 	}
@@ -100,9 +104,13 @@ func (bsl *bytesliceLine) Any(name string, v any) *bytesliceLine {
 	}
 	str := fmt.Sprintf("%v", v)
 	if bsl.jsonMode {
-		bsl.output = append(bsl.output, []byte(name+"\":\""+str+"\"")...)
+		bsl.output = append(bsl.output, ',', '"')
+		bsl.output = appendJSONEscaped(bsl.output, name)
+		bsl.output = append(bsl.output, '"', ':', '"')
+		bsl.output = appendJSONEscaped(bsl.output, str)
+		bsl.output = append(bsl.output, '"')
 	} else {
-		bsl.output = append(bsl.output, []byte(name+"\"="+str+" ")...)
+		bsl.output = append(bsl.output, []byte(name+"="+str+" ")...)
 	}
 	return bsl
 }

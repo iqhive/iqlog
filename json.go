@@ -42,6 +42,37 @@ func appendJSONString(dst *bytes.Buffer, s string) {
 	dst.WriteByte('"')
 }
 
+// appendJSONEscaped appends s to dst with JSON string escaping
+// (without surrounding quotes).
+func appendJSONEscaped(dst []byte, s string) []byte {
+	start := 0
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c < 0x20 || c == '\\' || c == '"' {
+			if i > start {
+				dst = append(dst, s[start:i]...)
+			}
+			switch c {
+			case '\\', '"':
+				dst = append(dst, '\\', c)
+			case '\n':
+				dst = append(dst, '\\', 'n')
+			case '\r':
+				dst = append(dst, '\\', 'r')
+			case '\t':
+				dst = append(dst, '\\', 't')
+			default:
+				dst = append(dst, '\\', 'u', '0', '0', hex[c>>4], hex[c&0x0f])
+			}
+			start = i + 1
+		}
+	}
+	if start < len(s) {
+		dst = append(dst, s[start:]...)
+	}
+	return dst
+}
+
 func appendFastFloat64(dst *bytes.Buffer, f float64) error {
 	if math.IsNaN(f) {
 		dst.WriteString(`"NaN"`)
@@ -164,17 +195,18 @@ func appendIntBuffer(dst *bytes.Buffer, i int64) {
 	var b [20]byte
 	pos := len(b)
 	neg := i < 0
+	u := uint64(i)
 	if neg {
-		i = -i
+		u = -u
 	}
-	if i == 0 {
+	if u == 0 {
 		pos--
 		b[pos] = '0'
 	}
-	for i > 0 {
+	for u > 0 {
 		pos--
-		b[pos] = byte('0' + i%10)
-		i /= 10
+		b[pos] = byte('0' + u%10)
+		u /= 10
 	}
 	if neg {
 		pos--
@@ -187,16 +219,17 @@ func appendIntBuffer(dst *bytes.Buffer, i int64) {
 // eg setIntBytes(..., 5, 2) writes "05".
 func setIntBytes(dst []byte, val int64, width int) int {
 	neg := val < 0
+	u := uint64(val)
 	if neg {
-		val = -val
+		u = -u
 	}
 	// Build the digits in temp buffer
 	var tmp [20]byte
 	i := len(tmp)
-	for val > 0 {
+	for u > 0 {
 		i--
-		tmp[i] = byte('0' + (val % 10))
-		val /= 10
+		tmp[i] = byte('0' + (u % 10))
+		u /= 10
 	}
 	// If nothing was written, write "0"
 	if i == len(tmp) {

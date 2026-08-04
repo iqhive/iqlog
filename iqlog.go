@@ -118,7 +118,7 @@ func Init(applicationName string, syslogHost string, debugMode bool) {
 	SetApplicationName(applicationName)
 	SetDebugMode(debugMode)
 	SetCallerDepth(1)
-	SetUseColour(true)
+	SetUseColour(terminal.IsTerminal(int(os.Stderr.Fd())) && (runtime.GOOS != "windows"))
 	SetNewLine(true)
 	SetSyslogHost(syslogHost)
 	if GlobalLogger == nil {
@@ -134,20 +134,30 @@ func (l *logger) WithGroup(name string) *logger {
 }
 
 func (l *logger) copy() *logger {
-	nl := *l
-	// nl.baseRecord = l.baseRecord
-	return &nl
+	// copy fields individually so the sync.Mutex is not copied
+	return &logger{
+		ctx:             l.ctx,
+		err:             l.err,
+		out:             l.out,
+		Level:           l.Level,
+		jsonMode:        l.jsonMode,
+		applicationName: l.applicationName,
+		syslogHost:      l.syslogHost,
+		IncludeTime:     l.IncludeTime,
+		TimestampFormat: l.TimestampFormat,
+		newLine:         l.newLine,
+		CallerDepth:     l.CallerDepth,
+	}
 }
 
 // Add a context to the log entry.
 func WithContext(ctx context.Context) *logger {
 	if GlobalLogger == nil {
 		return NewGlobalIQLogger()
-	} else {
-		nl := GlobalLogger
-		nl.ctx = ctx
-		return nl
 	}
+	nl := GlobalLogger.copy()
+	nl.ctx = ctx
+	return nl
 }
 
 // func (l *logger) HandleMsg(level Level, msg string, args ...interface{}) {

@@ -106,20 +106,21 @@ func appendTimeRFC3339Micro(t time.Time, dst []byte) int {
 
 func writeIntDecimal(dst []byte, i int64) int {
 	neg := (i < 0)
+	u := uint64(i)
 	if neg {
-		i = -i
+		u = -u
 	}
 	var tmp [20]byte
 	pos := len(tmp)
 
-	if i == 0 {
+	if u == 0 {
 		pos--
 		tmp[pos] = '0'
 	} else {
-		for i > 0 {
+		for u > 0 {
 			pos--
-			tmp[pos] = byte('0' + (i % 10))
-			i /= 10
+			tmp[pos] = byte('0' + (u % 10))
+			u /= 10
 		}
 	}
 	if neg {
@@ -136,20 +137,21 @@ func writeIntDecimal(dst []byte, i int64) int {
 
 func appendIntDecimal(src []byte, i int64) ([]byte, int) {
 	neg := (i < 0)
+	u := uint64(i)
 	if neg {
-		i = -i
+		u = -u
 	}
 	var tmp [20]byte
 	pos := len(tmp)
 
-	if i == 0 {
+	if u == 0 {
 		pos--
 		tmp[pos] = '0'
 	} else {
-		for i > 0 {
+		for u > 0 {
 			pos--
-			tmp[pos] = byte('0' + (i % 10))
-			i /= 10
+			tmp[pos] = byte('0' + (u % 10))
+			u /= 10
 		}
 	}
 	if neg {
@@ -163,20 +165,26 @@ func appendIntDecimal(src []byte, i int64) ([]byte, int) {
 
 func writeIntToBuffer(buf *bytes.Buffer, num int) {
 	// Pre-allocate a byte slice with enough space for the largest int
-	var b [20]byte // 20 bytes is enough for a 64-bit integer
+	var b [21]byte // enough for a 64-bit integer plus sign
 	i := len(b)
 
+	neg := num < 0
+	u := uint64(num)
+	if neg {
+		u = -u
+	}
+
 	// Convert the integer to a string in reverse order
-	for num >= 10 || num <= -10 {
+	for u >= 10 {
 		i--
-		b[i] = byte('0' + num%10)
-		num /= 10
+		b[i] = byte('0' + u%10)
+		u /= 10
 	}
 	i--
-	b[i] = byte('0' + num%10)
+	b[i] = byte('0' + u)
 
 	// If the number is negative, add the minus sign
-	if num < 0 {
+	if neg {
 		i--
 		b[i] = '-'
 	}
@@ -187,20 +195,21 @@ func writeIntToBuffer(buf *bytes.Buffer, num int) {
 
 func appendBufferIntDecimal(buf *bytes.Buffer, i int64) (int, error) {
 	neg := (i < 0)
+	u := uint64(i)
 	if neg {
-		i = -i
+		u = -u
 	}
 	var tmp [20]byte
 	pos := len(tmp)
 
-	if i == 0 {
+	if u == 0 {
 		pos--
 		tmp[pos] = '0'
 	} else {
-		for i > 0 {
+		for u > 0 {
 			pos--
-			tmp[pos] = byte('0' + (i % 10))
-			i /= 10
+			tmp[pos] = byte('0' + (u % 10))
+			u /= 10
 		}
 	}
 	if neg {

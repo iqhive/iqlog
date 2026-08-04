@@ -32,7 +32,11 @@ func (rw *ringWriter) Start() {
 }
 
 func (rw *ringWriter) Write(p []byte) (n int, err error) {
-	rw.ringBuffer.Enqueue(p)
+	// Copy p because callers (e.g. pooled line buffers) may reuse the
+	// underlying array before the consumer goroutine writes it out.
+	c := make([]byte, len(p))
+	copy(c, p)
+	rw.ringBuffer.Enqueue(c)
 	return len(p), nil
 }
 
@@ -112,8 +116,8 @@ func SetCallerDepth(captureCaller int) {
 }
 func (l *logger) SetCallerDepth(d int) { l.CallerDepth = d }
 
-func SetUseColour(useColour bool) {
-	useColour = useColour
+func SetUseColour(enabled bool) {
+	useColour = enabled
 }
 func (l *logger) SetUseColour(d bool) { useColour = d }
 

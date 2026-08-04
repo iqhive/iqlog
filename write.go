@@ -32,8 +32,9 @@ func (l *logger) Flush() {
 	if asyncWr, ok := l.out.(*asyncWriter); ok {
 		// close asyncWriter to flush all buffers
 		asyncWr.Close()
-		// reopen to continue logging
-		l.out = newAsyncWriter(l.out, cap(asyncWr.ch))
+		// reopen to continue logging, wrapping the underlying writer
+		// (not the closed asyncWriter itself)
+		l.out = newAsyncWriter(asyncWr.out, cap(asyncWr.ch))
 	}
 }
 
