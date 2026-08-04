@@ -2,9 +2,18 @@ package iqlog
 
 import (
 	"runtime"
+	"runtime/debug"
 	"strings"
 	"unsafe"
 )
+
+var mainModulePath string
+
+func init() {
+	if info, ok := debug.ReadBuildInfo(); ok {
+		mainModulePath = info.Main.Path
+	}
+}
 
 // Maximum Number of paths to log
 var NumPathsToLog = 1
@@ -61,13 +70,47 @@ func fillCallerData(pc PC, callerData *callerData) {
 
 	// Get the function name
 	zstr := &f.datap.funcnametab[f.nameOff]
-	callerData.callerFuncLen = uint(findnull(zstr))
-	if callerData.callerFuncLen > callerDataMaxLen {
-		callerData.callerFuncLen = callerDataMaxLen
+	funcLen := findnull(zstr)
+
+	// Strip the main module path so callers show package paths relative to the
+	// module or workspace root (e.g. servers/datetime/pkg/datetime.loadCities
+	// instead of github.com/iqhive/mcp/servers/datetime/pkg/datetime.loadCities).
+	// We use the longest common prefix between the function name and the main
+	// module path so nested Go workspaces/submodules still produce short paths.
+	start := 0
+	if prefixLen := len(mainModulePath); prefixLen > 0 && funcLen > 0 {
+		nameBytes := unsafe.Slice((*byte)(unsafe.Pointer(zstr)), funcLen)
+
+		common := 0
+		maxCommon := prefixLen
+		if funcLen < maxCommon {
+			maxCommon = funcLen
+		}
+		for common < maxCommon && nameBytes[common] == mainModulePath[common] {
+			common++
+		}
+
+		if common > 0 {
+			if common < funcLen && (nameBytes[common] == '/' || nameBytes[common] == '.') {
+				// Common prefix is a whole module/package component; strip the
+				// separator too.
+				start = common + 1
+			} else if nameBytes[common-1] == '/' {
+				// Common prefix ended right after a slash (diverging components
+				// in the same parent workspace); strip up to that slash.
+				start = common
+			}
+		}
 	}
 
-	zstrSlice := (*[callerDataMaxLen]byte)(unsafe.Pointer(zstr))[:callerData.callerFuncLen:callerData.callerFuncLen]
-	copy(callerData.callerFunc[:], zstrSlice[:callerData.callerFuncLen])
+	copyLen := funcLen - start
+	if copyLen > callerDataMaxLen {
+		copyLen = callerDataMaxLen
+	}
+
+	callerData.callerFuncLen = uint(copyLen)
+	zstrSlice := unsafe.Slice((*byte)(unsafe.Pointer(zstr)), funcLen)[start : start+copyLen]
+	copy(callerData.callerFunc[:], zstrSlice)
 
 	// callerData.callerFunc = [50]byte(name)
 	// callerData.callerFile = [50]byte(file)
