@@ -8,7 +8,7 @@ func (pal *preallocLine) Int(name string, val int) *preallocLine {
 	}
 	if pal.jsonMode {
 		pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, ",\"")
-		pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, name)
+		pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, jsonEscapedString(name))
 		pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, "\":")
 		pal.bytesUsed += writeIntDecimal(pal.output[pal.bytesUsed:], int64(val))
 	} else {
@@ -26,7 +26,7 @@ func (pal *preallocLine) Int64(name string, val int64) *preallocLine {
 	}
 	if pal.jsonMode {
 		pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, ",\"")
-		pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, name)
+		pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, jsonEscapedString(name))
 		pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, "\":")
 		pal.bytesUsed += writeIntDecimal(pal.output[pal.bytesUsed:], val)
 	} else {
@@ -44,9 +44,9 @@ func (pal *preallocLine) Str(name string, s string) *preallocLine {
 	}
 	if pal.jsonMode {
 		pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, ",\"")
-		pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, name)
+		pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, jsonEscapedString(name))
 		pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, "\":\"")
-		pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, s)
+		pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, jsonEscapedString(s))
 		pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, "\"")
 	} else {
 		pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, name)
@@ -63,7 +63,7 @@ func (pal *preallocLine) Float32(name string, f float32) *preallocLine {
 	}
 	if pal.jsonMode {
 		pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, ",\"")
-		pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, name)
+		pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, jsonEscapedString(name))
 		pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, "\":")
 		pal.bytesUsed += fastFloatFill(pal.output[pal.bytesUsed:], float64(f), 6)
 	} else {
@@ -81,7 +81,7 @@ func (pal *preallocLine) Float64(name string, f float64) *preallocLine {
 	}
 	if pal.jsonMode {
 		pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, ",\"")
-		pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, name)
+		pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, jsonEscapedString(name))
 		pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, "\":")
 		pal.bytesUsed += fastFloatFill(pal.output[pal.bytesUsed:], f, 6)
 	} else {
@@ -99,7 +99,7 @@ func (pal *preallocLine) Bool(name string, b bool) *preallocLine {
 	}
 	if pal.jsonMode {
 		pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, ",\"")
-		pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, name)
+		pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, jsonEscapedString(name))
 		pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, "\":")
 		if b {
 			pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, "true")
@@ -126,10 +126,10 @@ func (pal *preallocLine) Any(name string, v any) *preallocLine {
 	str := fmt.Sprintf("%v", v)
 	if pal.jsonMode {
 		pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, ",\"")
-		pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, name)
+		pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, jsonEscapedString(name))
 		pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, "\":")
 		pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, "\"")
-		pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, str)
+		pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, jsonEscapedString(str))
 		pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, "\"")
 	} else {
 		pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, name)

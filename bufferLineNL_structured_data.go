@@ -7,7 +7,7 @@ func (bl *bufferLineNL) Int(name string, val int) *bufferLineNL {
 		return bl
 	}
 	if bl.jsonMode {
-		bl.buffer.Write([]byte(",\"" + name + "\":"))
+		bl.buffer.Write([]byte(",\"" + jsonEscapedString(name) + "\":"))
 		appendBufferIntDecimal(bl.buffer, int64(val))
 	} else {
 		bl.buffer.Write([]byte(name + "="))
@@ -22,7 +22,7 @@ func (bl *bufferLineNL) Int64(name string, val int64) *bufferLineNL {
 		return bl
 	}
 	if bl.jsonMode {
-		bl.buffer.Write([]byte(",\"" + name + "\":"))
+		bl.buffer.Write([]byte(",\"" + jsonEscapedString(name) + "\":"))
 		appendBufferIntDecimal(bl.buffer, int64(val))
 	} else {
 		bl.buffer.Write([]byte(name + "="))
@@ -37,7 +37,7 @@ func (bl *bufferLineNL) Str(name string, s string) *bufferLineNL {
 		return bl
 	}
 	if bl.jsonMode {
-		bl.buffer.Write([]byte(",\"" + name + "\":\"" + s + "\""))
+		bl.buffer.Write([]byte(",\"" + jsonEscapedString(name) + "\":\"" + jsonEscapedString(s) + "\""))
 	} else {
 		bl.buffer.Write([]byte(name + "=" + s + " "))
 	}
@@ -49,7 +49,7 @@ func (bl *bufferLineNL) Float32(name string, f float32) *bufferLineNL {
 		return bl
 	}
 	if bl.jsonMode {
-		bl.buffer.Write([]byte(",\"" + name + "\":"))
+		bl.buffer.Write([]byte(",\"" + jsonEscapedString(name) + "\":"))
 		appendBufferfastFloatFill(bl.buffer, float64(f), 6)
 	} else {
 		bl.buffer.Write([]byte(name + "="))
@@ -64,7 +64,7 @@ func (bl *bufferLineNL) Float64(name string, f float64) *bufferLineNL {
 		return bl
 	}
 	if bl.jsonMode {
-		bl.buffer.Write([]byte(",\"" + name + "\":"))
+		bl.buffer.Write([]byte(",\"" + jsonEscapedString(name) + "\":"))
 		appendBufferfastFloatFill(bl.buffer, float64(f), 6)
 	} else {
 		bl.buffer.Write([]byte(name + "="))
@@ -80,9 +80,9 @@ func (bl *bufferLineNL) Bool(name string, b bool) *bufferLineNL {
 	}
 	if bl.jsonMode {
 		if b {
-			bl.buffer.Write([]byte(",\"" + name + "\":true"))
+			bl.buffer.Write([]byte(",\"" + jsonEscapedString(name) + "\":true"))
 		} else {
-			bl.buffer.Write([]byte(",\"" + name + "\":false"))
+			bl.buffer.Write([]byte(",\"" + jsonEscapedString(name) + "\":false"))
 		}
 	} else {
 		if b {
@@ -100,7 +100,7 @@ func (bl *bufferLineNL) Any(name string, v any) *bufferLineNL {
 	}
 	str := fmt.Sprintf("%v", v)
 	if bl.jsonMode {
-		bl.buffer.Write([]byte(",\"" + name + "\":\"" + str + "\""))
+		bl.buffer.Write([]byte(",\"" + jsonEscapedString(name) + "\":\"" + jsonEscapedString(str) + "\""))
 	} else {
 		bl.buffer.Write([]byte(name + "=\"" + str + "\" "))
 	}

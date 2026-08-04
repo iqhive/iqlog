@@ -7,6 +7,7 @@ import (
 	"log/syslog"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/iqhive/iqlog/ringbuffer"
 )
@@ -14,6 +15,9 @@ import (
 type ringWriter struct {
 	ringBuffer *ringbuffer.RingBuffer[[]byte]
 	writer     io.Writer
+	// writeMu serializes writes to writer between the consumer goroutine
+	// and the synchronous fallback path in Write
+	writeMu sync.Mutex
 }
 
 func (rw *ringWriter) Start() {
@@ -26,7 +30,9 @@ func (rw *ringWriter) Start() {
 				// os.Exit(1)
 				continue
 			}
+			rw.writeMu.Lock()
 			rw.writer.Write(val)
+			rw.writeMu.Unlock()
 		}
 	}()
 }
@@ -36,7 +42,12 @@ func (rw *ringWriter) Write(p []byte) (n int, err error) {
 	// underlying array before the consumer goroutine writes it out.
 	c := make([]byte, len(p))
 	copy(c, p)
-	rw.ringBuffer.Enqueue(c)
+	if !rw.ringBuffer.Enqueue(c) {
+		// ring is full: write synchronously rather than silently dropping
+		rw.writeMu.Lock()
+		defer rw.writeMu.Unlock()
+		return rw.writer.Write(p)
+	}
 	return len(p), nil
 }
 
@@ -138,26 +149,28 @@ func (l *logger) SetJSONMode(isJSONmode bool) {
 }
 
 func (l *logger) SetSyslogHost(newhost string) {
-	l.syslogHost = newhost
 	if newhost != "" && !strings.Contains(newhost, ":") {
 		// make sure we have a (UDP) port in the host definition
 		newhost = newhost + ":514"
 	}
-	if l.syslogHost == newhost && newhost == "" {
+	if l.syslogHost == newhost {
 		// no change
 		l.Debugf("Syslog host not changed to (%s) - already set to that", newhost)
 		return
 	}
 	if newhost == "" {
-		l.Info("Log output changed to StdErr", newhost)
+		l.Info("Log output changed to StdErr")
+		l.syslogHost = newhost
 		l.out = os.Stderr
 		return
 	}
 	newSyslog, syslogErr := syslog.Dial("udp", newhost, syslog.LOG_DAEMON|syslog.LOG_INFO, l.applicationName)
 	if syslogErr == nil && newSyslog != nil {
+		l.syslogHost = newhost
 		l.out = newSyslog
 	} else {
+		// keep the current writer rather than terminating the host process;
+		// a logging library must not exit the application
 		l.Errorf("ERROR: Unable to init syslog to (%s): %v", newhost, syslogErr)
-		os.Exit(1)
 	}
 }

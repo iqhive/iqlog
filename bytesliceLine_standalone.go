@@ -6,12 +6,13 @@ import (
 )
 
 type bytesliceLine struct {
-	logger        *logger
-	jsonMode      bool
-	output        []byte
-	includeTime   bool
-	captureCaller int
-	callerData    callerData
+	logger         *logger
+	jsonMode       bool
+	output         []byte
+	includeTime    bool
+	captureCaller  int
+	exitAfterWrite bool
+	callerData     callerData
 }
 
 func (l *logger) ByteSliceLineTrace(msg string, args ...interface{}) {

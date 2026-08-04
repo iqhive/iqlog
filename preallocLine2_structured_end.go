@@ -89,9 +89,7 @@ func (pal *preallocLine2) writeFinalConsoleF(format string, args ...interface{})
 	bia := biapool.Get().(*byteIndexAppender)
 	bia.Index = 0
 	fmt.Fprintf(bia, format, args...)
-	copy(pal.output[pal.bytesUsed:], bia.Bytes[:bia.Index])
-	pal.bytesUsed += bia.Index
-	// pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, "\n")
+	pal.bytesUsed += copy(pal.output[pal.bytesUsed:], bia.Bytes[:bia.Index])
 	biapool.Put(bia)
 
 	// if pal.logger.newLine {
@@ -107,7 +105,7 @@ func (pal *preallocLine2) writeFinalJSON(msg string, args ...interface{}) {
 	// write JSON closer
 	pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, ",\"message\":\"")
 
-	pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, msg)
+	pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, jsonEscapedString(msg))
 
 	// followed by args
 	for _, thisarg := range args {
@@ -115,7 +113,7 @@ func (pal *preallocLine2) writeFinalJSON(msg string, args ...interface{}) {
 
 		switch thisarg := thisarg.(type) {
 		case string:
-			pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, thisarg)
+			pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, jsonEscapedString(thisarg))
 		case int:
 			pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, strconv.Itoa(thisarg))
 		case int32:
@@ -133,7 +131,7 @@ func (pal *preallocLine2) writeFinalJSON(msg string, args ...interface{}) {
 		case bool:
 			pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, strconv.FormatBool(thisarg))
 		default:
-			pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, fmt.Sprintf("%v", thisarg))
+			pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, jsonEscapedString(fmt.Sprintf("%v", thisarg)))
 		}
 	}
 
@@ -161,8 +159,7 @@ func (pal *preallocLine2) writeFinalJSONF(format string, args ...interface{}) {
 	bia := biapool.Get().(*byteIndexAppender)
 	bia.Index = 0
 	fmt.Fprintf(bia, format, args...)
-	copy(pal.output[pal.bytesUsed:], bia.Bytes[:bia.Index])
-	pal.bytesUsed += bia.Index
+	pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, jsonEscapedString(unsafeString(bia.Bytes[:bia.Index])))
 	biapool.Put(bia)
 
 	// if pal.logger.newLine {

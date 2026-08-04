@@ -53,4 +53,8 @@ func (vs *varStack) applyDefaults(l *logger, level Level) {
 	vs.includeTime = l.IncludeTime
 	vs.captureCaller = l.CallerDepth
 	vs.varCount = 0
+	// release references held from a previous pooled use so they can be
+	// garbage collected
+	vs.varName = [maxVars]string{}
+	vs.varValue = [maxVars]any{}
 }

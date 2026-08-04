@@ -1,7 +1,6 @@
 package iqlog
 
 import (
-	"os"
 	"time"
 )
 
@@ -15,6 +14,7 @@ func emptybytesliceLine(l *logger) *bytesliceLine {
 	bsl.jsonMode = l.jsonMode
 	bsl.includeTime = l.IncludeTime
 	bsl.captureCaller = l.CallerDepth
+	bsl.exitAfterWrite = false
 	bsl.callerData.callerFuncLen = 0
 	bsl.callerData.callerFileLen = 0
 	return bsl
@@ -56,9 +56,9 @@ func (bsl *bytesliceLine) AddCallers() {
 	if bsl.jsonMode {
 		// json mode
 		bsl.output = append(bsl.output, []byte(`,"func":"`)...)
-		bsl.output = append(bsl.output, bsl.callerData.callerFunc[:bsl.callerData.callerFuncLen]...)
+		bsl.output = appendJSONEscaped(bsl.output, unsafeString(bsl.callerData.callerFunc[:bsl.callerData.callerFuncLen]))
 		bsl.output = append(bsl.output, []byte(`","file":"`)...)
-		bsl.output = append(bsl.output, bsl.callerData.callerFile[:bsl.callerData.callerFileLen]...)
+		bsl.output = appendJSONEscaped(bsl.output, unsafeString(bsl.callerData.callerFile[:bsl.callerData.callerFileLen]))
 		bsl.output = append(bsl.output, []byte(`"`)...)
 	} else {
 		// console mode
@@ -208,8 +208,9 @@ func (l *logger) WithByteSliceLinePanic() *bytesliceLine {
 	} else {
 		bsl.writeInitialConsole(LevelPanic)
 	}
-	// bsl.logger.Flush()
-	os.Exit(1)
+	// exit after the final message has been written, not before the
+	// caller has had a chance to add fields and the message itself
+	bsl.exitAfterWrite = true
 	return bsl
 }
 
@@ -230,8 +231,9 @@ func (l *logger) WithByteSliceLineFatal() *bytesliceLine {
 	} else {
 		bsl.writeInitialConsole(LevelFatal)
 	}
-	// bsl.logger.Flush()
-	os.Exit(1)
+	// exit after the final message has been written, not before the
+	// caller has had a chance to add fields and the message itself
+	bsl.exitAfterWrite = true
 	return bsl
 }
 

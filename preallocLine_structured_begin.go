@@ -59,7 +59,7 @@ func (pal *preallocLine) AddCallers() {
 		pal.bytesUsed += copy(pal.output[pal.bytesUsed:], pal.callerData.callerFunc[:pal.callerData.callerFuncLen])
 		pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, `","file":"`)
 		// pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, file[fileOffset2ndLast:])
-		pal.bytesUsed += copy(pal.output[pal.bytesUsed:], pal.callerData.callerFunc[:pal.callerData.callerFuncLen])
+		pal.bytesUsed += copy(pal.output[pal.bytesUsed:], pal.callerData.callerFile[:pal.callerData.callerFileLen])
 		pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, `"`)
 	} else {
 		// console mode
@@ -72,7 +72,7 @@ func (pal *preallocLine) AddCallers() {
 		pal.bytesUsed += copy(pal.output[pal.bytesUsed:], pal.callerData.callerFunc[:pal.callerData.callerFuncLen])
 		pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, ` `)
 		// pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, file[fileOffset2ndLast:])
-		pal.bytesUsed += copy(pal.output[pal.bytesUsed:], pal.callerData.callerFunc[:pal.callerData.callerFuncLen])
+		pal.bytesUsed += copy(pal.output[pal.bytesUsed:], pal.callerData.callerFile[:pal.callerData.callerFileLen])
 		if useColour {
 			pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, "]\x1b[0m ")
 		} else {

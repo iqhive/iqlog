@@ -77,8 +77,10 @@ func TestAddTimeConsoleInPlaceCopy(t *testing.T) {
 	timeNow := testTime
 	AddTimeConsoleInPlaceCopy(timeNow, byteSlice[:])
 	str := string(byteSlice[0:29])
-	if str != timeNow.Format("[2006-01-02T15:04:05.999999] ") {
-		t.Errorf("AddTimeConsoleInPlaceCopy() = |%v|, want |%v|", str, timeNow.Format("[2006-01-02T15:04:05.999999] "))
+	// the encoder always emits a fixed six-digit fraction, so compare against
+	// the zero-padded format (".999999" trims trailing zeros and is flaky)
+	if str != timeNow.Format("[2006-01-02T15:04:05.000000] ") {
+		t.Errorf("AddTimeConsoleInPlaceCopy() = |%v|, want |%v|", str, timeNow.Format("[2006-01-02T15:04:05.000000] "))
 	}
 }
 
@@ -186,8 +188,10 @@ func TestAddTimeJSONInPlaceCopy(t *testing.T) {
 	timeNow := testTime
 	AddTimeJSONInPlaceCopy(timeNow, byteSlice[:])
 	str := string(byteSlice[0:37])
-	if str != timeNow.Format("{\"time\":\"2006-01-02T15:04:05.999999\",") {
-		t.Errorf("TestAddTimeJSONInPlaceCopy() = |%v|, want |%v|", str, timeNow.Format("{\"time\":\"2006-01-02T15:04:05.999999\","))
+	// the encoder always emits a fixed six-digit fraction, so compare against
+	// the zero-padded format (".999999" trims trailing zeros and is flaky)
+	if str != timeNow.Format("{\"time\":\"2006-01-02T15:04:05.000000\",") {
+		t.Errorf("TestAddTimeJSONInPlaceCopy() = |%v|, want |%v|", str, timeNow.Format("{\"time\":\"2006-01-02T15:04:05.000000\","))
 	}
 }
 

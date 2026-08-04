@@ -110,12 +110,12 @@ func (rb *RingBuffer[T]) Enqueue(val T) bool {
 	// Next sequence for this slot is pos+1, so that a consumer can claim it
 	atomic.StoreUint64(&n.seq, pos+1)
 
-	// If the buffer was empty before enqueueing this item, wake any blocking dequeuers
-	if rb.Size() == 1 {
-		rb.condMu.Lock()
-		rb.cond.Signal() // we have at least one item now
-		rb.condMu.Unlock()
-	}
+	// Wake any blocking dequeuer. Signal unconditionally: gating this on a
+	// Size()==1 check races with concurrent producers/consumers and can lose
+	// wakeups, leaving a consumer blocked while items are available.
+	rb.condMu.Lock()
+	rb.cond.Signal()
+	rb.condMu.Unlock()
 
 	return true
 }
@@ -166,15 +166,21 @@ func (rb *RingBuffer[T]) Dequeue() (T, bool) {
 // Returns (val, true) if an item is successfully dequeued, or (zeroValue, false)
 // if the ring is closed or in some unexpected state
 func (rb *RingBuffer[T]) DequeueBlocking() (T, bool) {
-	rb.condMu.Lock()
-	// Wait while size is 0, i.e. no items available
-	for rb.Size() == 0 {
-		rb.cond.Wait()
-	}
-	rb.condMu.Unlock()
+	for {
+		rb.condMu.Lock()
+		// Wait while size is 0, i.e. no items available
+		for rb.Size() == 0 {
+			rb.cond.Wait()
+		}
+		rb.condMu.Unlock()
 
-	// Now we expect something to be available -> attempt the normal Dequeue
-	return rb.Dequeue()
+		// Attempt the normal Dequeue; another consumer may have raced us to
+		// the item, in which case go back to waiting instead of returning a
+		// spurious (zero, false)
+		if val, ok := rb.Dequeue(); ok {
+			return val, true
+		}
+	}
 }
 
 // Size returns the number of items currently in the ring buffer

@@ -186,30 +186,30 @@ func (vs *varStack) writeFinalJSON(msg string, args ...interface{}) {
 	for i := 0; i < vs.varCount; i++ {
 		output = append(output, ',')
 		output = append(output, '"')
-		output = append(output, vs.varName[i]...)
+		output = appendJSONEscaped(output, vs.varName[i])
 		output = append(output, '"', ':')
 
 		switch v := vs.varValue[i].(type) {
 		case string:
 			output = append(output, '"')
-			output = append(output, v...)
+			output = appendJSONEscaped(output, v)
 			output = append(output, '"')
 		case int:
 			output = append(output, strconv.Itoa(v)...)
 		case float32:
-			output = append(output, strconv.FormatFloat(float64(v), 'f', 6, 32)...)
+			output = appendJSONFloat(output, float64(v), 32)
 		case float64:
-			output = append(output, strconv.FormatFloat(v, 'f', 6, 64)...)
+			output = appendJSONFloat(output, v, 64)
 		default:
 			output = append(output, '"')
-			output = append(output, fmt.Sprintf("%v", v)...)
+			output = appendJSONEscaped(output, fmt.Sprintf("%v", v))
 			output = append(output, '"')
 		}
 	}
 
 	// Add message
 	output = append(output, []byte(",\"message\":\"")...)
-	output = append(output, msg...)
+	output = appendJSONEscaped(output, msg)
 
 	// Add any additional args
 	for _, thisarg := range args {
@@ -217,7 +217,7 @@ func (vs *varStack) writeFinalJSON(msg string, args ...interface{}) {
 
 		switch thisarg := thisarg.(type) {
 		case string:
-			output = append(output, thisarg...)
+			output = appendJSONEscaped(output, thisarg)
 		case int:
 			output = append(output, strconv.Itoa(thisarg)...)
 		case int32:
@@ -235,7 +235,7 @@ func (vs *varStack) writeFinalJSON(msg string, args ...interface{}) {
 		case bool:
 			output = append(output, strconv.FormatBool(thisarg)...)
 		default:
-			output = append(output, fmt.Sprintf("%v", thisarg)...)
+			output = appendJSONEscaped(output, fmt.Sprintf("%v", thisarg))
 		}
 	}
 
@@ -280,23 +280,23 @@ func (vs *varStack) writeFinalJSONF(format string, args ...interface{}) {
 	for i := 0; i < vs.varCount; i++ {
 		output = append(output, ',')
 		output = append(output, '"')
-		output = append(output, vs.varName[i]...)
+		output = appendJSONEscaped(output, vs.varName[i])
 		output = append(output, '"', ':')
 
 		switch v := vs.varValue[i].(type) {
 		case string:
 			output = append(output, '"')
-			output = append(output, v...)
+			output = appendJSONEscaped(output, v)
 			output = append(output, '"')
 		case int:
 			output = append(output, strconv.Itoa(v)...)
 		case float32:
-			output = append(output, strconv.FormatFloat(float64(v), 'f', 6, 32)...)
+			output = appendJSONFloat(output, float64(v), 32)
 		case float64:
-			output = append(output, strconv.FormatFloat(v, 'f', 6, 64)...)
+			output = appendJSONFloat(output, v, 64)
 		default:
 			output = append(output, '"')
-			output = append(output, fmt.Sprintf("%v", v)...)
+			output = appendJSONEscaped(output, fmt.Sprintf("%v", v))
 			output = append(output, '"')
 		}
 	}
@@ -304,7 +304,7 @@ func (vs *varStack) writeFinalJSONF(format string, args ...interface{}) {
 	// Add message with formatting
 	output = append(output, []byte(",\"message\":\"")...)
 	formatted := fmt.Sprintf(format, args...)
-	output = append(output, formatted...)
+	output = appendJSONEscaped(output, formatted)
 
 	// Close JSON and add newline
 	output = append(output, []byte("\"}\n")...)

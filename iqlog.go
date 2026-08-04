@@ -118,15 +118,15 @@ func NewIQLogger(jsonMode bool) *logger {
 // This function is typically called when the application is starting up
 // It sets log/slog and log's default output to use the iqlog format.
 func Init(applicationName string, syslogHost string, debugMode bool) {
+	if GlobalLogger == nil {
+		GlobalLogger = NewGlobalIQLogger()
+	}
 	SetApplicationName(applicationName)
 	SetDebugMode(debugMode)
 	SetCallerDepth(1)
 	SetUseColour(terminal.IsTerminal(int(os.Stderr.Fd())) && (runtime.GOOS != "windows"))
 	SetNewLine(true)
 	SetSyslogHost(syslogHost)
-	if GlobalLogger == nil {
-		GlobalLogger = NewGlobalIQLogger()
-	}
 }
 
 // WithGroup returns a new Handler with the given group appended to
