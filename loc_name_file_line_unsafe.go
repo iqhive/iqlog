@@ -1,3 +1,5 @@
+//go:build !iqlog_safe_callers
+
 package iqlog
 
 import (

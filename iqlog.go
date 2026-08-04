@@ -45,8 +45,8 @@ type logger struct {
 	// logger (e.g. from WithContext) share the same lock for a shared writer
 	mu *sync.Mutex
 	// writeErr records the most recent error returned by the output
-	// writer; guarded by mu
-	writeErr *error
+	// writer; shared between logger copies and background writers
+	writeErr *writeErrBox
 
 	// A sync.Pool to handle re-usable buffers to reduce allocations.
 	// bufferPool     sync.Pool
@@ -79,7 +79,7 @@ func NewIQLogger(jsonMode bool) *logger {
 		TimestampFormat: TimestampFormatRFC3339Milli,
 		out:             io.Discard,
 		mu:              &sync.Mutex{},
-		writeErr:        new(error),
+		writeErr:        &writeErrBox{},
 	}
 	logger.SetCallerDepth(0) // >0 = Capture callers
 	logger.IncludeTime.Store(true)
@@ -140,27 +140,42 @@ func Init(applicationName string, syslogHost string, debugMode bool) {
 	SetSyslogHost(syslogHost)
 }
 
-// writeLocked writes a completed line to the output writer under the
-// logger's lock, recording any writer error for LastWriteError.
+// writeErrBox holds the most recent writer error behind its own lock so
+// background writer goroutines can record errors without touching the
+// logger mutex.
+type writeErrBox struct {
+	mu  sync.Mutex
+	err error
+}
+
 func (l *logger) writeLocked(line []byte) {
 	l.mu.Lock()
 	_, err := l.out.Write(line)
-	if err != nil && l.writeErr != nil {
-		*l.writeErr = err
-	}
 	l.mu.Unlock()
+	l.recordWriteErr(err)
+}
+
+// recordWriteErr stores a writer error for later inspection via
+// LastWriteError. Safe to call from background writer goroutines.
+func (l *logger) recordWriteErr(err error) {
+	if err == nil || l.writeErr == nil {
+		return
+	}
+	l.writeErr.mu.Lock()
+	l.writeErr.err = err
+	l.writeErr.mu.Unlock()
 }
 
 // LastWriteError returns the most recent error returned by the logger's
-// output writer, or nil if all writes have succeeded. Errors from
-// asynchronous writers are reported by their own fallback writes.
+// output writer, or nil if all writes have succeeded. Errors from async
+// and ring-buffer background writes are also recorded here.
 func (l *logger) LastWriteError() error {
 	if l.writeErr == nil {
 		return nil
 	}
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	return *l.writeErr
+	l.writeErr.mu.Lock()
+	defer l.writeErr.mu.Unlock()
+	return l.writeErr.err
 }
 
 // LastWriteError returns the most recent write error of the GlobalLogger.

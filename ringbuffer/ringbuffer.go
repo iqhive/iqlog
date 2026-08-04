@@ -30,8 +30,9 @@ type RingBuffer[T any] struct {
 	condMu sync.Mutex
 	cond   *sync.Cond
 
-	// closed is set by Close (under condMu) so blocked consumers can exit
-	closed bool
+	// closed is set by Close so blocked consumers can exit and new
+	// enqueues are rejected
+	closed atomic.Bool
 }
 
 // node holds a single ring buffer slot plus a sequence number used to synchronize producers/consumers
@@ -79,6 +80,10 @@ func NewRingBuffer[T any](capacity uint64) *RingBuffer[T] {
 // Enqueue tries to put val into the ring buffer
 // Returns true if successful, false if the buffer is full at this moment
 func (rb *RingBuffer[T]) Enqueue(val T) bool {
+	if rb.closed.Load() {
+		return false
+	}
+
 	var n *node[T]
 	var pos uint64
 
@@ -173,7 +178,7 @@ func (rb *RingBuffer[T]) DequeueBlocking() (T, bool) {
 		rb.condMu.Lock()
 		// Wait while size is 0, i.e. no items available
 		for rb.Size() == 0 {
-			if rb.closed {
+			if rb.closed.Load() {
 				rb.condMu.Unlock()
 				var zero T
 				return zero, false
@@ -192,11 +197,12 @@ func (rb *RingBuffer[T]) DequeueBlocking() (T, bool) {
 }
 
 // Close marks the ring buffer as closed and wakes all blocked consumers.
-// Items still in the ring can be drained with Dequeue/DequeueBlocking;
-// DequeueBlocking returns (zero, false) once the ring is closed and empty.
+// Subsequent Enqueue calls return false. Items still in the ring can be
+// drained with Dequeue/DequeueBlocking; DequeueBlocking returns
+// (zero, false) once the ring is closed and empty.
 func (rb *RingBuffer[T]) Close() {
 	rb.condMu.Lock()
-	rb.closed = true
+	rb.closed.Store(true)
 	rb.cond.Broadcast()
 	rb.condMu.Unlock()
 }
