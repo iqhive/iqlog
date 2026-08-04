@@ -11,7 +11,7 @@ func emptybytesliceLine(l *logger) *bytesliceLine {
 	bsl := bytesliceLinePool.Get().(*bytesliceLine)
 	// bsl.output = make([]byte, 0)
 	bsl.output = bsl.output[:0]
-	bsl.out = l.out
+	bsl.logger = l
 	bsl.jsonMode = l.jsonMode
 	bsl.includeTime = l.IncludeTime
 	bsl.captureCaller = l.CallerDepth

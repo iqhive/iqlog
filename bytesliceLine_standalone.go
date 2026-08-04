@@ -2,12 +2,11 @@ package iqlog
 
 import (
 	"fmt"
-	"io"
 	"os"
 )
 
 type bytesliceLine struct {
-	out           io.Writer
+	logger        *logger
 	jsonMode      bool
 	output        []byte
 	includeTime   bool

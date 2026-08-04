@@ -39,9 +39,26 @@ type node[T any] struct {
 	hasVal bool
 }
 
-// NewRingBuffer creates a new ring buffer with the requested capacity,
-// which must be a power of two (e.g., 1024, 4096, 65536)
+// maxRingCapacity caps the ring size at an allocatable power of two.
+const maxRingCapacity = 1 << 30
+
+// NewRingBuffer creates a new ring buffer with the requested capacity.
+// The capacity is rounded up to the next power of two (and capped at
+// maxRingCapacity), since the index masking requires a power-of-two ring size.
 func NewRingBuffer[T any](capacity uint64) *RingBuffer[T] {
+	if capacity == 0 {
+		capacity = 1
+	}
+	if capacity > maxRingCapacity {
+		capacity = maxRingCapacity
+	}
+	if capacity&(capacity-1) != 0 {
+		p := uint64(1)
+		for p < capacity {
+			p <<= 1
+		}
+		capacity = p
+	}
 	rb := &RingBuffer[T]{}
 	rb.capacity = capacity
 	rb.mask = capacity - 1
