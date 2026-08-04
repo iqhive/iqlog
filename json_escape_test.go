@@ -119,6 +119,7 @@ func TestLargeFloatFormatting(t *testing.T) {
 	l.WithByteSliceLineInfo().Float64("nan", math.NaN()).Float64("inf", math.Inf(1)).Float64("ninf", math.Inf(-1)).Msg("nonfinite")
 	l.WithBufferLineInfo().Float64("nan", math.NaN()).Float64("inf", math.Inf(1)).Msg("nonfinite")
 	l.WithPreallocLine2Info().Float64("nan", math.NaN()).Float64("inf", math.Inf(1)).Msg("nonfinite")
+	l.WithVarStackInfo().Float64("nan", math.NaN()).Float64("inf", math.Inf(1)).Float32("nan32", float32(math.NaN())).Msg("nonfinite")
 	requireValidJSONLines(t, buf.String())
 }
 

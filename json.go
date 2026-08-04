@@ -78,6 +78,15 @@ func appendJSONEscaped(dst []byte, s string) []byte {
 	return dst
 }
 
+// appendJSONFloat appends f as a JSON-safe value: quoted for non-finite
+// values (bare NaN/Inf are not valid JSON), decimal otherwise.
+func appendJSONFloat(dst []byte, f float64, bitSize int) []byte {
+	if math.IsNaN(f) || math.IsInf(f, 0) {
+		return append(dst, fallbackFloatString(f)...)
+	}
+	return append(dst, strconv.FormatFloat(f, 'f', 6, bitSize)...)
+}
+
 func appendFastFloat64(dst *bytes.Buffer, f float64) error {
 	if math.IsNaN(f) {
 		dst.WriteString(`"NaN"`)

@@ -197,9 +197,9 @@ func (vs *varStack) writeFinalJSON(msg string, args ...interface{}) {
 		case int:
 			output = append(output, strconv.Itoa(v)...)
 		case float32:
-			output = append(output, strconv.FormatFloat(float64(v), 'f', 6, 32)...)
+			output = appendJSONFloat(output, float64(v), 32)
 		case float64:
-			output = append(output, strconv.FormatFloat(v, 'f', 6, 64)...)
+			output = appendJSONFloat(output, v, 64)
 		default:
 			output = append(output, '"')
 			output = appendJSONEscaped(output, fmt.Sprintf("%v", v))
@@ -291,9 +291,9 @@ func (vs *varStack) writeFinalJSONF(format string, args ...interface{}) {
 		case int:
 			output = append(output, strconv.Itoa(v)...)
 		case float32:
-			output = append(output, strconv.FormatFloat(float64(v), 'f', 6, 32)...)
+			output = appendJSONFloat(output, float64(v), 32)
 		case float64:
-			output = append(output, strconv.FormatFloat(v, 'f', 6, 64)...)
+			output = appendJSONFloat(output, v, 64)
 		default:
 			output = append(output, '"')
 			output = appendJSONEscaped(output, fmt.Sprintf("%v", v))
