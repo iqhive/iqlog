@@ -55,6 +55,7 @@ func TestByteSliceLineJSONEscaping(t *testing.T) {
 	buf := &syncBuffer{}
 	l := newJSONTestLogger(buf)
 	l.WithByteSliceLineInfo().Str(injection, injection).Any("any", injection).Msg(injection)
+	l.WithByteSliceLineInfo().Int(injection, 1).Int64(injection, 2).Float64(injection, 3.5).Bool(injection, true).Msg("keys")
 	l.WithByteSliceLineInfo().Msgs("msg", injection)
 	l.WithByteSliceLineInfo().Msgf("formatted %s", injection)
 	requireValidJSONLines(t, buf.String())
@@ -64,6 +65,7 @@ func TestBufferLineJSONEscaping(t *testing.T) {
 	buf := &syncBuffer{}
 	l := newJSONTestLogger(buf)
 	l.WithBufferLineInfo().Str(injection, injection).Any("any", injection).Msg(injection)
+	l.WithBufferLineInfo().Int(injection, 1).Int64(injection, 2).Float64(injection, 3.5).Bool(injection, true).Msg("keys")
 	l.WithBufferLineInfo().Msgs("msg", injection)
 	l.WithBufferLineInfo().Msgf("formatted %s", injection)
 	requireValidJSONLines(t, buf.String())
@@ -73,6 +75,7 @@ func TestBufferLineNLJSONEscaping(t *testing.T) {
 	buf := &syncBuffer{}
 	l := newJSONTestLogger(buf)
 	l.WithBufferLineNLInfo().Str(injection, injection).Any("any", injection).Msg(injection)
+	l.WithBufferLineNLInfo().Int(injection, 1).Int64(injection, 2).Float64(injection, 3.5).Bool(injection, true).Msg("keys")
 	l.WithBufferLineNLInfo().Msgs("msg", injection)
 	l.WithBufferLineNLInfo().Msgf("formatted %s", injection)
 	requireValidJSONLines(t, buf.String())
@@ -82,6 +85,7 @@ func TestPreallocLineJSONEscaping(t *testing.T) {
 	buf := &syncBuffer{}
 	l := newJSONTestLogger(buf)
 	l.WithPreallocLineInfo().Str(injection, injection).Any("any", injection).Msg(injection)
+	l.WithPreallocLineInfo().Int(injection, 1).Int64(injection, 2).Float64(injection, 3.5).Bool(injection, true).Msg("keys")
 	l.WithPreallocLineInfo().Msgs("msg", injection)
 	l.WithPreallocLineInfo().Msgf("formatted %s", injection)
 	requireValidJSONLines(t, buf.String())
@@ -91,6 +95,7 @@ func TestPreallocLine2JSONEscaping(t *testing.T) {
 	buf := &syncBuffer{}
 	l := newJSONTestLogger(buf)
 	l.WithPreallocLine2Info().Str(injection, injection).Any("any", injection).Msg(injection)
+	l.WithPreallocLine2Info().Int(injection, 1).Int64(injection, 2).Float64(injection, 3.5).Bool(injection, true).Msg("keys")
 	l.WithPreallocLine2Info().Msgs("msg", injection)
 	l.WithPreallocLine2Info().Msgf("formatted %s", injection)
 	requireValidJSONLines(t, buf.String())
@@ -111,6 +116,9 @@ func TestLargeFloatFormatting(t *testing.T) {
 	l.WithByteSliceLineInfo().Float64("big", math.MaxFloat64).Float64("small", -math.MaxFloat64).Msg("floats")
 	l.WithBufferLineInfo().Float64("big", math.MaxFloat64).Msg("floats")
 	l.WithPreallocLine2Info().Float64("big", 1e300).Msg("floats")
+	l.WithByteSliceLineInfo().Float64("nan", math.NaN()).Float64("inf", math.Inf(1)).Float64("ninf", math.Inf(-1)).Msg("nonfinite")
+	l.WithBufferLineInfo().Float64("nan", math.NaN()).Float64("inf", math.Inf(1)).Msg("nonfinite")
+	l.WithPreallocLine2Info().Float64("nan", math.NaN()).Float64("inf", math.Inf(1)).Msg("nonfinite")
 	requireValidJSONLines(t, buf.String())
 }
 

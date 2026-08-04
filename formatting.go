@@ -13,6 +13,21 @@ func floatNeedsFallback(f float64) bool {
 	return math.IsNaN(f) || math.IsInf(f, 0) || f >= maxExactInt64Float || f <= -maxExactInt64Float
 }
 
+// fallbackFloatString formats floats the fast paths cannot handle. Non-finite
+// values are quoted so JSON output stays parseable (bare NaN/Inf are not
+// valid JSON tokens), matching appendFastFloat64.
+func fallbackFloatString(f float64) string {
+	switch {
+	case math.IsNaN(f):
+		return `"NaN"`
+	case math.IsInf(f, 1):
+		return `"Infinity"`
+	case math.IsInf(f, -1):
+		return `"-Infinity"`
+	}
+	return strconv.FormatFloat(f, 'f', -1, 64)
+}
+
 func ansiColourPrefix(level Level) []byte {
 	switch level {
 	case LevelInfo:
@@ -230,8 +245,7 @@ func appendBufferIntDecimal(buf *bytes.Buffer, i int64) (int, error) {
 
 func fastFloatFill(dst []byte, f float64, decimals int) int {
 	if floatNeedsFallback(f) {
-		n := copy(dst, strconv.FormatFloat(f, 'f', -1, 64))
-		return n
+		return copy(dst, fallbackFloatString(f))
 	}
 	neg := (f < 0)
 	if neg {
@@ -277,7 +291,7 @@ func fastFloatFill(dst []byte, f float64, decimals int) int {
 
 func appendfastFloatFill(src []byte, f float64, decimals int) ([]byte, int) {
 	if floatNeedsFallback(f) {
-		s := strconv.FormatFloat(f, 'f', -1, 64)
+		s := fallbackFloatString(f)
 		return append(src, s...), len(s)
 	}
 	neg := (f < 0)
@@ -317,7 +331,7 @@ func appendfastFloatFill(src []byte, f float64, decimals int) ([]byte, int) {
 
 func appendBufferfastFloatFill(buf *bytes.Buffer, f float64, decimals int) (int, error) {
 	if floatNeedsFallback(f) {
-		return buf.WriteString(strconv.FormatFloat(f, 'f', -1, 64))
+		return buf.WriteString(fallbackFloatString(f))
 	}
 	neg := (f < 0)
 	if neg {

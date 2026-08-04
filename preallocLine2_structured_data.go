@@ -8,7 +8,7 @@ func (pal *preallocLine2) Int(name string, val int) *preallocLine2 {
 	}
 	if pal.jsonMode {
 		pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, ",\"")
-		pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, name)
+		pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, jsonEscapedString(name))
 		pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, "\":")
 		pal.bytesUsed += writeIntDecimal(pal.output[pal.bytesUsed:], int64(val))
 	} else {
@@ -27,7 +27,7 @@ func (pal *preallocLine2) Int64(name string, val int64) *preallocLine2 {
 	}
 	if pal.jsonMode {
 		pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, ",\"")
-		pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, name)
+		pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, jsonEscapedString(name))
 		pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, "\":")
 		pal.bytesUsed += writeIntDecimal(pal.output[pal.bytesUsed:], val)
 	} else {
@@ -64,7 +64,7 @@ func (pal *preallocLine2) Float32(name string, f float32) *preallocLine2 {
 	}
 	if pal.jsonMode {
 		pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, ",\"")
-		pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, name)
+		pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, jsonEscapedString(name))
 		pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, "\":")
 		pal.bytesUsed += fastFloatFill(pal.output[pal.bytesUsed:], float64(f), 6)
 	} else {
@@ -82,7 +82,7 @@ func (pal *preallocLine2) Float64(name string, f float64) *preallocLine2 {
 	}
 	if pal.jsonMode {
 		pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, ",\"")
-		pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, name)
+		pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, jsonEscapedString(name))
 		pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, "\":")
 		pal.bytesUsed += fastFloatFill(pal.output[pal.bytesUsed:], f, 6)
 	} else {
@@ -100,7 +100,7 @@ func (pal *preallocLine2) Bool(name string, b bool) *preallocLine2 {
 	}
 	if pal.jsonMode {
 		pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, ",\"")
-		pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, name)
+		pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, jsonEscapedString(name))
 		pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, "\":")
 		if b {
 			pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, "true")

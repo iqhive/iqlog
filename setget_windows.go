@@ -5,6 +5,7 @@ package iqlog
 import (
 	"io"
 	"os"
+	"sync"
 
 	"github.com/iqhive/iqlog/ringbuffer"
 )
@@ -12,6 +13,9 @@ import (
 type ringWriter struct {
 	ringBuffer *ringbuffer.RingBuffer[[]byte]
 	writer     io.Writer
+	// writeMu serializes writes to writer between the consumer goroutine
+	// and the synchronous fallback path in Write
+	writeMu sync.Mutex
 }
 
 func (rw *ringWriter) Start() {
@@ -24,7 +28,9 @@ func (rw *ringWriter) Start() {
 				// os.Exit(1)
 				continue
 			}
+			rw.writeMu.Lock()
 			rw.writer.Write(val)
+			rw.writeMu.Unlock()
 		}
 	}()
 }
@@ -36,6 +42,8 @@ func (rw *ringWriter) Write(p []byte) (n int, err error) {
 	copy(c, p)
 	if !rw.ringBuffer.Enqueue(c) {
 		// ring is full: write synchronously rather than silently dropping
+		rw.writeMu.Lock()
+		defer rw.writeMu.Unlock()
 		return rw.writer.Write(p)
 	}
 	return len(p), nil

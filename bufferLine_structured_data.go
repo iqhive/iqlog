@@ -7,7 +7,7 @@ func (bl *bufferLine) Int(name string, val int) *bufferLine {
 		return bl
 	}
 	if bl.logger.jsonMode {
-		bl.buffer.Write([]byte(",\"" + name + "\":"))
+		bl.buffer.Write([]byte(",\"" + jsonEscapedString(name) + "\":"))
 		appendBufferIntDecimal(bl.buffer, int64(val))
 	} else {
 		bl.buffer.Write([]byte(name + "="))
@@ -22,7 +22,7 @@ func (bl *bufferLine) Int64(name string, val int64) *bufferLine {
 		return bl
 	}
 	if bl.logger.jsonMode {
-		bl.buffer.Write([]byte(",\"" + name + "\":"))
+		bl.buffer.Write([]byte(",\"" + jsonEscapedString(name) + "\":"))
 		appendBufferIntDecimal(bl.buffer, int64(val))
 	} else {
 		bl.buffer.Write([]byte(name + "="))
@@ -49,7 +49,7 @@ func (bl *bufferLine) Float32(name string, f float32) *bufferLine {
 		return bl
 	}
 	if bl.logger.jsonMode {
-		bl.buffer.Write([]byte(",\"" + name + "\":"))
+		bl.buffer.Write([]byte(",\"" + jsonEscapedString(name) + "\":"))
 		appendBufferfastFloatFill(bl.buffer, float64(f), 6)
 	} else {
 		bl.buffer.Write([]byte(name + "="))
@@ -64,7 +64,7 @@ func (bl *bufferLine) Float64(name string, f float64) *bufferLine {
 		return bl
 	}
 	if bl.logger.jsonMode {
-		bl.buffer.Write([]byte(",\"" + name + "\":"))
+		bl.buffer.Write([]byte(",\"" + jsonEscapedString(name) + "\":"))
 		appendBufferfastFloatFill(bl.buffer, float64(f), 6)
 	} else {
 		bl.buffer.Write([]byte(name + "="))
@@ -80,9 +80,9 @@ func (bl *bufferLine) Bool(name string, b bool) *bufferLine {
 	}
 	if bl.logger.jsonMode {
 		if b {
-			bl.buffer.Write([]byte(",\"" + name + "\":true"))
+			bl.buffer.Write([]byte(",\"" + jsonEscapedString(name) + "\":true"))
 		} else {
-			bl.buffer.Write([]byte(",\"" + name + "\":false"))
+			bl.buffer.Write([]byte(",\"" + jsonEscapedString(name) + "\":false"))
 		}
 	} else {
 		if b {
