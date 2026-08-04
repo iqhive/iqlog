@@ -45,9 +45,9 @@ func (pal *preallocLine2) Str(name string, s string) *preallocLine2 {
 	}
 	if pal.jsonMode {
 		pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, ",\"")
-		pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, name)
+		pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, jsonEscapedString(name))
 		pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, "\":\"")
-		pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, s)
+		pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, jsonEscapedString(s))
 		pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, "\"")
 	} else {
 		pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, name)
@@ -127,10 +127,10 @@ func (pal *preallocLine2) Any(name string, v any) *preallocLine2 {
 	str := fmt.Sprintf("%v", v)
 	if pal.jsonMode {
 		pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, ",\"")
-		pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, name)
+		pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, jsonEscapedString(name))
 		pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, "\":")
 		pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, "\"")
-		pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, str)
+		pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, jsonEscapedString(str))
 		pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, "\"")
 	} else {
 		pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, name)

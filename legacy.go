@@ -42,19 +42,19 @@ func (l *logger) LogWithFields(ctx context.Context, level Level, fields map[stri
 	var logger *bytesliceLine
 	switch level {
 	case LevelTrace:
-		logger = GlobalLogger.WithByteSliceLineTrace()
+		logger = l.WithByteSliceLineTrace()
 	case LevelDebug:
-		logger = GlobalLogger.WithByteSliceLineDebug()
+		logger = l.WithByteSliceLineDebug()
 	case LevelInfo:
-		logger = GlobalLogger.WithByteSliceLineInfo()
+		logger = l.WithByteSliceLineInfo()
 	case LevelWarn:
-		logger = GlobalLogger.WithByteSliceLineWarn()
+		logger = l.WithByteSliceLineWarn()
 	case LevelError:
-		logger = GlobalLogger.WithByteSliceLineError()
+		logger = l.WithByteSliceLineError()
 	case LevelPanic:
-		logger = GlobalLogger.WithByteSliceLinePanic()
+		logger = l.WithByteSliceLinePanic()
 	case LevelFatal:
-		logger = GlobalLogger.WithByteSliceLineFatal()
+		logger = l.WithByteSliceLineFatal()
 	default:
 		fmt.Println("Invalid log level")
 		return

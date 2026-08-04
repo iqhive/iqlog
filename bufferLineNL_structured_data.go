@@ -37,7 +37,7 @@ func (bl *bufferLineNL) Str(name string, s string) *bufferLineNL {
 		return bl
 	}
 	if bl.jsonMode {
-		bl.buffer.Write([]byte(",\"" + name + "\":\"" + s + "\""))
+		bl.buffer.Write([]byte(",\"" + jsonEscapedString(name) + "\":\"" + jsonEscapedString(s) + "\""))
 	} else {
 		bl.buffer.Write([]byte(name + "=" + s + " "))
 	}
@@ -100,7 +100,7 @@ func (bl *bufferLineNL) Any(name string, v any) *bufferLineNL {
 	}
 	str := fmt.Sprintf("%v", v)
 	if bl.jsonMode {
-		bl.buffer.Write([]byte(",\"" + name + "\":\"" + str + "\""))
+		bl.buffer.Write([]byte(",\"" + jsonEscapedString(name) + "\":\"" + jsonEscapedString(str) + "\""))
 	} else {
 		bl.buffer.Write([]byte(name + "=\"" + str + "\" "))
 	}

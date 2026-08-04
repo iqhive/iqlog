@@ -4,8 +4,13 @@ import (
 	"bytes"
 	"fmt"
 	"math"
+	"strconv"
 	"unsafe"
 )
+
+// maxExactInt64Float is 2^63; float64 values at or beyond this magnitude
+// cannot be converted to int64 safely.
+const maxExactInt64Float = float64(1 << 63)
 
 var hex = "0123456789abcdef"
 
@@ -87,7 +92,14 @@ func appendFastFloat64(dst *bytes.Buffer, f float64) error {
 		return nil
 	}
 
-	if f == float64(int64(f)) && f <= math.MaxInt64 && f >= math.MinInt64 {
+	if f >= maxExactInt64Float || f <= -maxExactInt64Float {
+		// Out of int64 range: the fast integer/decimal paths would overflow,
+		// so fall back to the standard library formatter.
+		dst.WriteString(strconv.FormatFloat(f, 'f', -1, 64))
+		return nil
+	}
+
+	if f == float64(int64(f)) {
 		appendIntBuffer(dst, int64(f))
 		return nil
 	}
@@ -147,6 +159,18 @@ func valToString(v any) string {
 
 func unsafeString(b []byte) string {
 	return *(*string)(unsafe.Pointer(&b))
+}
+
+// jsonEscapedString returns s with JSON string escaping applied.
+// It returns s unchanged when no escaping is needed.
+func jsonEscapedString(s string) string {
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c < 0x20 || c == '\\' || c == '"' {
+			return string(appendJSONEscaped(make([]byte, 0, len(s)+8), s))
+		}
+	}
+	return s
 }
 
 func sprintf(format string, args ...any) string {

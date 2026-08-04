@@ -34,7 +34,10 @@ func (rw *ringWriter) Write(p []byte) (n int, err error) {
 	// underlying array before the consumer goroutine writes it out.
 	c := make([]byte, len(p))
 	copy(c, p)
-	rw.ringBuffer.Enqueue(c)
+	if !rw.ringBuffer.Enqueue(c) {
+		// ring is full: write synchronously rather than silently dropping
+		return rw.writer.Write(p)
+	}
 	return len(p), nil
 }
 

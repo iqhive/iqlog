@@ -2,8 +2,16 @@ package iqlog
 
 import (
 	"bytes"
+	"math"
+	"strconv"
 	"time"
 )
+
+// floatNeedsFallback reports whether f cannot be formatted by the fast
+// integer-based float paths (int64 conversion would overflow or is invalid).
+func floatNeedsFallback(f float64) bool {
+	return math.IsNaN(f) || math.IsInf(f, 0) || f >= maxExactInt64Float || f <= -maxExactInt64Float
+}
 
 func ansiColourPrefix(level Level) []byte {
 	switch level {
@@ -221,6 +229,10 @@ func appendBufferIntDecimal(buf *bytes.Buffer, i int64) (int, error) {
 }
 
 func fastFloatFill(dst []byte, f float64, decimals int) int {
+	if floatNeedsFallback(f) {
+		n := copy(dst, strconv.FormatFloat(f, 'f', -1, 64))
+		return n
+	}
 	neg := (f < 0)
 	if neg {
 		f = -f
@@ -264,6 +276,10 @@ func fastFloatFill(dst []byte, f float64, decimals int) int {
 }
 
 func appendfastFloatFill(src []byte, f float64, decimals int) ([]byte, int) {
+	if floatNeedsFallback(f) {
+		s := strconv.FormatFloat(f, 'f', -1, 64)
+		return append(src, s...), len(s)
+	}
 	neg := (f < 0)
 	if neg {
 		f = -f
@@ -300,6 +316,9 @@ func appendfastFloatFill(src []byte, f float64, decimals int) ([]byte, int) {
 }
 
 func appendBufferfastFloatFill(buf *bytes.Buffer, f float64, decimals int) (int, error) {
+	if floatNeedsFallback(f) {
+		return buf.WriteString(strconv.FormatFloat(f, 'f', -1, 64))
+	}
 	neg := (f < 0)
 	if neg {
 		f = -f
