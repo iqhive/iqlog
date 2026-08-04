@@ -29,6 +29,9 @@ type RingBuffer[T any] struct {
 	// need this for blocking Dequeues (so we don't spin lock)
 	condMu sync.Mutex
 	cond   *sync.Cond
+
+	// closed is set by Close (under condMu) so blocked consumers can exit
+	closed bool
 }
 
 // node holds a single ring buffer slot plus a sequence number used to synchronize producers/consumers
@@ -170,6 +173,11 @@ func (rb *RingBuffer[T]) DequeueBlocking() (T, bool) {
 		rb.condMu.Lock()
 		// Wait while size is 0, i.e. no items available
 		for rb.Size() == 0 {
+			if rb.closed {
+				rb.condMu.Unlock()
+				var zero T
+				return zero, false
+			}
 			rb.cond.Wait()
 		}
 		rb.condMu.Unlock()
@@ -181,6 +189,16 @@ func (rb *RingBuffer[T]) DequeueBlocking() (T, bool) {
 			return val, true
 		}
 	}
+}
+
+// Close marks the ring buffer as closed and wakes all blocked consumers.
+// Items still in the ring can be drained with Dequeue/DequeueBlocking;
+// DequeueBlocking returns (zero, false) once the ring is closed and empty.
+func (rb *RingBuffer[T]) Close() {
+	rb.condMu.Lock()
+	rb.closed = true
+	rb.cond.Broadcast()
+	rb.condMu.Unlock()
 }
 
 // Size returns the number of items currently in the ring buffer

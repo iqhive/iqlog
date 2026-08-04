@@ -58,7 +58,7 @@ const (
 // 	default:
 // 		levelColor = blue
 // 	}
-// 	if l.IncludeTimePrefix {
+// 	if l.IncludeTime.Load()Prefix {
 // 		if l.TimePrefixFormat == "" {
 // 			fmt.Fprintf(b, "%s ", entry.Time.Format(time.StampMicro))
 // 		} else {

@@ -1,7 +1,7 @@
 package iqlog
 
 func (l *logger) VarStackTrace(msg string, args ...interface{}) {
-	if l.Level > LevelTrace {
+	if l.Level() > LevelTrace {
 		return
 	}
 	vs := emptyvarStack(l, LevelTrace)
@@ -13,7 +13,7 @@ func (l *logger) VarStackTrace(msg string, args ...interface{}) {
 	return
 }
 func (l *logger) VarStackTracef(format string, args ...interface{}) {
-	if l.Level > LevelTrace {
+	if l.Level() > LevelTrace {
 		return
 	}
 	vs := emptyvarStack(l, LevelTrace)
@@ -33,7 +33,7 @@ func (l *logger) VarStackTracef(format string, args ...interface{}) {
 }
 
 func (l *logger) VarStackDebug(msg string, args ...interface{}) {
-	if l.Level > LevelDebug {
+	if l.Level() > LevelDebug {
 		return
 	}
 	vs := emptyvarStack(l, LevelDebug)
@@ -45,7 +45,7 @@ func (l *logger) VarStackDebug(msg string, args ...interface{}) {
 	return
 }
 func (l *logger) VarStackDebugf(format string, args ...interface{}) {
-	if l.Level > LevelDebug {
+	if l.Level() > LevelDebug {
 		return
 	}
 	vs := emptyvarStack(l, LevelDebug)
@@ -65,7 +65,7 @@ func (l *logger) VarStackDebugf(format string, args ...interface{}) {
 }
 
 func (l *logger) VarStackInfo(msg string, args ...interface{}) {
-	if l.Level > LevelInfo {
+	if l.Level() > LevelInfo {
 		return
 	}
 	vs := emptyvarStack(l, LevelInfo)
@@ -77,7 +77,7 @@ func (l *logger) VarStackInfo(msg string, args ...interface{}) {
 	return
 }
 func (l *logger) VarStackInfof(format string, args ...interface{}) {
-	if l.Level > LevelInfo {
+	if l.Level() > LevelInfo {
 		return
 	}
 	vs := emptyvarStack(l, LevelInfo)
@@ -97,7 +97,7 @@ func (l *logger) VarStackInfof(format string, args ...interface{}) {
 }
 
 func (l *logger) VarStackPrint(msg string, args ...interface{}) {
-	if l.Level > LevelPrint {
+	if l.Level() > LevelPrint {
 		return
 	}
 	vs := emptyvarStack(l, LevelPrint)
@@ -109,7 +109,7 @@ func (l *logger) VarStackPrint(msg string, args ...interface{}) {
 	return
 }
 func (l *logger) VarStackPrintf(format string, args ...interface{}) {
-	if l.Level > LevelPrint {
+	if l.Level() > LevelPrint {
 		return
 	}
 	vs := emptyvarStack(l, LevelPrint)
@@ -129,7 +129,7 @@ func (l *logger) VarStackPrintf(format string, args ...interface{}) {
 }
 
 func (l *logger) VarStackWarn(msg string, args ...interface{}) {
-	if l.Level > LevelWarn {
+	if l.Level() > LevelWarn {
 		return
 	}
 	vs := emptyvarStack(l, LevelWarn)
@@ -141,7 +141,7 @@ func (l *logger) VarStackWarn(msg string, args ...interface{}) {
 	return
 }
 func (l *logger) VarStackWarnf(format string, args ...interface{}) {
-	if l.Level > LevelWarn {
+	if l.Level() > LevelWarn {
 		return
 	}
 	vs := emptyvarStack(l, LevelWarn)
@@ -161,7 +161,7 @@ func (l *logger) VarStackWarnf(format string, args ...interface{}) {
 }
 
 func (l *logger) VarStackError(msg string, args ...interface{}) {
-	if l.Level > LevelError {
+	if l.Level() > LevelError {
 		return
 	}
 	vs := emptyvarStack(l, LevelError)
@@ -173,7 +173,7 @@ func (l *logger) VarStackError(msg string, args ...interface{}) {
 	return
 }
 func (l *logger) VarStackErrorf(format string, args ...interface{}) {
-	if l.Level > LevelError {
+	if l.Level() > LevelError {
 		return
 	}
 	vs := emptyvarStack(l, LevelError)
@@ -193,7 +193,7 @@ func (l *logger) VarStackErrorf(format string, args ...interface{}) {
 }
 
 func (l *logger) VarStackFatal(msg string, args ...interface{}) {
-	if l.Level > LevelFatal {
+	if l.Level() > LevelFatal {
 		return
 	}
 	vs := emptyvarStack(l, LevelFatal)
@@ -205,7 +205,7 @@ func (l *logger) VarStackFatal(msg string, args ...interface{}) {
 	return
 }
 func (l *logger) VarStackFatalf(format string, args ...interface{}) {
-	if l.Level > LevelFatal {
+	if l.Level() > LevelFatal {
 		return
 	}
 	vs := emptyvarStack(l, LevelFatal)
@@ -225,7 +225,7 @@ func (l *logger) VarStackFatalf(format string, args ...interface{}) {
 }
 
 func (l *logger) VarStackPanic(msg string, args ...interface{}) {
-	if l.Level > LevelPanic {
+	if l.Level() > LevelPanic {
 		return
 	}
 	vs := emptyvarStack(l, LevelPanic)
@@ -237,7 +237,7 @@ func (l *logger) VarStackPanic(msg string, args ...interface{}) {
 	return
 }
 func (l *logger) VarStackPanicf(format string, args ...interface{}) {
-	if l.Level > LevelPanic {
+	if l.Level() > LevelPanic {
 		return
 	}
 	vs := emptyvarStack(l, LevelPanic)
@@ -258,7 +258,7 @@ func (l *logger) VarStackPanicf(format string, args ...interface{}) {
 
 // Log writes a log message at the level
 func (l *logger) VarStackLog(level Level, msg string, args ...interface{}) {
-	if l.Level > level {
+	if l.Level() > level {
 		return
 	}
 
@@ -271,7 +271,7 @@ func (l *logger) VarStackLog(level Level, msg string, args ...interface{}) {
 }
 
 func (l *logger) VarStackLogf(level Level, format string, args ...interface{}) {
-	if l.Level > level {
+	if l.Level() > level {
 		return
 	}
 

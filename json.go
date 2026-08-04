@@ -2,6 +2,7 @@ package iqlog
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"math"
 	"strconv"
@@ -76,6 +77,35 @@ func appendJSONEscaped(dst []byte, s string) []byte {
 		dst = append(dst, s[start:]...)
 	}
 	return dst
+}
+
+// repairTruncatedJSONLine repairs a partially assembled JSON object that hit
+// the fixed line-buffer limit, so the emitted record stays parseable. It
+// walks back from the end looking for the longest prefix that forms a valid
+// object once closed (with `"}` when the cut lands inside a string, or `}`
+// otherwise) and returns the new length. Only called on the rare truncation
+// path, so validating candidates with json.Valid is acceptable.
+func repairTruncatedJSONLine(buf []byte, used, max int) int {
+	if used > max {
+		used = max
+	}
+	for cut := used; cut > 1; cut-- {
+		for _, closer := range []string{"\"}", "}"} {
+			if cut+len(closer) > max {
+				continue
+			}
+			cand := make([]byte, 0, cut+len(closer))
+			cand = append(cand, buf[:cut]...)
+			cand = append(cand, closer...)
+			if json.Valid(cand) {
+				copy(buf[cut:], closer)
+				return cut + len(closer)
+			}
+		}
+	}
+	// give up: emit an empty object rather than an invalid record
+	copy(buf, "{}")
+	return 2
 }
 
 // appendJSONFloat appends f as a JSON-safe value: quoted for non-finite

@@ -1,14 +1,13 @@
 package iqlog
 
 import (
-	"io"
 	"sync"
 )
 
 const maxVars = 8
 
 type varStack struct {
-	out           io.Writer
+	logger        *logger
 	jsonMode      bool
 	includeTime   bool
 	captureCaller int
@@ -32,15 +31,15 @@ var varStackPool = sync.Pool{
 var noopvarStack = &varStack{varCount: maxVars, level: LevelUnknown}
 
 func emptyvarStack(l *logger, level Level) *varStack {
-	if l.Level > level {
+	if l.Level() > level {
 		return noopvarStack
 	}
 	vs := varStackPool.Get().(*varStack)
 	vs.applyDefaults(l, level)
 	// vs.level = level
 	// vs.out = l.out
-	// vs.jsonMode = l.jsonMode
-	// vs.includeTime = l.IncludeTime
+	// vs.jsonMode = l.jsonMode.Load()
+	// vs.includeTime = l.IncludeTime.Load()
 	// vs.captureCallers = l.captureCallers
 	// vs.varCount = 0
 	return vs
@@ -48,10 +47,10 @@ func emptyvarStack(l *logger, level Level) *varStack {
 
 func (vs *varStack) applyDefaults(l *logger, level Level) {
 	vs.level = level
-	vs.out = l.out
-	vs.jsonMode = l.jsonMode
-	vs.includeTime = l.IncludeTime
-	vs.captureCaller = l.CallerDepth
+	vs.logger = l
+	vs.jsonMode = l.jsonMode.Load()
+	vs.includeTime = l.IncludeTime.Load()
+	vs.captureCaller = int(l.CallerDepth.Load())
 	vs.varCount = 0
 	// release references held from a previous pooled use so they can be
 	// garbage collected

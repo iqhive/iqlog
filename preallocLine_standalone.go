@@ -2,25 +2,30 @@ package iqlog
 
 import (
 	"fmt"
-	"io"
 	"os"
 )
 
 type preallocLine struct {
-	out           io.Writer
-	output        *[maxLineLen]byte
-	bytesUsed     int
-	jsonMode      bool
-	includeTime   bool
-	captureCaller int
-	callerData    callerData
+	logger         *logger
+	output         *[maxLineLen]byte
+	bytesUsed      int
+	jsonMode       bool
+	includeTime    bool
+	captureCaller  int
+	exitAfterWrite bool
+	callerData     callerData
 }
 
 func (l *logger) PreAllocLineTrace(msg string, args ...interface{}) {
-	if l.Level > LevelTrace {
+	if l.Level() > LevelTrace {
 		return
 	}
 	pal := emptypreallocLine(l)
+	if d := int(l.CallerDepth.Load()); d > 0 {
+		var pc PC
+		caller1(d+1, &pc, 1, 1)
+		fillCallerData(pc, &pal.callerData)
+	}
 	if pal.jsonMode {
 		pal.writeInitialJSON(LevelTrace)
 		pal.writeFinalJSON(msg, args...)
@@ -31,7 +36,7 @@ func (l *logger) PreAllocLineTrace(msg string, args ...interface{}) {
 	return
 }
 func (l *logger) PreAllocLineTracef(format string, args ...interface{}) {
-	if l.Level > LevelTrace {
+	if l.Level() > LevelTrace {
 		return
 	}
 	msg := fmt.Sprintf(format, args...)
@@ -39,10 +44,15 @@ func (l *logger) PreAllocLineTracef(format string, args ...interface{}) {
 }
 
 func (l *logger) PreAllocLineDebug(msg string, args ...interface{}) {
-	if l.Level > LevelDebug {
+	if l.Level() > LevelDebug {
 		return
 	}
 	pal := emptypreallocLine(l)
+	if d := int(l.CallerDepth.Load()); d > 0 {
+		var pc PC
+		caller1(d+1, &pc, 1, 1)
+		fillCallerData(pc, &pal.callerData)
+	}
 	if pal.jsonMode {
 		pal.writeInitialJSON(LevelDebug)
 		pal.writeFinalJSON(msg, args...)
@@ -53,7 +63,7 @@ func (l *logger) PreAllocLineDebug(msg string, args ...interface{}) {
 	return
 }
 func (l *logger) PreAllocLineDebugf(format string, args ...interface{}) {
-	if l.Level > LevelDebug {
+	if l.Level() > LevelDebug {
 		return
 	}
 	msg := fmt.Sprintf(format, args...)
@@ -61,10 +71,15 @@ func (l *logger) PreAllocLineDebugf(format string, args ...interface{}) {
 }
 
 func (l *logger) PreAllocLineInfo(msg string, args ...interface{}) {
-	if l.Level > LevelInfo {
+	if l.Level() > LevelInfo {
 		return
 	}
 	pal := emptypreallocLine(l)
+	if d := int(l.CallerDepth.Load()); d > 0 {
+		var pc PC
+		caller1(d+1, &pc, 1, 1)
+		fillCallerData(pc, &pal.callerData)
+	}
 	if pal.jsonMode {
 		pal.writeInitialJSON(LevelInfo)
 		pal.writeFinalJSON(msg, args...)
@@ -75,7 +90,7 @@ func (l *logger) PreAllocLineInfo(msg string, args ...interface{}) {
 	return
 }
 func (l *logger) PreAllocLineInfof(format string, args ...interface{}) {
-	if l.Level > LevelInfo {
+	if l.Level() > LevelInfo {
 		return
 	}
 	msg := fmt.Sprintf(format, args...)
@@ -83,10 +98,15 @@ func (l *logger) PreAllocLineInfof(format string, args ...interface{}) {
 }
 
 func (l *logger) PreAllocLinePrint(msg string, args ...interface{}) {
-	if l.Level > LevelPrint {
+	if l.Level() > LevelPrint {
 		return
 	}
 	pal := emptypreallocLine(l)
+	if d := int(l.CallerDepth.Load()); d > 0 {
+		var pc PC
+		caller1(d+1, &pc, 1, 1)
+		fillCallerData(pc, &pal.callerData)
+	}
 	if pal.jsonMode {
 		pal.writeInitialJSON(LevelPrint)
 		pal.writeFinalJSON(msg, args...)
@@ -97,7 +117,7 @@ func (l *logger) PreAllocLinePrint(msg string, args ...interface{}) {
 	return
 }
 func (l *logger) PreAllocLinePrintf(format string, args ...interface{}) {
-	if l.Level > LevelPrint {
+	if l.Level() > LevelPrint {
 		return
 	}
 	msg := fmt.Sprintf(format, args...)
@@ -105,10 +125,15 @@ func (l *logger) PreAllocLinePrintf(format string, args ...interface{}) {
 }
 
 func (l *logger) PreAllocLineWarn(msg string, args ...interface{}) {
-	if l.Level > LevelWarn {
+	if l.Level() > LevelWarn {
 		return
 	}
 	pal := emptypreallocLine(l)
+	if d := int(l.CallerDepth.Load()); d > 0 {
+		var pc PC
+		caller1(d+1, &pc, 1, 1)
+		fillCallerData(pc, &pal.callerData)
+	}
 	if pal.jsonMode {
 		pal.writeInitialJSON(LevelWarn)
 		pal.writeFinalJSON(msg, args...)
@@ -119,7 +144,7 @@ func (l *logger) PreAllocLineWarn(msg string, args ...interface{}) {
 	return
 }
 func (l *logger) PreAllocLineWarnf(format string, args ...interface{}) {
-	if l.Level > LevelWarn {
+	if l.Level() > LevelWarn {
 		return
 	}
 	msg := fmt.Sprintf(format, args...)
@@ -127,10 +152,15 @@ func (l *logger) PreAllocLineWarnf(format string, args ...interface{}) {
 }
 
 func (l *logger) PreAllocLineError(msg string, args ...interface{}) {
-	if l.Level > LevelError {
+	if l.Level() > LevelError {
 		return
 	}
 	pal := emptypreallocLine(l)
+	if d := int(l.CallerDepth.Load()); d > 0 {
+		var pc PC
+		caller1(d+1, &pc, 1, 1)
+		fillCallerData(pc, &pal.callerData)
+	}
 	if pal.jsonMode {
 		pal.writeInitialJSON(LevelError)
 		pal.writeFinalJSON(msg, args...)
@@ -142,7 +172,7 @@ func (l *logger) PreAllocLineError(msg string, args ...interface{}) {
 }
 
 func (l *logger) PreAllocLineErrorf(format string, args ...interface{}) {
-	if l.Level > LevelError {
+	if l.Level() > LevelError {
 		return
 	}
 	msg := fmt.Sprintf(format, args...)
@@ -150,10 +180,15 @@ func (l *logger) PreAllocLineErrorf(format string, args ...interface{}) {
 }
 
 func (l *logger) PreAllocLinePanic(msg string, args ...interface{}) {
-	if l.Level > LevelPanic {
+	if l.Level() > LevelPanic {
 		return
 	}
 	pal := emptypreallocLine(l)
+	if d := int(l.CallerDepth.Load()); d > 0 {
+		var pc PC
+		caller1(d+1, &pc, 1, 1)
+		fillCallerData(pc, &pal.callerData)
+	}
 	if pal.jsonMode {
 		pal.writeInitialJSON(LevelPanic)
 		pal.writeFinalJSON(msg, args...)
@@ -167,7 +202,7 @@ func (l *logger) PreAllocLinePanic(msg string, args ...interface{}) {
 }
 
 func (l *logger) PreAllocLinePanicf(format string, args ...interface{}) {
-	if l.Level > LevelPanic {
+	if l.Level() > LevelPanic {
 		return
 	}
 	msg := fmt.Sprintf(format, args...)
@@ -175,10 +210,15 @@ func (l *logger) PreAllocLinePanicf(format string, args ...interface{}) {
 }
 
 func (l *logger) PreAllocLineFatal(msg string, args ...interface{}) {
-	if l.Level > LevelFatal {
+	if l.Level() > LevelFatal {
 		return
 	}
 	pal := emptypreallocLine(l)
+	if d := int(l.CallerDepth.Load()); d > 0 {
+		var pc PC
+		caller1(d+1, &pc, 1, 1)
+		fillCallerData(pc, &pal.callerData)
+	}
 	if pal.jsonMode {
 		pal.writeInitialJSON(LevelFatal)
 		pal.writeFinalJSON(msg, args...)
@@ -192,7 +232,7 @@ func (l *logger) PreAllocLineFatal(msg string, args ...interface{}) {
 }
 
 func (l *logger) PreAllocLineFatalf(format string, args ...interface{}) {
-	if l.Level > LevelFatal {
+	if l.Level() > LevelFatal {
 		return
 	}
 	msg := fmt.Sprintf(format, args...)
@@ -201,10 +241,15 @@ func (l *logger) PreAllocLineFatalf(format string, args ...interface{}) {
 
 // Log writes a log message at the level
 func (l *logger) PreAllocLineLog(level Level, msg string, args ...interface{}) {
-	if l.Level > level {
+	if l.Level() > level {
 		return
 	}
 	pal := emptypreallocLine(l)
+	if d := int(l.CallerDepth.Load()); d > 0 {
+		var pc PC
+		caller1(d+1, &pc, 1, 1)
+		fillCallerData(pc, &pal.callerData)
+	}
 	if pal.jsonMode {
 		pal.writeInitialJSON(level)
 		pal.writeFinalJSON(msg, args...)
@@ -215,7 +260,7 @@ func (l *logger) PreAllocLineLog(level Level, msg string, args ...interface{}) {
 }
 
 func (l *logger) PreAllocLineLogf(level Level, format string, args ...interface{}) {
-	if l.Level > level {
+	if l.Level() > level {
 		return
 	}
 	msg := fmt.Sprintf(format, args...)

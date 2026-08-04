@@ -1,7 +1,7 @@
 package iqlog
 
 func (l *logger) WithVarStackTrace() *varStack {
-	if l.Level > LevelTrace {
+	if l.Level() > LevelTrace {
 		return noopvarStack
 	}
 	vs := emptyvarStack(l, LevelTrace)
@@ -10,7 +10,7 @@ func (l *logger) WithVarStackTrace() *varStack {
 }
 
 func (l *logger) WithVarStackDebug() *varStack {
-	if l.Level > LevelDebug {
+	if l.Level() > LevelDebug {
 		return noopvarStack
 	}
 	vs := emptyvarStack(l, LevelDebug)
@@ -19,7 +19,7 @@ func (l *logger) WithVarStackDebug() *varStack {
 }
 
 func (l *logger) WithVarStackInfo() *varStack {
-	if l.Level > LevelInfo {
+	if l.Level() > LevelInfo {
 		return noopvarStack
 	}
 	vs := emptyvarStack(l, LevelInfo)
@@ -28,7 +28,7 @@ func (l *logger) WithVarStackInfo() *varStack {
 }
 
 func (l *logger) WithVarStackWarn() *varStack {
-	if l.Level > LevelWarn {
+	if l.Level() > LevelWarn {
 		return noopvarStack
 	}
 	vs := emptyvarStack(l, LevelWarn)
@@ -37,7 +37,7 @@ func (l *logger) WithVarStackWarn() *varStack {
 }
 
 func (l *logger) WithVarStackError() *varStack {
-	if l.Level > LevelError {
+	if l.Level() > LevelError {
 		return noopvarStack
 	}
 	vs := emptyvarStack(l, LevelError)
@@ -46,7 +46,7 @@ func (l *logger) WithVarStackError() *varStack {
 }
 
 func (l *logger) WithVarStackPanic() *varStack {
-	if l.Level > LevelPanic {
+	if l.Level() > LevelPanic {
 		return noopvarStack
 	}
 	vs := emptyvarStack(l, LevelPanic)
@@ -57,7 +57,7 @@ func (l *logger) WithVarStackPanic() *varStack {
 }
 
 func (l *logger) WithVarStackFatal() *varStack {
-	if l.Level > LevelFatal {
+	if l.Level() > LevelFatal {
 		return noopvarStack
 	}
 	vs := emptyvarStack(l, LevelFatal)

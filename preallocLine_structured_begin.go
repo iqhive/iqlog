@@ -1,7 +1,6 @@
 package iqlog
 
 import (
-	"os"
 	"time"
 )
 
@@ -10,10 +9,12 @@ var nooppreallocLine = &preallocLine{}
 func emptypreallocLine(l *logger) *preallocLine {
 	pal := preallocLinePool.Get().(*preallocLine)
 	pal.bytesUsed = 0
-	pal.jsonMode = l.jsonMode
-	pal.out = l.out
-	pal.includeTime = l.IncludeTime
-	pal.captureCaller = l.CallerDepth
+	pal.jsonMode = l.jsonMode.Load()
+	pal.logger = l
+	pal.includeTime = l.IncludeTime.Load()
+	pal.captureCaller = int(l.CallerDepth.Load())
+	pal.exitAfterWrite = false
+	pal.callerData.callerFuncLen = 0
 
 	return pal
 }
@@ -63,7 +64,7 @@ func (pal *preallocLine) AddCallers() {
 		pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, `"`)
 	} else {
 		// console mode
-		if useColour {
+		if useColour.Load() {
 			pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, "\x1b[32m[")
 		} else {
 			pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, `[`)
@@ -73,7 +74,7 @@ func (pal *preallocLine) AddCallers() {
 		pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, ` `)
 		// pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, file[fileOffset2ndLast:])
 		pal.bytesUsed += copy(pal.output[pal.bytesUsed:], pal.callerData.callerFile[:pal.callerData.callerFileLen])
-		if useColour {
+		if useColour.Load() {
 			pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, "]\x1b[0m ")
 		} else {
 			pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, `] `)
@@ -87,7 +88,7 @@ func (pal *preallocLine) writeInitialConsole(level Level) {
 	if pal.includeTime {
 		pal.bytesUsed += AddTimeConsoleInPlaceCopy(time.Now(), pal.output[pal.bytesUsed:])
 	}
-	if useColour {
+	if useColour.Load() {
 		pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, string(ansiColourPrefix(level)))
 	} else {
 		pal.bytesUsed += safeOutputCopyMaxLineLen(pal.output, pal.bytesUsed, string(levelPrefix(level)))
@@ -96,10 +97,15 @@ func (pal *preallocLine) writeInitialConsole(level Level) {
 }
 
 func (l *logger) WithPreallocLineTrace() *preallocLine {
-	if l.Level > LevelTrace {
+	if l.Level() > LevelTrace {
 		return nooppreallocLine
 	}
 	pal := emptypreallocLine(l)
+	if d := int(l.CallerDepth.Load()); d > 0 {
+		var pc PC
+		caller1(d+1, &pc, 1, 1)
+		fillCallerData(pc, &pal.callerData)
+	}
 	if pal.jsonMode {
 		pal.writeInitialJSON(LevelTrace)
 	} else {
@@ -109,10 +115,15 @@ func (l *logger) WithPreallocLineTrace() *preallocLine {
 }
 
 func (l *logger) WithPreallocLineDebug() *preallocLine {
-	if l.Level > LevelDebug {
+	if l.Level() > LevelDebug {
 		return nooppreallocLine
 	}
 	pal := emptypreallocLine(l)
+	if d := int(l.CallerDepth.Load()); d > 0 {
+		var pc PC
+		caller1(d+1, &pc, 1, 1)
+		fillCallerData(pc, &pal.callerData)
+	}
 	if pal.jsonMode {
 		pal.writeInitialJSON(LevelDebug)
 	} else {
@@ -122,10 +133,15 @@ func (l *logger) WithPreallocLineDebug() *preallocLine {
 }
 
 func (l *logger) WithPreallocLineInfo() *preallocLine {
-	if l.Level > LevelInfo {
+	if l.Level() > LevelInfo {
 		return nooppreallocLine
 	}
 	pal := emptypreallocLine(l)
+	if d := int(l.CallerDepth.Load()); d > 0 {
+		var pc PC
+		caller1(d+1, &pc, 1, 1)
+		fillCallerData(pc, &pal.callerData)
+	}
 	// slice := fixedSlicePool2.Get().(*[maxLineLen]byte)
 	// pal.output = slice
 	if pal.jsonMode {
@@ -137,10 +153,15 @@ func (l *logger) WithPreallocLineInfo() *preallocLine {
 }
 
 func (l *logger) WithPreallocLineWarn() *preallocLine {
-	if l.Level > LevelWarn {
+	if l.Level() > LevelWarn {
 		return nooppreallocLine
 	}
 	pal := emptypreallocLine(l)
+	if d := int(l.CallerDepth.Load()); d > 0 {
+		var pc PC
+		caller1(d+1, &pc, 1, 1)
+		fillCallerData(pc, &pal.callerData)
+	}
 	if pal.jsonMode {
 		pal.writeInitialJSON(LevelWarn)
 	} else {
@@ -150,10 +171,15 @@ func (l *logger) WithPreallocLineWarn() *preallocLine {
 }
 
 func (l *logger) WithPreallocLineError() *preallocLine {
-	if l.Level > LevelError {
+	if l.Level() > LevelError {
 		return nooppreallocLine
 	}
 	pal := emptypreallocLine(l)
+	if d := int(l.CallerDepth.Load()); d > 0 {
+		var pc PC
+		caller1(d+1, &pc, 1, 1)
+		fillCallerData(pc, &pal.callerData)
+	}
 	if pal.jsonMode {
 		pal.writeInitialJSON(LevelError)
 	} else {
@@ -163,32 +189,42 @@ func (l *logger) WithPreallocLineError() *preallocLine {
 }
 
 func (l *logger) WithPreallocLinePanic() *preallocLine {
-	if l.Level > LevelPanic {
+	if l.Level() > LevelPanic {
 		return nooppreallocLine
 	}
 	pal := emptypreallocLine(l)
+	if d := int(l.CallerDepth.Load()); d > 0 {
+		var pc PC
+		caller1(d+1, &pc, 1, 1)
+		fillCallerData(pc, &pal.callerData)
+	}
 	if pal.jsonMode {
 		pal.writeInitialJSON(LevelPanic)
 	} else {
 		pal.writeInitialConsole(LevelPanic)
 	}
-	// pal.logger.Flush()
-	os.Exit(1)
+	// exit after the final write so the record is not lost
+	pal.exitAfterWrite = true
 	return pal
 }
 
 func (l *logger) WithPreallocLineFatal() *preallocLine {
-	if l.Level > LevelFatal {
+	if l.Level() > LevelFatal {
 		return nooppreallocLine
 	}
 	pal := emptypreallocLine(l)
+	if d := int(l.CallerDepth.Load()); d > 0 {
+		var pc PC
+		caller1(d+1, &pc, 1, 1)
+		fillCallerData(pc, &pal.callerData)
+	}
 	if pal.jsonMode {
 		pal.writeInitialJSON(LevelFatal)
 	} else {
 		pal.writeInitialConsole(LevelFatal)
 	}
-	// pal.logger.Flush()
-	os.Exit(1)
+	// exit after the final write so the record is not lost
+	pal.exitAfterWrite = true
 	return pal
 }
 

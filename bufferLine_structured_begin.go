@@ -1,14 +1,23 @@
 package iqlog
 
 import (
+	"io"
 	"os"
+	"sync"
 	"time"
 )
 
 var noopbufferLine = &bufferLine{
-	logger: &logger{
-		Level: 999999,
-	},
+	logger: newNoopLogger(),
+}
+
+func newNoopLogger() *logger {
+	l := &logger{
+		out: io.Discard,
+		mu:  &sync.Mutex{},
+	}
+	l.SetLevel(999999)
+	return l
 }
 
 // var emptybufferLine = bufferLine{}
@@ -21,7 +30,7 @@ func emptybufferLine(l *logger) *bufferLine {
 }
 
 func (bl *bufferLine) writeInitialJSON(level Level) {
-	if bl.logger.IncludeTime {
+	if bl.logger.IncludeTime.Load() {
 		AddTimeJSONToBuffer(time.Now(), bl.buffer)
 	} else {
 		bl.buffer.WriteByte('{')
@@ -47,11 +56,11 @@ func (bl *bufferLine) writeInitialJSON(level Level) {
 }
 
 func (bl *bufferLine) AddCallers() {
-	if bl.logger.CallerDepth == 0 || bl.callerData.callerFuncLen == 0 {
+	if bl.logger.CallerDepth.Load() == 0 || bl.callerData.callerFuncLen == 0 {
 		return
 	}
 
-	if bl.logger.jsonMode {
+	if bl.logger.jsonMode.Load() {
 		// json mode
 		bl.buffer.Write([]byte(`,"func":"`))
 		bl.buffer.Write([]byte(bl.callerData.callerFunc[:bl.callerData.callerFuncLen]))
@@ -60,7 +69,7 @@ func (bl *bufferLine) AddCallers() {
 		bl.buffer.Write([]byte(`"`))
 	} else {
 		// console mode
-		if useColour {
+		if useColour.Load() {
 			bl.buffer.Write([]byte("\x1b[32m["))
 		} else {
 			bl.buffer.Write([]byte(`[`))
@@ -68,7 +77,7 @@ func (bl *bufferLine) AddCallers() {
 		bl.buffer.Write([]byte(bl.callerData.callerFunc[:bl.callerData.callerFuncLen]))
 		bl.buffer.Write([]byte(` `))
 		bl.buffer.Write([]byte(bl.callerData.callerFile[:bl.callerData.callerFileLen]))
-		if useColour {
+		if useColour.Load() {
 			bl.buffer.Write([]byte("]\x1b[0m "))
 		} else {
 			bl.buffer.Write([]byte(`] `))
@@ -78,11 +87,11 @@ func (bl *bufferLine) AddCallers() {
 }
 
 func (bl *bufferLine) writeInitialConsole(level Level) {
-	if bl.logger.IncludeTime {
+	if bl.logger.IncludeTime.Load() {
 		AddTimeConsoleToBuffer(time.Now(), bl.buffer)
 	}
 
-	if useColour {
+	if useColour.Load() {
 		bl.buffer.Write(ansiColourPrefix(level))
 	} else {
 		bl.buffer.Write(levelPrefix(level))
@@ -91,12 +100,12 @@ func (bl *bufferLine) writeInitialConsole(level Level) {
 }
 
 func (l *logger) WithBufferLineTrace() *bufferLine {
-	if l.Level > LevelTrace {
+	if l.Level() > LevelTrace {
 		return noopbufferLine
 	}
 	bl := emptybufferLine(l)
 	bl.logger = l
-	if bl.logger.jsonMode {
+	if bl.logger.jsonMode.Load() {
 		bl.writeInitialJSON(LevelTrace)
 	} else {
 		bl.writeInitialConsole(LevelTrace)
@@ -105,11 +114,11 @@ func (l *logger) WithBufferLineTrace() *bufferLine {
 }
 
 func (l *logger) WithBufferLineDebug() *bufferLine {
-	if l.Level > LevelDebug {
+	if l.Level() > LevelDebug {
 		return noopbufferLine
 	}
 	bl := emptybufferLine(l)
-	if bl.logger.jsonMode {
+	if bl.logger.jsonMode.Load() {
 		bl.writeInitialJSON(LevelDebug)
 	} else {
 		bl.writeInitialConsole(LevelDebug)
@@ -118,11 +127,11 @@ func (l *logger) WithBufferLineDebug() *bufferLine {
 }
 
 func (l *logger) WithBufferLineInfo() *bufferLine {
-	if l.Level > LevelInfo {
+	if l.Level() > LevelInfo {
 		return noopbufferLine
 	}
 	bl := emptybufferLine(l)
-	if bl.logger.jsonMode {
+	if bl.logger.jsonMode.Load() {
 		bl.writeInitialJSON(LevelInfo)
 	} else {
 		bl.writeInitialConsole(LevelInfo)
@@ -131,11 +140,11 @@ func (l *logger) WithBufferLineInfo() *bufferLine {
 }
 
 func (l *logger) WithBufferLineWarn() *bufferLine {
-	if l.Level > LevelWarn {
+	if l.Level() > LevelWarn {
 		return noopbufferLine
 	}
 	bl := emptybufferLine(l)
-	if bl.logger.jsonMode {
+	if bl.logger.jsonMode.Load() {
 		bl.writeInitialJSON(LevelWarn)
 	} else {
 		bl.writeInitialConsole(LevelWarn)
@@ -144,11 +153,11 @@ func (l *logger) WithBufferLineWarn() *bufferLine {
 }
 
 func (l *logger) WithBufferLineError() *bufferLine {
-	if l.Level > LevelError {
+	if l.Level() > LevelError {
 		return noopbufferLine
 	}
 	bl := emptybufferLine(l)
-	if bl.logger.jsonMode {
+	if bl.logger.jsonMode.Load() {
 		bl.writeInitialJSON(LevelError)
 	} else {
 		bl.writeInitialConsole(LevelError)
@@ -157,11 +166,11 @@ func (l *logger) WithBufferLineError() *bufferLine {
 }
 
 func (l *logger) WithBufferLinePanic() *bufferLine {
-	if l.Level > LevelPanic {
+	if l.Level() > LevelPanic {
 		return noopbufferLine
 	}
 	bl := emptybufferLine(l)
-	if bl.logger.jsonMode {
+	if bl.logger.jsonMode.Load() {
 		bl.writeInitialJSON(LevelPanic)
 	} else {
 		bl.writeInitialConsole(LevelPanic)
@@ -172,11 +181,11 @@ func (l *logger) WithBufferLinePanic() *bufferLine {
 }
 
 func (l *logger) WithBufferLineFatal() *bufferLine {
-	if l.Level > LevelFatal {
+	if l.Level() > LevelFatal {
 		return noopbufferLine
 	}
 	bl := emptybufferLine(l)
-	if bl.logger.jsonMode {
+	if bl.logger.jsonMode.Load() {
 		bl.writeInitialJSON(LevelFatal)
 	} else {
 		bl.writeInitialConsole(LevelFatal)

@@ -11,9 +11,9 @@ func emptybytesliceLine(l *logger) *bytesliceLine {
 	// bsl.output = make([]byte, 0)
 	bsl.output = bsl.output[:0]
 	bsl.logger = l
-	bsl.jsonMode = l.jsonMode
-	bsl.includeTime = l.IncludeTime
-	bsl.captureCaller = l.CallerDepth
+	bsl.jsonMode = l.jsonMode.Load()
+	bsl.includeTime = l.IncludeTime.Load()
+	bsl.captureCaller = int(l.CallerDepth.Load())
 	bsl.exitAfterWrite = false
 	bsl.callerData.callerFuncLen = 0
 	bsl.callerData.callerFileLen = 0
@@ -62,7 +62,7 @@ func (bsl *bytesliceLine) AddCallers() {
 		bsl.output = append(bsl.output, []byte(`"`)...)
 	} else {
 		// console mode
-		if useColour {
+		if useColour.Load() {
 			bsl.output = append(bsl.output, []byte("\x1b[32m[")...)
 		} else {
 			bsl.output = append(bsl.output, []byte(`[`)...)
@@ -70,7 +70,7 @@ func (bsl *bytesliceLine) AddCallers() {
 		bsl.output = append(bsl.output, bsl.callerData.callerFunc[:bsl.callerData.callerFuncLen]...)
 		bsl.output = append(bsl.output, []byte(` `)...)
 		bsl.output = append(bsl.output, bsl.callerData.callerFile[:bsl.callerData.callerFileLen]...)
-		if useColour {
+		if useColour.Load() {
 			bsl.output = append(bsl.output, []byte("]\x1b[0m ")...)
 		} else {
 			bsl.output = append(bsl.output, []byte(`] `)...)
@@ -82,7 +82,7 @@ func (bsl *bytesliceLine) writeInitialConsole(level Level) {
 	if bsl.includeTime {
 		AddTimeConsoleAppend(time.Now(), &bsl.output)
 	}
-	if useColour {
+	if useColour.Load() {
 		bsl.output = append(bsl.output, ansiColourPrefix(level)...)
 	} else {
 		bsl.output = append(bsl.output, levelPrefix(level)...)
@@ -91,14 +91,14 @@ func (bsl *bytesliceLine) writeInitialConsole(level Level) {
 }
 
 func (l *logger) WithByteSliceLineTrace() *bytesliceLine {
-	if l.Level > LevelTrace {
+	if l.Level() > LevelTrace {
 		return noopbytesliceLine
 	}
 	bsl := emptybytesliceLine(l)
 
-	if l.CallerDepth > 0 {
+	if int(l.CallerDepth.Load()) > 0 {
 		var pc PC
-		caller1(l.CallerDepth+1, &pc, 1, 1)
+		caller1(int(l.CallerDepth.Load())+1, &pc, 1, 1)
 		fillCallerData(pc, &bsl.callerData)
 	}
 
@@ -111,14 +111,14 @@ func (l *logger) WithByteSliceLineTrace() *bytesliceLine {
 }
 
 func (l *logger) WithByteSliceLineDebug() *bytesliceLine {
-	if l.Level > LevelDebug {
+	if l.Level() > LevelDebug {
 		return noopbytesliceLine
 	}
 	bsl := emptybytesliceLine(l)
 
-	if l.CallerDepth > 0 {
+	if int(l.CallerDepth.Load()) > 0 {
 		var pc PC
-		caller1(l.CallerDepth+1, &pc, 1, 1)
+		caller1(int(l.CallerDepth.Load())+1, &pc, 1, 1)
 		fillCallerData(pc, &bsl.callerData)
 	}
 
@@ -131,15 +131,15 @@ func (l *logger) WithByteSliceLineDebug() *bytesliceLine {
 }
 
 func (l *logger) WithByteSliceLineInfo() *bytesliceLine {
-	if l.Level > LevelInfo {
+	if l.Level() > LevelInfo {
 		return noopbytesliceLine
 	}
 
 	bsl := emptybytesliceLine(l)
 
-	if l.CallerDepth > 0 {
+	if int(l.CallerDepth.Load()) > 0 {
 		var pc PC
-		caller1(l.CallerDepth+1, &pc, 1, 1)
+		caller1(int(l.CallerDepth.Load())+1, &pc, 1, 1)
 		fillCallerData(pc, &bsl.callerData)
 	}
 
@@ -152,14 +152,14 @@ func (l *logger) WithByteSliceLineInfo() *bytesliceLine {
 }
 
 func (l *logger) WithByteSliceLineWarn() *bytesliceLine {
-	if l.Level > LevelWarn {
+	if l.Level() > LevelWarn {
 		return noopbytesliceLine
 	}
 	bsl := emptybytesliceLine(l)
 
-	if l.CallerDepth > 0 {
+	if int(l.CallerDepth.Load()) > 0 {
 		var pc PC
-		caller1(l.CallerDepth+1, &pc, 1, 1)
+		caller1(int(l.CallerDepth.Load())+1, &pc, 1, 1)
 		fillCallerData(pc, &bsl.callerData)
 	}
 
@@ -172,14 +172,14 @@ func (l *logger) WithByteSliceLineWarn() *bytesliceLine {
 }
 
 func (l *logger) WithByteSliceLineError() *bytesliceLine {
-	if l.Level > LevelError {
+	if l.Level() > LevelError {
 		return noopbytesliceLine
 	}
 	bsl := emptybytesliceLine(l)
 
-	if l.CallerDepth > 0 {
+	if int(l.CallerDepth.Load()) > 0 {
 		var pc PC
-		caller1(l.CallerDepth+1, &pc, 1, 1)
+		caller1(int(l.CallerDepth.Load())+1, &pc, 1, 1)
 		fillCallerData(pc, &bsl.callerData)
 	}
 
@@ -192,14 +192,14 @@ func (l *logger) WithByteSliceLineError() *bytesliceLine {
 }
 
 func (l *logger) WithByteSliceLinePanic() *bytesliceLine {
-	if l.Level > LevelPanic {
+	if l.Level() > LevelPanic {
 		return noopbytesliceLine
 	}
 	bsl := emptybytesliceLine(l)
 
-	if l.CallerDepth > 0 {
+	if int(l.CallerDepth.Load()) > 0 {
 		var pc PC
-		caller1(l.CallerDepth+1, &pc, 1, 1)
+		caller1(int(l.CallerDepth.Load())+1, &pc, 1, 1)
 		fillCallerData(pc, &bsl.callerData)
 	}
 
@@ -215,14 +215,14 @@ func (l *logger) WithByteSliceLinePanic() *bytesliceLine {
 }
 
 func (l *logger) WithByteSliceLineFatal() *bytesliceLine {
-	if l.Level > LevelFatal {
+	if l.Level() > LevelFatal {
 		return noopbytesliceLine
 	}
 	bsl := emptybytesliceLine(l)
 
-	if l.CallerDepth > 0 {
+	if int(l.CallerDepth.Load()) > 0 {
 		var pc PC
-		caller1(l.CallerDepth+1, &pc, 1, 1)
+		caller1(int(l.CallerDepth.Load())+1, &pc, 1, 1)
 		fillCallerData(pc, &bsl.callerData)
 	}
 

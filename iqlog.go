@@ -7,13 +7,18 @@ import (
 	"runtime"
 	"strconv"
 	"sync"
+	"sync/atomic"
 
 	terminal "golang.org/x/term"
 )
 
 // GlobalLogger is used by the Global Logging functions
 var GlobalLogger *logger = NewGlobalIQLogger()
-var useColour = terminal.IsTerminal(int(os.Stderr.Fd())) && (runtime.GOOS != "windows")
+var useColour = func() *atomic.Bool {
+	b := &atomic.Bool{}
+	b.Store(terminal.IsTerminal(int(os.Stderr.Fd())) && (runtime.GOOS != "windows"))
+	return b
+}()
 
 const maxLineLen = 1024
 const maxStringLen = 256
@@ -24,24 +29,29 @@ type logger struct {
 
 	out io.Writer
 
-	Level           Level
-	jsonMode        bool
+	// level, jsonMode, IncludeTime, newLine, and CallerDepth are accessed
+	// atomically so they can be reconfigured while other goroutines log
+	level           atomic.Int32
+	jsonMode        atomic.Bool
 	applicationName string
 	syslogHost      string
 
 	// logFields LogFields
 
-	IncludeTime     bool
+	IncludeTime     atomic.Bool
 	TimestampFormat TimestampFormat
-	newLine         bool
+	newLine         atomic.Bool
 	// mu serializes writes to out; it is a pointer so copies of the
 	// logger (e.g. from WithContext) share the same lock for a shared writer
 	mu *sync.Mutex
+	// writeErr records the most recent error returned by the output
+	// writer; guarded by mu
+	writeErr *error
 
 	// A sync.Pool to handle re-usable buffers to reduce allocations.
 	// bufferPool     sync.Pool
 	// fixedSlicePool sync.Pool
-	CallerDepth int
+	CallerDepth atomic.Int32
 }
 
 type TimestampFormat int
@@ -66,14 +76,15 @@ func NewGlobalIQLogger() *logger {
 func NewIQLogger(jsonMode bool) *logger {
 	logger := &logger{
 		// logFields:       NewLogFields(),
-		CallerDepth:     0, // >0 = Capture callers
-		IncludeTime:     true,
 		TimestampFormat: TimestampFormatRFC3339Milli,
-		newLine:         true,
 		out:             io.Discard,
-		Level:           LevelInfo,
 		mu:              &sync.Mutex{},
+		writeErr:        new(error),
 	}
+	logger.SetCallerDepth(0) // >0 = Capture callers
+	logger.IncludeTime.Store(true)
+	logger.newLine.Store(true)
+	logger.SetLevel(LevelInfo)
 	logger.SetWriter(os.Stderr)
 	debugStr := os.Getenv("IQLOG_DEBUG")
 	if b, _ := strconv.ParseBool(debugStr); b {
@@ -129,6 +140,34 @@ func Init(applicationName string, syslogHost string, debugMode bool) {
 	SetSyslogHost(syslogHost)
 }
 
+// writeLocked writes a completed line to the output writer under the
+// logger's lock, recording any writer error for LastWriteError.
+func (l *logger) writeLocked(line []byte) {
+	l.mu.Lock()
+	_, err := l.out.Write(line)
+	if err != nil && l.writeErr != nil {
+		*l.writeErr = err
+	}
+	l.mu.Unlock()
+}
+
+// LastWriteError returns the most recent error returned by the logger's
+// output writer, or nil if all writes have succeeded. Errors from
+// asynchronous writers are reported by their own fallback writes.
+func (l *logger) LastWriteError() error {
+	if l.writeErr == nil {
+		return nil
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return *l.writeErr
+}
+
+// LastWriteError returns the most recent write error of the GlobalLogger.
+func LastWriteError() error {
+	return GlobalLogger.LastWriteError()
+}
+
 // WithGroup returns a new Handler with the given group appended to
 // the receiver's existing groups.
 // Implementation is a no-op here:
@@ -139,20 +178,22 @@ func (l *logger) WithGroup(name string) *logger {
 func (l *logger) copy() *logger {
 	// copy fields individually, sharing the mutex pointer so copies
 	// serialize writes against the original logger
-	return &logger{
+	nl := &logger{
 		ctx:             l.ctx,
 		err:             l.err,
 		out:             l.out,
-		Level:           l.Level,
-		jsonMode:        l.jsonMode,
+		writeErr:        l.writeErr,
 		applicationName: l.applicationName,
 		syslogHost:      l.syslogHost,
-		IncludeTime:     l.IncludeTime,
 		TimestampFormat: l.TimestampFormat,
-		newLine:         l.newLine,
 		mu:              l.mu,
-		CallerDepth:     l.CallerDepth,
 	}
+	nl.jsonMode.Store(l.jsonMode.Load())
+	nl.IncludeTime.Store(l.IncludeTime.Load())
+	nl.newLine.Store(l.newLine.Load())
+	nl.CallerDepth.Store(l.CallerDepth.Load())
+	nl.SetLevel(l.Level())
+	return nl
 }
 
 // Add a context to the log entry.
@@ -169,13 +210,13 @@ func WithContext(ctx context.Context) *logger {
 // 	lb := &preallocLine{
 // 		logger: l,
 // 	}
-// 	if l.jsonMode {
+// 	if l.jsonMode.Load() {
 // 		lb.output[0] = '{'
 // 		lb.bytesUsed++
 // 	}
 // 	lb.AddTime()
 
-// 	if lb.logger.jsonMode {
+// 	if lb.logger.jsonMode.Load() {
 // 		lb.writeFinalJSON(msg, args...)
 // 	} else {
 // 		lb.writeFinalConsole(msg, args...)
@@ -186,7 +227,7 @@ func WithContext(ctx context.Context) *logger {
 // 	lb := &preallocLine{
 // 		logger: l,
 // 	}
-// 	if l.jsonMode {
+// 	if l.jsonMode.Load() {
 // 		lb.output[0] = '{'
 // 		lb.bytesUsed++
 // 	}
@@ -195,7 +236,7 @@ func WithContext(ctx context.Context) *logger {
 // 	// TODO: use fmt.Appendf ?
 // 	str := fmt.Sprintf(format, args...)
 
-// 	if lb.logger.jsonMode {
+// 	if lb.logger.jsonMode.Load() {
 // 		lb.writeFinalJSON(str)
 // 	} else {
 // 		lb.writeFinalConsole(str)

@@ -58,17 +58,23 @@ Global helpers exist for every level: `Trace`, `Debug`, `Info`, `Warn`,
 `ErrorWith`, ...). The same methods are available on logger instances.
 
 Note: `Fatal`/`Panic` via the fluent `getWith` path log at the respective
-level but do not terminate the process. The dedicated
-`ByteSliceLineFatal`/`ByteSliceLinePanic` helpers (and
-`WithByteSliceLineFatal`/`WithByteSliceLinePanic`) call `os.Exit(1)` after
-the message has been written.
+level but do not terminate the process. The dedicated per-builder
+`...Fatal`/`...Panic` helpers (and their `With...` variants) call
+`os.Exit(1)` after the message has been written.
+
+The level can be changed at any time with `SetLevel(Level)` and read with
+the `Level()` method; level, JSON mode, timestamp inclusion, newline mode,
+and caller depth are stored atomically, so they can be reconfigured safely
+while other goroutines are logging.
 
 ### Output formats
 
 - **Console mode** (default): `LEVEL key=value ... message`, with optional
   ANSI colour for the level prefix and caller info. Colour is enabled
   automatically when stderr is a terminal (never on Windows) and can be
-  overridden with `SetUseColour(bool)`.
+  overridden with `SetUseColour(bool)`. Carriage returns and newlines
+  embedded in messages or values are escaped to `\r`/`\n`, so untrusted
+  input cannot forge additional console log lines.
 - **JSON mode**: one JSON object per line, e.g.
   `{"time":"...","level":"info","user":"alice","message":"request handled"}`.
   Enabled via `NewIQLogger(true)` or `SetJSONMode(true)`. All string field
@@ -97,18 +103,29 @@ With `SetCallerDepth(n)` (n > 0), each line includes the calling function
 and file:line, resolved through an optimised runtime-based lookup with a
 PC cache (much cheaper than `runtime.Caller`). The main module path prefix
 is trimmed from function names for readability. The global logger created
-by `Init`/`NewGlobalIQLogger` enables caller capture at depth 1.
+by `Init`/`NewGlobalIQLogger` enables caller capture at depth 1. All line
+builders (including `preallocLine`, `preallocLine2`, and `bufferLineNL`)
+emit `func` and `file` fields when caller capture is enabled.
 
 ### Output writers
 
 - `SetWriter(w io.Writer)` — synchronous writes (default: stderr).
   Writes are serialised with an internal mutex.
 - `SetAsyncWriter(w io.Writer)` — writes go through a buffered channel and
-  a background goroutine; `Flush()` drains and re-creates the async writer.
+  a background goroutine; `Flush()` blocks until everything queued so far
+  has been written (safe to call while other goroutines are logging).
 - `SetRingbufferWriter(w io.Writer)` — writes are enqueued on a lock-free
   MPMC ring buffer (capacity 10,000) consumed by a background goroutine.
   If the ring is full the write falls back to a synchronous write, so no
   log lines are dropped.
+
+Replacing the writer (via any `Set*Writer` call) closes the previous
+async/ring wrapper: queued lines are drained to its underlying writer and
+its background goroutine exits, so writers can be swapped repeatedly
+without leaking goroutines.
+
+Write errors from the output writer are recorded and can be inspected with
+`LastWriteError()` (also available as a method on logger instances).
 
 ### Syslog (non-Windows)
 
@@ -123,7 +140,9 @@ and the current writer is kept. On Windows, `SetSyslogHost` is a no-op.
 - `SetApplicationName(string)` — used as the syslog tag
 - `SetDebugMode(bool)` — toggles between `LevelDebug` and `LevelInfo`
 - `SetJSONMode(bool)`, `SetNewLine(bool)`, `SetUseColour(bool)`
+- `SetLevel(Level)` — set the minimum level directly
 - `SetCallerDepth(int)`, `SetWriter(io.Writer)`, `GetWriter()`
+- `LastWriteError()` — most recent output writer error, if any
 - `Flush()` — flush the async writer, if one is in use
 - Environment: setting `IQLOG_DEBUG=true` enables debug level for newly
   created loggers.
@@ -156,7 +175,9 @@ is the primary, recommended path. Benchmarks live in `iqlog_test.go`.
 - `WithGroup` and slog-style attribute grouping are currently no-ops; the
   `log/slog` handler integration is not yet enabled.
 - Fixed-buffer strategies (`preallocLine`, `preallocLine2`) truncate lines
-  longer than 1024 bytes.
+  longer than 1024 bytes. In JSON mode a truncated line is repaired so the
+  emitted record is still valid JSON (trailing partial fields may be
+  dropped).
 - Fields in `LogWithFields`/`WithFields` are stringified with `%v`.
 - Syslog output uses UDP only and is unavailable on Windows.
 

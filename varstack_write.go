@@ -6,6 +6,17 @@ import (
 	"time"
 )
 
+// finish writes the assembled line under the logger mutex (serializing with
+// all other builders) and returns the varStack to the pool.
+func (vs *varStack) finish(output []byte) {
+	if !vs.jsonMode {
+		output = sanitizeConsoleLine(output)
+	}
+	vs.logger.writeLocked(output)
+
+	varStackPool.Put(vs)
+}
+
 func (vs *varStack) writeFinalConsole(msg string, args ...interface{}) {
 	var output []byte
 
@@ -15,7 +26,7 @@ func (vs *varStack) writeFinalConsole(msg string, args ...interface{}) {
 	}
 
 	// Add level prefix
-	if useColour {
+	if useColour.Load() {
 		output = append(output, ansiColourPrefix(vs.level)...)
 	} else {
 		output = append(output, levelPrefix(vs.level)...)
@@ -90,9 +101,7 @@ func (vs *varStack) writeFinalConsole(msg string, args ...interface{}) {
 	output = append(output, '\n')
 
 	// Write to output
-	vs.out.Write(output)
-
-	varStackPool.Put(vs)
+	vs.finish(output)
 }
 
 func (vs *varStack) writeFinalConsoleF(format string, args ...interface{}) {
@@ -104,7 +113,7 @@ func (vs *varStack) writeFinalConsoleF(format string, args ...interface{}) {
 	}
 
 	// Add level prefix
-	if useColour {
+	if useColour.Load() {
 		output = append(output, ansiColourPrefix(vs.level)...)
 	} else {
 		output = append(output, levelPrefix(vs.level)...)
@@ -149,9 +158,7 @@ func (vs *varStack) writeFinalConsoleF(format string, args ...interface{}) {
 	output = append(output, '\n')
 
 	// Write to output
-	vs.out.Write(output)
-
-	varStackPool.Put(vs)
+	vs.finish(output)
 }
 
 func (vs *varStack) writeFinalJSON(msg string, args ...interface{}) {
@@ -243,9 +250,7 @@ func (vs *varStack) writeFinalJSON(msg string, args ...interface{}) {
 	output = append(output, []byte("\"}\n")...)
 
 	// Write to output
-	vs.out.Write(output)
-
-	varStackPool.Put(vs)
+	vs.finish(output)
 }
 
 func (vs *varStack) writeFinalJSONF(format string, args ...interface{}) {
@@ -310,9 +315,7 @@ func (vs *varStack) writeFinalJSONF(format string, args ...interface{}) {
 	output = append(output, []byte("\"}\n")...)
 
 	// Write to output
-	vs.out.Write(output)
-
-	varStackPool.Put(vs)
+	vs.finish(output)
 }
 
 // func (vs *varStack) AddCallers() {
@@ -364,7 +367,7 @@ func (vs *varStack) writeFinalJSONF(format string, args ...interface{}) {
 // 			vs.output = append(vs.output, []byte(`"`)...)
 // 		} else {
 // 			// console mode
-// 			if useColour {
+// 			if useColour.Load() {
 // 				vs.output = append(vs.output, []byte("\x1b[32m[")...)
 // 			} else {
 // 				vs.output = append(vs.output, []byte(`[`)...)
@@ -372,7 +375,7 @@ func (vs *varStack) writeFinalJSONF(format string, args ...interface{}) {
 // 			vs.output = append(vs.output, []byte(frame.Function)...)
 // 			vs.output = append(vs.output, []byte(` `)...)
 // 			vs.output = append(vs.output, []byte(frame.File[fileOffset2ndLast:])...)
-// 			if useColour {
+// 			if useColour.Load() {
 // 				vs.output = append(vs.output, []byte("]\x1b[0m ")...)
 // 			} else {
 // 				vs.output = append(vs.output, []byte(`] `)...)

@@ -79,6 +79,31 @@ func safeStringCopy(dst *[maxStringLen]byte, s string) int {
 	return n
 }
 
+// sanitizeConsoleLine escapes any CR/LF embedded in a console-mode line
+// (excluding the trailing newline) so logged values cannot forge additional
+// log lines. Returns the input unchanged when no escaping is needed.
+func sanitizeConsoleLine(line []byte) []byte {
+	end := len(line)
+	if end > 0 && line[end-1] == '\n' {
+		end--
+	}
+	if bytes.IndexByte(line[:end], '\n') < 0 && bytes.IndexByte(line[:end], '\r') < 0 {
+		return line
+	}
+	out := make([]byte, 0, len(line)+8)
+	for i := 0; i < end; i++ {
+		switch line[i] {
+		case '\n':
+			out = append(out, '\\', 'n')
+		case '\r':
+			out = append(out, '\\', 'r')
+		default:
+			out = append(out, line[i])
+		}
+	}
+	return append(out, line[end:]...)
+}
+
 func safeOutputCopy(dst []byte, offset int, s string) int {
 	n := len(s)
 	if n > maxLineLen-offset {

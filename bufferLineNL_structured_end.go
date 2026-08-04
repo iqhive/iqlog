@@ -2,8 +2,30 @@ package iqlog
 
 import (
 	"fmt"
+	"os"
 	"strconv"
 )
+
+// finish writes the assembled line under the logger mutex (serializing with
+// all other builders), returns the line to the pool, and honors any pending
+// fatal/panic exit after the record has been written.
+func (bl *bufferLineNL) finish() {
+	exit := bl.exitAfterWrite
+
+	line := bl.buffer.Bytes()
+	if !bl.jsonMode {
+		line = sanitizeConsoleLine(line)
+	}
+
+	bl.logger.writeLocked(line)
+
+	bl.exitAfterWrite = false
+	bufferLineNLPool.Put(bl)
+
+	if exit {
+		os.Exit(1)
+	}
+}
 
 func (bl *bufferLineNL) Msg(msg string) {
 	if bl.buffer == nil {
@@ -67,13 +89,11 @@ func (bl *bufferLineNL) writeFinalConsole(msg string, args ...interface{}) {
 			bl.buffer.WriteString(fmt.Sprintf("%v", thisarg))
 		}
 	}
-	// if bl.logger.newLine {
+	// if bl.logger.newLine.Load() {
 	bl.buffer.WriteByte('\n')
 	// }
 
-	bl.out.Write(bl.buffer.Bytes())
-
-	bufferLineNLPool.Put(bl)
+	bl.finish()
 }
 
 func (bl *bufferLineNL) writeFinalConsoleF(format string, args ...interface{}) {
@@ -91,12 +111,11 @@ func (bl *bufferLineNL) writeFinalConsoleF(format string, args ...interface{}) {
 	// bl.buffer.Write(bia.Bytes[:bia.Index])
 	// biapool.Put(bia)
 
-	// if bl.logger.newLine {
+	// if bl.logger.newLine.Load() {
 	bl.buffer.WriteByte('\n')
 	// }
 
-	bl.out.Write(bl.buffer.Bytes())
-	bufferLineNLPool.Put(bl)
+	bl.finish()
 }
 
 func (bl *bufferLineNL) writeFinalJSON(msg string, args ...interface{}) {
@@ -133,15 +152,13 @@ func (bl *bufferLineNL) writeFinalJSON(msg string, args ...interface{}) {
 		}
 	}
 
-	// if bl.logger.newLine {
+	// if bl.logger.newLine.Load() {
 	bl.buffer.Write([]byte("\"}\n"))
 	// } else {
 	// 	bl.buffer.Write([]byte("\"}"))
 	// }
 
-	bl.out.Write(bl.buffer.Bytes())
-
-	bufferLineNLPool.Put(bl)
+	bl.finish()
 }
 
 func (bl *bufferLineNL) writeFinalJSONF(format string, args ...interface{}) {
@@ -153,12 +170,11 @@ func (bl *bufferLineNL) writeFinalJSONF(format string, args ...interface{}) {
 	bl.buffer.WriteString(jsonEscapedString(unsafeString(ba.Bytes)))
 	baPool.Put(ba)
 
-	// if bl.logger.newLine {
+	// if bl.logger.newLine.Load() {
 	bl.buffer.Write([]byte("\"}\n"))
 	// } else {
 	// 	bl.buffer.Write([]byte("\"}"))
 	// }
 
-	bl.out.Write(bl.buffer.Bytes())
-	bufferLineNLPool.Put(bl)
+	bl.finish()
 }

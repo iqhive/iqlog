@@ -14,11 +14,11 @@ type bufferLine struct {
 }
 
 func (l *logger) BufferLineTrace(msg string, args ...interface{}) {
-	if l.Level > LevelTrace {
+	if l.Level() > LevelTrace {
 		return
 	}
 	bl := emptybufferLine(l)
-	if bl.logger.jsonMode {
+	if bl.logger.jsonMode.Load() {
 		bl.writeInitialJSON(LevelTrace)
 		bl.writeFinalJSON(msg, args...)
 	} else {
@@ -28,7 +28,7 @@ func (l *logger) BufferLineTrace(msg string, args ...interface{}) {
 	return
 }
 func (l *logger) BufferLineTracef(format string, args ...interface{}) {
-	if l.Level > LevelTrace {
+	if l.Level() > LevelTrace {
 		return
 	}
 	msg := fmt.Sprintf(format, args...)
@@ -36,11 +36,11 @@ func (l *logger) BufferLineTracef(format string, args ...interface{}) {
 }
 
 func (l *logger) BufferLineDebug(msg string, args ...interface{}) {
-	if l.Level > LevelDebug {
+	if l.Level() > LevelDebug {
 		return
 	}
 	bl := emptybufferLine(l)
-	if bl.logger.jsonMode {
+	if bl.logger.jsonMode.Load() {
 		bl.writeInitialJSON(LevelDebug)
 		bl.writeFinalJSON(msg, args...)
 	} else {
@@ -50,7 +50,7 @@ func (l *logger) BufferLineDebug(msg string, args ...interface{}) {
 	return
 }
 func (l *logger) BufferLineDebugf(format string, args ...interface{}) {
-	if l.Level > LevelDebug {
+	if l.Level() > LevelDebug {
 		return
 	}
 	msg := fmt.Sprintf(format, args...)
@@ -58,11 +58,11 @@ func (l *logger) BufferLineDebugf(format string, args ...interface{}) {
 }
 
 func (l *logger) BufferLineInfo(msg string, args ...interface{}) {
-	if l.Level > LevelInfo {
+	if l.Level() > LevelInfo {
 		return
 	}
 	bl := emptybufferLine(l)
-	if bl.logger.jsonMode {
+	if bl.logger.jsonMode.Load() {
 		bl.writeInitialJSON(LevelInfo)
 		bl.writeFinalJSON(msg, args...)
 	} else {
@@ -72,7 +72,7 @@ func (l *logger) BufferLineInfo(msg string, args ...interface{}) {
 	return
 }
 func (l *logger) BufferLineInfof(format string, args ...interface{}) {
-	if l.Level > LevelInfo {
+	if l.Level() > LevelInfo {
 		return
 	}
 	msg := fmt.Sprintf(format, args...)
@@ -80,11 +80,11 @@ func (l *logger) BufferLineInfof(format string, args ...interface{}) {
 }
 
 func (l *logger) BufferLinePrint(msg string, args ...interface{}) {
-	if l.Level > LevelPrint {
+	if l.Level() > LevelPrint {
 		return
 	}
 	bl := emptybufferLine(l)
-	if bl.logger.jsonMode {
+	if bl.logger.jsonMode.Load() {
 		bl.writeInitialJSON(LevelPrint)
 		bl.writeFinalJSON(msg, args...)
 	} else {
@@ -94,7 +94,7 @@ func (l *logger) BufferLinePrint(msg string, args ...interface{}) {
 	return
 }
 func (l *logger) BufferLinePrintf(format string, args ...interface{}) {
-	if l.Level > LevelPrint {
+	if l.Level() > LevelPrint {
 		return
 	}
 	msg := fmt.Sprintf(format, args...)
@@ -102,11 +102,11 @@ func (l *logger) BufferLinePrintf(format string, args ...interface{}) {
 }
 
 func (l *logger) BufferLineWarn(msg string, args ...interface{}) {
-	if l.Level > LevelWarn {
+	if l.Level() > LevelWarn {
 		return
 	}
 	bl := emptybufferLine(l)
-	if bl.logger.jsonMode {
+	if bl.logger.jsonMode.Load() {
 		bl.writeInitialJSON(LevelWarn)
 		bl.writeFinalJSON(msg, args...)
 	} else {
@@ -116,7 +116,7 @@ func (l *logger) BufferLineWarn(msg string, args ...interface{}) {
 	return
 }
 func (l *logger) BufferLineWarnf(format string, args ...interface{}) {
-	if l.Level > LevelWarn {
+	if l.Level() > LevelWarn {
 		return
 	}
 	msg := fmt.Sprintf(format, args...)
@@ -124,11 +124,11 @@ func (l *logger) BufferLineWarnf(format string, args ...interface{}) {
 }
 
 func (l *logger) BufferLineError(msg string, args ...interface{}) {
-	if l.Level > LevelError {
+	if l.Level() > LevelError {
 		return
 	}
 	bl := emptybufferLine(l)
-	if bl.logger.jsonMode {
+	if bl.logger.jsonMode.Load() {
 		bl.writeInitialJSON(LevelError)
 		bl.writeFinalJSON(msg, args...)
 	} else {
@@ -139,7 +139,7 @@ func (l *logger) BufferLineError(msg string, args ...interface{}) {
 }
 
 func (l *logger) BufferLineErrorf(format string, args ...interface{}) {
-	if l.Level > LevelError {
+	if l.Level() > LevelError {
 		return
 	}
 	msg := fmt.Sprintf(format, args...)
@@ -147,11 +147,11 @@ func (l *logger) BufferLineErrorf(format string, args ...interface{}) {
 }
 
 func (l *logger) BufferLinePanic(msg string, args ...interface{}) {
-	if l.Level > LevelPanic {
+	if l.Level() > LevelPanic {
 		return
 	}
 	bl := emptybufferLine(l)
-	if bl.logger.jsonMode {
+	if bl.logger.jsonMode.Load() {
 		bl.writeInitialJSON(LevelPanic)
 		bl.writeFinalJSON(msg, args...)
 	} else {
@@ -164,7 +164,7 @@ func (l *logger) BufferLinePanic(msg string, args ...interface{}) {
 }
 
 func (l *logger) BufferLinePanicf(format string, args ...interface{}) {
-	if l.Level > LevelPanic {
+	if l.Level() > LevelPanic {
 		return
 	}
 	msg := fmt.Sprintf(format, args...)
@@ -172,11 +172,11 @@ func (l *logger) BufferLinePanicf(format string, args ...interface{}) {
 }
 
 func (l *logger) BufferLineFatal(msg string, args ...interface{}) {
-	if l.Level > LevelFatal {
+	if l.Level() > LevelFatal {
 		return
 	}
 	bl := emptybufferLine(l)
-	if bl.logger.jsonMode {
+	if bl.logger.jsonMode.Load() {
 		bl.writeInitialJSON(LevelFatal)
 		bl.writeFinalJSON(msg, args...)
 	} else {
@@ -189,7 +189,7 @@ func (l *logger) BufferLineFatal(msg string, args ...interface{}) {
 }
 
 func (l *logger) BufferLineFatalf(format string, args ...interface{}) {
-	if l.Level > LevelFatal {
+	if l.Level() > LevelFatal {
 		return
 	}
 	msg := fmt.Sprintf(format, args...)
@@ -198,11 +198,11 @@ func (l *logger) BufferLineFatalf(format string, args ...interface{}) {
 
 // Log writes a log message at the level
 func (l *logger) BufferLineLog(level Level, msg string, args ...interface{}) {
-	if l.Level > level {
+	if l.Level() > level {
 		return
 	}
 	bl := emptybufferLine(l)
-	if bl.logger.jsonMode {
+	if bl.logger.jsonMode.Load() {
 		bl.writeInitialJSON(level)
 		bl.writeFinalJSON(msg, args...)
 	} else {
@@ -212,7 +212,7 @@ func (l *logger) BufferLineLog(level Level, msg string, args ...interface{}) {
 }
 
 func (l *logger) BufferLineLogf(level Level, format string, args ...interface{}) {
-	if l.Level > level {
+	if l.Level() > level {
 		return
 	}
 	msg := fmt.Sprintf(format, args...)
