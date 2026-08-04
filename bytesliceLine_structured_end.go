@@ -12,11 +12,14 @@ import (
 func (bsl *bytesliceLine) finish() {
 	exit := bsl.exitAfterWrite
 
+	line := bsl.output
+	if !bsl.jsonMode {
+		line = sanitizeConsoleLine(line)
+	}
+
 	// re-read the writer under the lock so a concurrent Flush() swap
 	// cannot leave us writing to a closed writer
-	bsl.logger.mu.Lock()
-	bsl.logger.out.Write(bsl.output)
-	bsl.logger.mu.Unlock()
+	bsl.logger.writeLocked(line)
 
 	bytesliceLinePool.Put(bsl)
 
@@ -88,7 +91,7 @@ func (bsl *bytesliceLine) writeFinalConsole(msg string, args ...interface{}) {
 			bsl.output = append(bsl.output, fmt.Sprintf("%v", thisarg)...)
 		}
 	}
-	// if bsl.logger.newLine {
+	// if bsl.logger.newLine.Load() {
 	bsl.output = append(bsl.output, '\n')
 	// }
 
@@ -109,7 +112,7 @@ func (bsl *bytesliceLine) writeFinalConsoleF(format string, args ...interface{})
 	bsl.output = append(bsl.output, bia.Bytes[:bia.Index]...)
 	biapool.Put(bia)
 
-	// if bsl.logger.newLine {
+	// if bsl.logger.newLine.Load() {
 	bsl.output = append(bsl.output, '\n')
 	// }
 
@@ -174,7 +177,7 @@ func (bsl *bytesliceLine) writeFinalJSONF(format string, args ...interface{}) {
 	// bsl.output = append(bsl.output, bia.Bytes[:bia.Index]...)
 	// biapool.Put(bia)
 
-	// if bsl.logger.newLine {
+	// if bsl.logger.newLine.Load() {
 	bsl.output = append(bsl.output, []byte("\"}\n")...)
 
 	bsl.finish()

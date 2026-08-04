@@ -2,8 +2,48 @@ package iqlog
 
 import (
 	"fmt"
+	"os"
 	"strconv"
 )
+
+// finish writes the assembled line under the logger mutex (serializing with
+// all other builders), returns the line to the pool, and honors any pending
+// fatal/panic exit after the record has been written.
+func (pal *preallocLine2) finish() {
+	exit := pal.exitAfterWrite
+
+	// a line that filled the fixed buffer may have lost its trailing newline
+	if pal.bytesUsed == maxLineLen && pal.output[pal.bytesUsed-1] != '\n' {
+		pal.output[pal.bytesUsed-1] = '\n'
+	}
+
+	line := pal.output[:pal.bytesUsed]
+	if !pal.jsonMode {
+		line = sanitizeConsoleLine(line)
+	}
+
+	pal.logger.writeLocked(line)
+
+	pal.exitAfterWrite = false
+	preallocLine2Pool.Put(pal)
+
+	if exit {
+		os.Exit(1)
+	}
+}
+
+// finishJSON closes the JSON object (repairing the record if it was
+// truncated by the fixed buffer) and writes it out.
+func (pal *preallocLine2) finishJSON() {
+	if pal.bytesUsed+3 <= maxLineLen {
+		pal.bytesUsed += copy(pal.output[pal.bytesUsed:], "\"}\n")
+	} else {
+		pal.bytesUsed = repairTruncatedJSONLine(pal.output, pal.bytesUsed, maxLineLen-1)
+		pal.output[pal.bytesUsed] = '\n'
+		pal.bytesUsed++
+	}
+	pal.finish()
+}
 
 func (pal *preallocLine2) Msg(msg string) {
 	if pal.output == nil {
@@ -73,9 +113,7 @@ func (pal *preallocLine2) writeFinalConsole(msg string, args ...interface{}) {
 	pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, "\n")
 	// }
 
-	pal.out.Write(pal.output[:pal.bytesUsed])
-
-	preallocLine2Pool.Put(pal)
+	pal.finish()
 }
 
 func (pal *preallocLine2) writeFinalConsoleF(format string, args ...interface{}) {
@@ -96,9 +134,7 @@ func (pal *preallocLine2) writeFinalConsoleF(format string, args ...interface{})
 	pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, "\n")
 	// }
 
-	pal.out.Write(pal.output[:pal.bytesUsed])
-
-	preallocLine2Pool.Put(pal)
+	pal.finish()
 }
 
 func (pal *preallocLine2) writeFinalJSON(msg string, args ...interface{}) {
@@ -135,15 +171,7 @@ func (pal *preallocLine2) writeFinalJSON(msg string, args ...interface{}) {
 		}
 	}
 
-	// if pal.logger.newLine {
-	pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, "\"}\n")
-	// } else {
-	// 	pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, "\"}")
-	// }
-
-	pal.out.Write(pal.output[:pal.bytesUsed])
-
-	preallocLine2Pool.Put(pal)
+	pal.finishJSON()
 }
 
 func (pal *preallocLine2) writeFinalJSONF(format string, args ...interface{}) {
@@ -162,13 +190,5 @@ func (pal *preallocLine2) writeFinalJSONF(format string, args ...interface{}) {
 	pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, jsonEscapedString(unsafeString(bia.Bytes[:bia.Index])))
 	biapool.Put(bia)
 
-	// if pal.logger.newLine {
-	pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, "\"}\n")
-	// } else {
-	// 	pal.bytesUsed += safeOutputCopy(pal.output, pal.bytesUsed, "\"}")
-	// }
-
-	pal.out.Write(pal.output[:pal.bytesUsed])
-
-	preallocLine2Pool.Put(pal)
+	pal.finishJSON()
 }

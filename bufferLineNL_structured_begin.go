@@ -1,7 +1,6 @@
 package iqlog
 
 import (
-	"os"
 	"time"
 )
 
@@ -10,10 +9,12 @@ var noopbufferLineNL = &bufferLineNL{}
 func emptybufferLineNL(l *logger) *bufferLineNL {
 	bl := bufferLineNLPool.Get().(*bufferLineNL)
 	bl.buffer.Reset()
-	bl.out = l.out
-	bl.includeTime = l.IncludeTime
-	bl.jsonMode = l.jsonMode
-	bl.captureCaller = l.CallerDepth
+	bl.logger = l
+	bl.includeTime = l.IncludeTime.Load()
+	bl.jsonMode = l.jsonMode.Load()
+	bl.captureCaller = int(l.CallerDepth.Load())
+	bl.exitAfterWrite = false
+	bl.callerData.callerFuncLen = 0
 
 	return bl
 }
@@ -60,7 +61,7 @@ func (bl *bufferLineNL) AddCallers() {
 		bl.buffer.Write([]byte(`"`))
 	} else {
 		// console mode
-		if useColour {
+		if useColour.Load() {
 			bl.buffer.Write([]byte("\x1b[32m["))
 		} else {
 			bl.buffer.Write([]byte(`[`))
@@ -68,7 +69,7 @@ func (bl *bufferLineNL) AddCallers() {
 		bl.buffer.Write([]byte(bl.callerData.callerFunc[:bl.callerData.callerFuncLen]))
 		bl.buffer.Write([]byte(` `))
 		bl.buffer.Write([]byte(bl.callerData.callerFile[:bl.callerData.callerFileLen]))
-		if useColour {
+		if useColour.Load() {
 			bl.buffer.Write([]byte("]\x1b[0m "))
 		} else {
 			bl.buffer.Write([]byte(`] `))
@@ -80,7 +81,7 @@ func (bl *bufferLineNL) writeInitialConsole(level Level) {
 	if bl.includeTime {
 		AddTimeConsoleToBuffer(time.Now(), bl.buffer)
 	}
-	if useColour {
+	if useColour.Load() {
 		bl.buffer.Write(ansiColourPrefix(level))
 	} else {
 		bl.buffer.Write(levelPrefix(level))
@@ -140,10 +141,15 @@ func (bl *bufferLineNL) AddTime() {
 }
 
 func (l *logger) WithBufferLineNLTrace() *bufferLineNL {
-	if l.Level > LevelTrace {
+	if l.Level() > LevelTrace {
 		return noopbufferLineNL
 	}
 	bl := emptybufferLineNL(l)
+	if d := int(l.CallerDepth.Load()); d > 0 {
+		var pc PC
+		caller1(d+1, &pc, 1, 1)
+		fillCallerData(pc, &bl.callerData)
+	}
 	if bl.jsonMode {
 		bl.writeInitialJSON(LevelTrace)
 	} else {
@@ -153,10 +159,15 @@ func (l *logger) WithBufferLineNLTrace() *bufferLineNL {
 }
 
 func (l *logger) WithBufferLineNLDebug() *bufferLineNL {
-	if l.Level > LevelDebug {
+	if l.Level() > LevelDebug {
 		return noopbufferLineNL
 	}
 	bl := emptybufferLineNL(l)
+	if d := int(l.CallerDepth.Load()); d > 0 {
+		var pc PC
+		caller1(d+1, &pc, 1, 1)
+		fillCallerData(pc, &bl.callerData)
+	}
 	if bl.jsonMode {
 		bl.writeInitialJSON(LevelDebug)
 	} else {
@@ -166,10 +177,15 @@ func (l *logger) WithBufferLineNLDebug() *bufferLineNL {
 }
 
 func (l *logger) WithBufferLineNLInfo() *bufferLineNL {
-	if l.Level > LevelInfo {
+	if l.Level() > LevelInfo {
 		return noopbufferLineNL
 	}
 	bl := emptybufferLineNL(l)
+	if d := int(l.CallerDepth.Load()); d > 0 {
+		var pc PC
+		caller1(d+1, &pc, 1, 1)
+		fillCallerData(pc, &bl.callerData)
+	}
 	if bl.jsonMode {
 		bl.writeInitialJSON(LevelInfo)
 	} else {
@@ -179,10 +195,15 @@ func (l *logger) WithBufferLineNLInfo() *bufferLineNL {
 }
 
 func (l *logger) WithBufferLineNLWarn() *bufferLineNL {
-	if l.Level > LevelWarn {
+	if l.Level() > LevelWarn {
 		return noopbufferLineNL
 	}
 	bl := emptybufferLineNL(l)
+	if d := int(l.CallerDepth.Load()); d > 0 {
+		var pc PC
+		caller1(d+1, &pc, 1, 1)
+		fillCallerData(pc, &bl.callerData)
+	}
 	if bl.jsonMode {
 		bl.writeInitialJSON(LevelWarn)
 	} else {
@@ -192,10 +213,15 @@ func (l *logger) WithBufferLineNLWarn() *bufferLineNL {
 }
 
 func (l *logger) WithBufferLineNLError() *bufferLineNL {
-	if l.Level > LevelError {
+	if l.Level() > LevelError {
 		return noopbufferLineNL
 	}
 	bl := emptybufferLineNL(l)
+	if d := int(l.CallerDepth.Load()); d > 0 {
+		var pc PC
+		caller1(d+1, &pc, 1, 1)
+		fillCallerData(pc, &bl.callerData)
+	}
 	if bl.jsonMode {
 		bl.writeInitialJSON(LevelError)
 	} else {
@@ -205,31 +231,41 @@ func (l *logger) WithBufferLineNLError() *bufferLineNL {
 }
 
 func (l *logger) WithBufferLineNLPanic() *bufferLineNL {
-	if l.Level > LevelPanic {
+	if l.Level() > LevelPanic {
 		return noopbufferLineNL
 	}
 	bl := emptybufferLineNL(l)
+	if d := int(l.CallerDepth.Load()); d > 0 {
+		var pc PC
+		caller1(d+1, &pc, 1, 1)
+		fillCallerData(pc, &bl.callerData)
+	}
 	if bl.jsonMode {
 		bl.writeInitialJSON(LevelPanic)
 	} else {
 		bl.writeInitialConsole(LevelPanic)
 	}
-	// bl.logger.Flush()
-	os.Exit(1)
+	// exit after the final write so the record is not lost
+	bl.exitAfterWrite = true
 	return bl
 }
 
 func (l *logger) WithBufferLineNLFatal() *bufferLineNL {
-	if l.Level > LevelFatal {
+	if l.Level() > LevelFatal {
 		return noopbufferLineNL
 	}
 	bl := emptybufferLineNL(l)
+	if d := int(l.CallerDepth.Load()); d > 0 {
+		var pc PC
+		caller1(d+1, &pc, 1, 1)
+		fillCallerData(pc, &bl.callerData)
+	}
 	if bl.jsonMode {
 		bl.writeInitialJSON(LevelFatal)
 	} else {
 		bl.writeInitialConsole(LevelFatal)
 	}
-	// bl.logger.Flush()
-	os.Exit(1)
+	// exit after the final write so the record is not lost
+	bl.exitAfterWrite = true
 	return bl
 }

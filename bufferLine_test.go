@@ -11,7 +11,7 @@ func TestBufferLineConsoleMsg(t *testing.T) {
 	logger := NewIQLogger(false)
 	logger.SetWriter(buf)
 	logger.SetDebugMode(true)
-	logger.IncludeTime = false
+	logger.IncludeTime.Store(false)
 	logger.WithBufferLineInfo().Msg("Test message")
 	logOutput := buf.String()
 
@@ -27,7 +27,7 @@ func TestBufferLineConsoleMsgWithVars(t *testing.T) {
 	logger := NewIQLogger(false)
 	logger.SetWriter(buf)
 	logger.SetDebugMode(true)
-	logger.IncludeTime = false
+	logger.IncludeTime.Store(false)
 	logger.WithBufferLineInfo().Str("string", "value").Int("int", 42).Float32("float", 3.14).Msg("Test message")
 	logOutput := buf.String()
 
@@ -43,7 +43,7 @@ func TestBufferLineConsoleMsgWithTimestamp(t *testing.T) {
 	logger := NewIQLogger(false)
 	logger.SetWriter(buf)
 	logger.SetDebugMode(true)
-	logger.IncludeTime = true
+	logger.IncludeTime.Store(true)
 	logger.WithBufferLineInfo().Msg("Test message")
 	logOutput := buf.String()
 
@@ -63,7 +63,7 @@ func TestBufferLineConsoleMsgWithVarsTimestamp(t *testing.T) {
 	logger := NewIQLogger(false)
 	logger.SetWriter(buf)
 	logger.SetDebugMode(true)
-	logger.IncludeTime = true
+	logger.IncludeTime.Store(true)
 	logger.WithBufferLineInfo().Str("string", "value").Int("int", 42).Float32("float", 3.14).Msg("Test message")
 	logOutput := buf.String()
 
@@ -84,7 +84,7 @@ func TestBufferLineConsoleMsgf(t *testing.T) {
 	logger := NewIQLogger(false)
 	logger.SetWriter(buf)
 	logger.SetDebugMode(true)
-	logger.IncludeTime = false
+	logger.IncludeTime.Store(false)
 	logger.WithBufferLineInfo().Msgf("Test message %d %s %f", 42, "string", 3.14)
 	logOutput := buf.String()
 	expected := "INFO Test message 42 string 3.140000\n"
@@ -98,7 +98,7 @@ func TestBufferLineConsoleMsgfWithVars(t *testing.T) {
 	logger := NewIQLogger(false)
 	logger.SetWriter(buf)
 	logger.SetDebugMode(true)
-	logger.IncludeTime = true
+	logger.IncludeTime.Store(true)
 	logger.WithBufferLineInfo().Msgf("Test message %d %s %f", 42, "string", 3.14)
 	logOutput := buf.String()
 
@@ -115,7 +115,7 @@ func TestBufferLineConsoleMsgfTimestamp(t *testing.T) {
 	logger := NewIQLogger(false)
 	logger.SetWriter(buf)
 	logger.SetDebugMode(true)
-	logger.IncludeTime = true
+	logger.IncludeTime.Store(true)
 	logger.WithBufferLineInfo().Msgf("Test message %d %s %f", 42, "string", 3.14)
 	logOutput := buf.String()
 
@@ -132,7 +132,7 @@ func TestBufferLineConsoleMsgfVarsTimestamp(t *testing.T) {
 	logger := NewIQLogger(false)
 	logger.SetWriter(buf)
 	logger.SetDebugMode(true)
-	logger.IncludeTime = true
+	logger.IncludeTime.Store(true)
 	logger.WithBufferLineInfo().Msgf("Test message %d %s %f", 42, "string", 3.14)
 	logOutput := buf.String()
 
@@ -149,7 +149,7 @@ func TestBufferLineJSONMsg(t *testing.T) {
 	logger := NewIQLogger(true)
 	logger.SetWriter(buf)
 	logger.SetDebugMode(true)
-	logger.IncludeTime = false
+	logger.IncludeTime.Store(false)
 	logger.WithBufferLineInfo().Msg("Test message")
 	logOutput := buf.String()
 	expectedRegexStr := `^\{"level":"info","message":"Test message"\}\n$`
@@ -164,7 +164,7 @@ func TestBufferLineJSONMsgWithVars(t *testing.T) {
 	logger := NewIQLogger(true)
 	logger.SetWriter(buf)
 	logger.SetDebugMode(true)
-	logger.IncludeTime = false
+	logger.IncludeTime.Store(false)
 	logger.WithBufferLineInfo().Str("string", "value").Int("int", 42).Float32("float", 3.14).Msg("Test message")
 	logOutput := buf.String()
 	expectedRegexStr := `^\{"level":"info","string":"value","int":42,"float":3.140000,"message":"Test message"\}\n$`
@@ -179,7 +179,7 @@ func TestBufferLineJSONMsgWithTimestamp(t *testing.T) {
 	logger := NewIQLogger(true)
 	logger.SetWriter(buf)
 	logger.SetDebugMode(true)
-	logger.IncludeTime = true
+	logger.IncludeTime.Store(true)
 	logger.WithBufferLineInfo().Msg("Test message")
 	logOutput := buf.String()
 	expectedRegexStr := `^\{"time":"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}","level":"info","message":"Test message"\}\n$`
@@ -194,7 +194,7 @@ func TestBufferLineJSONMsgWithVarsTimestamp(t *testing.T) {
 	logger := NewIQLogger(true)
 	logger.SetWriter(buf)
 	logger.SetDebugMode(true)
-	logger.IncludeTime = true
+	logger.IncludeTime.Store(true)
 	logger.WithBufferLineInfo().Str("string", "value").Int("int", 42).Float32("float", 3.14).Msg("Test message")
 	logOutput := buf.String()
 	expectedRegexStr := `^\{"time":"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}","level":"info","string":"value","int":42,"float":3.140000,"message":"Test message"\}\n$`
@@ -209,7 +209,7 @@ func TestBufferLineJSONMsgf(t *testing.T) {
 	logger := NewIQLogger(true)
 	logger.SetWriter(buf)
 	logger.SetDebugMode(true)
-	logger.IncludeTime = false
+	logger.IncludeTime.Store(false)
 	logger.WithBufferLineInfo().Msgf("Test message %d %s %f", 42, "string", 3.14)
 	logOutput := buf.String()
 	expectedRegexStr := `^\{"level":"info","message":"Test message 42 string 3.140000"\}\n$`
@@ -224,7 +224,7 @@ func TestBufferLineJSONMsgWithVarf(t *testing.T) {
 	logger := NewIQLogger(true)
 	logger.SetWriter(buf)
 	logger.SetDebugMode(true)
-	logger.IncludeTime = false
+	logger.IncludeTime.Store(false)
 	logger.WithBufferLineInfo().Str("string", "value").Int("int", 42).Float32("float", 3.14).Msgf("Test message %d %s %f", 42, "string", 3.14)
 	logOutput := buf.String()
 	expectedRegexStr := `^\{"level":"info","string":"value","int":42,"float":3.140000,"message":"Test message 42 string 3.140000"\}\n$`
@@ -239,7 +239,7 @@ func TestBufferLineJSONMsgWithTimestampf(t *testing.T) {
 	logger := NewIQLogger(true)
 	logger.SetWriter(buf)
 	logger.SetDebugMode(true)
-	logger.IncludeTime = true
+	logger.IncludeTime.Store(true)
 	logger.WithBufferLineInfo().Msgf("Test message %d %s %f", 42, "string", 3.14)
 	logOutput := buf.String()
 	expectedRegexStr := `^\{"time":"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}","level":"info","message":"Test message 42 string 3.140000"\}\n$`
@@ -254,7 +254,7 @@ func TestBufferLineJSONMsgWithVarsTimestampf(t *testing.T) {
 	logger := NewIQLogger(true)
 	logger.SetWriter(buf)
 	logger.SetDebugMode(true)
-	logger.IncludeTime = true
+	logger.IncludeTime.Store(true)
 	logger.WithBufferLineInfo().Str("string", "value").Int("int", 42).Float32("float", 3.14).Msgf("Test message %d %s %f", 42, "string", 3.14)
 	logOutput := buf.String()
 	expectedRegexStr := `^\{"time":"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}","level":"info","string":"value","int":42,"float":3.140000,"message":"Test message 42 string 3.140000"\}\n$`

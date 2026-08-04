@@ -18,7 +18,7 @@ package iqlog
 // 	}
 // 	l.callerData = callerData
 
-// 	if l.jsonMode {
+// 	if l.jsonMode.Load() {
 // 		l.writeInitialJSON(level)
 // 	} else {
 // 		l.writeInitialConsole(level)
@@ -29,16 +29,16 @@ package iqlog
 
 func (l *logger) getWith(level Level) *bytesliceLine {
 	// Use the receiver logger instance, not GlobalLogger
-	if l.Level > level {
+	if l.Level() > level {
 		return noopbytesliceLine
 	}
 	bl := emptybytesliceLine(l)
 
 	callerData := callerData{}
-	if l.CallerDepth > 0 {
+	if int(l.CallerDepth.Load()) > 0 {
 		var pc PC
 		// +1 caller depth for the caller of the caller
-		caller1(l.CallerDepth+1, &pc, 1, 1)
+		caller1(int(l.CallerDepth.Load())+1, &pc, 1, 1)
 		fillCallerData(pc, &callerData)
 	}
 	bl.callerData = callerData

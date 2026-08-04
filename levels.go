@@ -14,3 +14,19 @@ const (
 	LevelPanic   Level = 9
 	LevelFatal   Level = 10
 )
+
+// Level returns the logger's current minimum level.
+func (l *logger) Level() Level {
+	return Level(l.level.Load())
+}
+
+// SetLevel sets the logger's minimum level. Safe to call while other
+// goroutines are logging.
+func (l *logger) SetLevel(level Level) {
+	l.level.Store(int32(level))
+}
+
+// SetLevel sets the GlobalLogger's minimum level.
+func SetLevel(level Level) {
+	GlobalLogger.SetLevel(level)
+}

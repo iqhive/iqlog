@@ -16,7 +16,7 @@ type bytesliceLine struct {
 }
 
 func (l *logger) ByteSliceLineTrace(msg string, args ...interface{}) {
-	if l.Level > LevelTrace {
+	if l.Level() > LevelTrace {
 		return
 	}
 	sbl := emptybytesliceLine(l)
@@ -30,7 +30,7 @@ func (l *logger) ByteSliceLineTrace(msg string, args ...interface{}) {
 	return
 }
 func (l *logger) ByteSliceLineTracef(format string, args ...interface{}) {
-	if l.Level > LevelTrace {
+	if l.Level() > LevelTrace {
 		return
 	}
 	msg := fmt.Sprintf(format, args...)
@@ -38,7 +38,7 @@ func (l *logger) ByteSliceLineTracef(format string, args ...interface{}) {
 }
 
 func (l *logger) ByteSliceLineDebug(msg string, args ...interface{}) {
-	if l.Level > LevelDebug {
+	if l.Level() > LevelDebug {
 		return
 	}
 	sbl := emptybytesliceLine(l)
@@ -52,7 +52,7 @@ func (l *logger) ByteSliceLineDebug(msg string, args ...interface{}) {
 	return
 }
 func (l *logger) ByteSliceLineDebugf(format string, args ...interface{}) {
-	if l.Level > LevelDebug {
+	if l.Level() > LevelDebug {
 		return
 	}
 	msg := fmt.Sprintf(format, args...)
@@ -60,7 +60,7 @@ func (l *logger) ByteSliceLineDebugf(format string, args ...interface{}) {
 }
 
 func (l *logger) ByteSliceLineInfo(msg string, args ...interface{}) {
-	if l.Level > LevelInfo {
+	if l.Level() > LevelInfo {
 		return
 	}
 	sbl := emptybytesliceLine(l)
@@ -74,7 +74,7 @@ func (l *logger) ByteSliceLineInfo(msg string, args ...interface{}) {
 	return
 }
 func (l *logger) ByteSliceLineInfof(format string, args ...interface{}) {
-	if l.Level > LevelInfo {
+	if l.Level() > LevelInfo {
 		return
 	}
 	msg := fmt.Sprintf(format, args...)
@@ -82,7 +82,7 @@ func (l *logger) ByteSliceLineInfof(format string, args ...interface{}) {
 }
 
 func (l *logger) ByteSliceLinePrint(msg string, args ...interface{}) {
-	if l.Level > LevelPrint {
+	if l.Level() > LevelPrint {
 		return
 	}
 	sbl := emptybytesliceLine(l)
@@ -96,7 +96,7 @@ func (l *logger) ByteSliceLinePrint(msg string, args ...interface{}) {
 	return
 }
 func (l *logger) ByteSliceLinePrintf(format string, args ...interface{}) {
-	if l.Level > LevelPrint {
+	if l.Level() > LevelPrint {
 		return
 	}
 	msg := fmt.Sprintf(format, args...)
@@ -104,7 +104,7 @@ func (l *logger) ByteSliceLinePrintf(format string, args ...interface{}) {
 }
 
 func (l *logger) ByteSliceLineWarn(msg string, args ...interface{}) {
-	if l.Level > LevelWarn {
+	if l.Level() > LevelWarn {
 		return
 	}
 	sbl := emptybytesliceLine(l)
@@ -118,7 +118,7 @@ func (l *logger) ByteSliceLineWarn(msg string, args ...interface{}) {
 	return
 }
 func (l *logger) ByteSliceLineWarnf(format string, args ...interface{}) {
-	if l.Level > LevelWarn {
+	if l.Level() > LevelWarn {
 		return
 	}
 	msg := fmt.Sprintf(format, args...)
@@ -126,7 +126,7 @@ func (l *logger) ByteSliceLineWarnf(format string, args ...interface{}) {
 }
 
 func (l *logger) ByteSliceLineError(msg string, args ...interface{}) {
-	if l.Level > LevelError {
+	if l.Level() > LevelError {
 		return
 	}
 	sbl := emptybytesliceLine(l)
@@ -141,7 +141,7 @@ func (l *logger) ByteSliceLineError(msg string, args ...interface{}) {
 }
 
 func (l *logger) ByteSliceLineErrorf(format string, args ...interface{}) {
-	if l.Level > LevelError {
+	if l.Level() > LevelError {
 		return
 	}
 	msg := fmt.Sprintf(format, args...)
@@ -149,7 +149,7 @@ func (l *logger) ByteSliceLineErrorf(format string, args ...interface{}) {
 }
 
 func (l *logger) ByteSliceLinePanic(msg string, args ...interface{}) {
-	if l.Level > LevelPanic {
+	if l.Level() > LevelPanic {
 		return
 	}
 	sbl := emptybytesliceLine(l)
@@ -166,7 +166,7 @@ func (l *logger) ByteSliceLinePanic(msg string, args ...interface{}) {
 }
 
 func (l *logger) ByteSliceLinePanicf(format string, args ...interface{}) {
-	if l.Level > LevelPanic {
+	if l.Level() > LevelPanic {
 		return
 	}
 	msg := fmt.Sprintf(format, args...)
@@ -174,7 +174,7 @@ func (l *logger) ByteSliceLinePanicf(format string, args ...interface{}) {
 }
 
 func (l *logger) ByteSliceLineFatal(msg string, args ...interface{}) {
-	if l.Level > LevelFatal {
+	if l.Level() > LevelFatal {
 		return
 	}
 	sbl := emptybytesliceLine(l)
@@ -191,7 +191,7 @@ func (l *logger) ByteSliceLineFatal(msg string, args ...interface{}) {
 }
 
 func (l *logger) ByteSliceLineFatalf(format string, args ...interface{}) {
-	if l.Level > LevelFatal {
+	if l.Level() > LevelFatal {
 		return
 	}
 	msg := fmt.Sprintf(format, args...)
@@ -200,7 +200,7 @@ func (l *logger) ByteSliceLineFatalf(format string, args ...interface{}) {
 
 // Log writes a log message at the level
 func (l *logger) ByteSliceLineLog(level Level, msg string, args ...interface{}) {
-	if l.Level > level {
+	if l.Level() > level {
 		return
 	}
 	sbl := emptybytesliceLine(l)
@@ -214,7 +214,7 @@ func (l *logger) ByteSliceLineLog(level Level, msg string, args ...interface{}) 
 }
 
 func (l *logger) ByteSliceLineLogf(level Level, format string, args ...interface{}) {
-	if l.Level > level {
+	if l.Level() > level {
 		return
 	}
 	msg := fmt.Sprintf(format, args...)

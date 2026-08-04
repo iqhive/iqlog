@@ -6,7 +6,7 @@ func (bl *bufferLine) Int(name string, val int) *bufferLine {
 	if bl.buffer == nil {
 		return bl
 	}
-	if bl.logger.jsonMode {
+	if bl.logger.jsonMode.Load() {
 		bl.buffer.Write([]byte(",\"" + jsonEscapedString(name) + "\":"))
 		appendBufferIntDecimal(bl.buffer, int64(val))
 	} else {
@@ -21,7 +21,7 @@ func (bl *bufferLine) Int64(name string, val int64) *bufferLine {
 	if bl.buffer == nil {
 		return bl
 	}
-	if bl.logger.jsonMode {
+	if bl.logger.jsonMode.Load() {
 		bl.buffer.Write([]byte(",\"" + jsonEscapedString(name) + "\":"))
 		appendBufferIntDecimal(bl.buffer, int64(val))
 	} else {
@@ -36,7 +36,7 @@ func (bl *bufferLine) Str(name string, s string) *bufferLine {
 	if bl.buffer == nil {
 		return bl
 	}
-	if bl.logger.jsonMode {
+	if bl.logger.jsonMode.Load() {
 		bl.buffer.Write([]byte(",\"" + jsonEscapedString(name) + "\":\"" + jsonEscapedString(s) + "\""))
 	} else {
 		bl.buffer.Write([]byte(name + "=" + s + " "))
@@ -48,7 +48,7 @@ func (bl *bufferLine) Float32(name string, f float32) *bufferLine {
 	if bl.buffer == nil {
 		return bl
 	}
-	if bl.logger.jsonMode {
+	if bl.logger.jsonMode.Load() {
 		bl.buffer.Write([]byte(",\"" + jsonEscapedString(name) + "\":"))
 		appendBufferfastFloatFill(bl.buffer, float64(f), 6)
 	} else {
@@ -63,7 +63,7 @@ func (bl *bufferLine) Float64(name string, f float64) *bufferLine {
 	if bl.buffer == nil {
 		return bl
 	}
-	if bl.logger.jsonMode {
+	if bl.logger.jsonMode.Load() {
 		bl.buffer.Write([]byte(",\"" + jsonEscapedString(name) + "\":"))
 		appendBufferfastFloatFill(bl.buffer, float64(f), 6)
 	} else {
@@ -78,7 +78,7 @@ func (bl *bufferLine) Bool(name string, b bool) *bufferLine {
 	if bl.buffer == nil {
 		return bl
 	}
-	if bl.logger.jsonMode {
+	if bl.logger.jsonMode.Load() {
 		if b {
 			bl.buffer.Write([]byte(",\"" + jsonEscapedString(name) + "\":true"))
 		} else {
@@ -99,7 +99,7 @@ func (bl *bufferLine) Any(name string, v any) *bufferLine {
 		return bl
 	}
 	str := fmt.Sprintf("%v", v)
-	if bl.logger.jsonMode {
+	if bl.logger.jsonMode.Load() {
 		bl.buffer.Write([]byte(",\"" + jsonEscapedString(name) + "\":\"" + jsonEscapedString(str) + "\""))
 	} else {
 		bl.buffer.Write([]byte(name + "=\"" + str + "\" "))

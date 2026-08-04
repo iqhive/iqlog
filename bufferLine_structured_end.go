@@ -9,7 +9,7 @@ func (bl *bufferLine) Msg(msg string) {
 	if bl.buffer == nil {
 		return
 	}
-	if bl.logger.jsonMode {
+	if bl.logger.jsonMode.Load() {
 		bl.writeFinalJSON(msg)
 	} else {
 		bl.writeFinalConsole(msg)
@@ -19,7 +19,7 @@ func (bl *bufferLine) Msgs(msg string, args ...interface{}) {
 	if bl.buffer == nil {
 		return
 	}
-	if bl.logger.jsonMode {
+	if bl.logger.jsonMode.Load() {
 		bl.writeFinalJSON(msg, args...)
 	} else {
 		bl.writeFinalConsole(msg, args...)
@@ -30,7 +30,7 @@ func (bl *bufferLine) Msgf(format string, args ...interface{}) {
 		return
 	}
 
-	if bl.logger.jsonMode {
+	if bl.logger.jsonMode.Load() {
 		bl.writeFinalJSONF(format, args...)
 	} else {
 		bl.writeFinalConsoleF(format, args...)
@@ -67,13 +67,12 @@ func (bl *bufferLine) writeFinalConsole(msg string, args ...interface{}) {
 			bl.buffer.WriteString(fmt.Sprintf("%v", thisarg))
 		}
 	}
-	if bl.logger.newLine {
+	if bl.logger.newLine.Load() {
 		bl.buffer.WriteByte('\n')
 	}
 
-	bl.logger.mu.Lock()
-	bl.logger.out.Write(bl.buffer.Bytes())
-	bl.logger.mu.Unlock()
+	line := sanitizeConsoleLine(bl.buffer.Bytes())
+	bl.logger.writeLocked(line)
 	bufferLinePool.Put(bl)
 }
 
@@ -92,13 +91,12 @@ func (bl *bufferLine) writeFinalConsoleF(format string, args ...interface{}) {
 	// bl.buffer.Write(bia.Bytes[:bia.Index])
 	// biapool.Put(bia)
 
-	if bl.logger.newLine {
+	if bl.logger.newLine.Load() {
 		bl.buffer.WriteByte('\n')
 	}
 
-	bl.logger.mu.Lock()
-	bl.logger.out.Write(bl.buffer.Bytes())
-	bl.logger.mu.Unlock()
+	line := sanitizeConsoleLine(bl.buffer.Bytes())
+	bl.logger.writeLocked(line)
 	bufferLinePool.Put(bl)
 }
 
@@ -134,14 +132,12 @@ func (bl *bufferLine) writeFinalJSON(msg string, args ...interface{}) {
 		}
 	}
 
-	if bl.logger.newLine {
+	if bl.logger.newLine.Load() {
 		bl.buffer.Write([]byte("\"}\n"))
 	} else {
 		bl.buffer.Write([]byte("\"}"))
 	}
-	bl.logger.mu.Lock()
-	bl.logger.out.Write(bl.buffer.Bytes())
-	bl.logger.mu.Unlock()
+	bl.logger.writeLocked(bl.buffer.Bytes())
 	bufferLinePool.Put(bl)
 }
 
@@ -154,13 +150,11 @@ func (bl *bufferLine) writeFinalJSONF(format string, args ...interface{}) {
 	bl.buffer.WriteString(jsonEscapedString(unsafeString(ba.Bytes)))
 	baPool.Put(ba)
 
-	if bl.logger.newLine {
+	if bl.logger.newLine.Load() {
 		bl.buffer.Write([]byte("\"}\n"))
 	} else {
 		bl.buffer.Write([]byte("\"}"))
 	}
-	bl.logger.mu.Lock()
-	bl.logger.out.Write(bl.buffer.Bytes())
-	bl.logger.mu.Unlock()
+	bl.logger.writeLocked(bl.buffer.Bytes())
 	bufferLinePool.Put(bl)
 }

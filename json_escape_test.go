@@ -33,7 +33,7 @@ const injection = "a\"b\\c\nd\te\r{}"
 
 func newJSONTestLogger(buf *syncBuffer) *logger {
 	l := NewIQLogger(true)
-	l.IncludeTime = false
+	l.IncludeTime.Store(false)
 	l.SetWriter(buf)
 	return l
 }

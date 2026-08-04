@@ -3,24 +3,29 @@ package iqlog
 import (
 	"bytes"
 	"fmt"
-	"io"
 	"os"
 )
 
 type bufferLineNL struct {
-	out           io.Writer
-	buffer        *bytes.Buffer
-	jsonMode      bool
-	includeTime   bool
-	captureCaller int
-	callerData    callerData
+	logger         *logger
+	buffer         *bytes.Buffer
+	jsonMode       bool
+	includeTime    bool
+	captureCaller  int
+	exitAfterWrite bool
+	callerData     callerData
 }
 
 func (l *logger) BufferSliceLineTrace(msg string, args ...interface{}) {
-	if l.Level > LevelTrace {
+	if l.Level() > LevelTrace {
 		return
 	}
 	bl := emptybufferLineNL(l)
+	if d := int(l.CallerDepth.Load()); d > 0 {
+		var pc PC
+		caller1(d+1, &pc, 1, 1)
+		fillCallerData(pc, &bl.callerData)
+	}
 	if bl.jsonMode {
 		bl.writeInitialJSON(LevelTrace)
 		bl.writeFinalJSON(msg, args...)
@@ -31,7 +36,7 @@ func (l *logger) BufferSliceLineTrace(msg string, args ...interface{}) {
 	return
 }
 func (l *logger) BufferSliceLineTracef(format string, args ...interface{}) {
-	if l.Level > LevelTrace {
+	if l.Level() > LevelTrace {
 		return
 	}
 	msg := fmt.Sprintf(format, args...)
@@ -39,10 +44,15 @@ func (l *logger) BufferSliceLineTracef(format string, args ...interface{}) {
 }
 
 func (l *logger) BufferSliceLineDebug(msg string, args ...interface{}) {
-	if l.Level > LevelDebug {
+	if l.Level() > LevelDebug {
 		return
 	}
 	bl := emptybufferLineNL(l)
+	if d := int(l.CallerDepth.Load()); d > 0 {
+		var pc PC
+		caller1(d+1, &pc, 1, 1)
+		fillCallerData(pc, &bl.callerData)
+	}
 	if bl.jsonMode {
 		bl.writeInitialJSON(LevelDebug)
 		bl.writeFinalJSON(msg, args...)
@@ -53,7 +63,7 @@ func (l *logger) BufferSliceLineDebug(msg string, args ...interface{}) {
 	return
 }
 func (l *logger) BufferSliceLineDebugf(format string, args ...interface{}) {
-	if l.Level > LevelDebug {
+	if l.Level() > LevelDebug {
 		return
 	}
 	msg := fmt.Sprintf(format, args...)
@@ -61,10 +71,15 @@ func (l *logger) BufferSliceLineDebugf(format string, args ...interface{}) {
 }
 
 func (l *logger) BufferSliceLineInfo(msg string, args ...interface{}) {
-	if l.Level > LevelInfo {
+	if l.Level() > LevelInfo {
 		return
 	}
 	bl := emptybufferLineNL(l)
+	if d := int(l.CallerDepth.Load()); d > 0 {
+		var pc PC
+		caller1(d+1, &pc, 1, 1)
+		fillCallerData(pc, &bl.callerData)
+	}
 	if bl.jsonMode {
 		bl.writeInitialJSON(LevelInfo)
 		bl.writeFinalJSON(msg, args...)
@@ -75,7 +90,7 @@ func (l *logger) BufferSliceLineInfo(msg string, args ...interface{}) {
 	return
 }
 func (l *logger) BufferSliceLineInfof(format string, args ...interface{}) {
-	if l.Level > LevelInfo {
+	if l.Level() > LevelInfo {
 		return
 	}
 	msg := fmt.Sprintf(format, args...)
@@ -83,10 +98,15 @@ func (l *logger) BufferSliceLineInfof(format string, args ...interface{}) {
 }
 
 func (l *logger) BufferSliceLinePrint(msg string, args ...interface{}) {
-	if l.Level > LevelPrint {
+	if l.Level() > LevelPrint {
 		return
 	}
 	bl := emptybufferLineNL(l)
+	if d := int(l.CallerDepth.Load()); d > 0 {
+		var pc PC
+		caller1(d+1, &pc, 1, 1)
+		fillCallerData(pc, &bl.callerData)
+	}
 	if bl.jsonMode {
 		bl.writeInitialJSON(LevelPrint)
 		bl.writeFinalJSON(msg, args...)
@@ -97,7 +117,7 @@ func (l *logger) BufferSliceLinePrint(msg string, args ...interface{}) {
 	return
 }
 func (l *logger) BufferSliceLinePrintf(format string, args ...interface{}) {
-	if l.Level > LevelPrint {
+	if l.Level() > LevelPrint {
 		return
 	}
 	msg := fmt.Sprintf(format, args...)
@@ -105,10 +125,15 @@ func (l *logger) BufferSliceLinePrintf(format string, args ...interface{}) {
 }
 
 func (l *logger) BufferSliceLineWarn(msg string, args ...interface{}) {
-	if l.Level > LevelWarn {
+	if l.Level() > LevelWarn {
 		return
 	}
 	bl := emptybufferLineNL(l)
+	if d := int(l.CallerDepth.Load()); d > 0 {
+		var pc PC
+		caller1(d+1, &pc, 1, 1)
+		fillCallerData(pc, &bl.callerData)
+	}
 	if bl.jsonMode {
 		bl.writeInitialJSON(LevelWarn)
 		bl.writeFinalJSON(msg, args...)
@@ -119,7 +144,7 @@ func (l *logger) BufferSliceLineWarn(msg string, args ...interface{}) {
 	return
 }
 func (l *logger) BufferSliceLineWarnf(format string, args ...interface{}) {
-	if l.Level > LevelWarn {
+	if l.Level() > LevelWarn {
 		return
 	}
 	msg := fmt.Sprintf(format, args...)
@@ -127,10 +152,15 @@ func (l *logger) BufferSliceLineWarnf(format string, args ...interface{}) {
 }
 
 func (l *logger) BufferSliceLineError(msg string, args ...interface{}) {
-	if l.Level > LevelError {
+	if l.Level() > LevelError {
 		return
 	}
 	bl := emptybufferLineNL(l)
+	if d := int(l.CallerDepth.Load()); d > 0 {
+		var pc PC
+		caller1(d+1, &pc, 1, 1)
+		fillCallerData(pc, &bl.callerData)
+	}
 	if bl.jsonMode {
 		bl.writeInitialJSON(LevelError)
 		bl.writeFinalJSON(msg, args...)
@@ -142,7 +172,7 @@ func (l *logger) BufferSliceLineError(msg string, args ...interface{}) {
 }
 
 func (l *logger) BufferSliceLineErrorf(format string, args ...interface{}) {
-	if l.Level > LevelError {
+	if l.Level() > LevelError {
 		return
 	}
 	msg := fmt.Sprintf(format, args...)
@@ -150,10 +180,15 @@ func (l *logger) BufferSliceLineErrorf(format string, args ...interface{}) {
 }
 
 func (l *logger) BufferSliceLinePanic(msg string, args ...interface{}) {
-	if l.Level > LevelPanic {
+	if l.Level() > LevelPanic {
 		return
 	}
 	bl := emptybufferLineNL(l)
+	if d := int(l.CallerDepth.Load()); d > 0 {
+		var pc PC
+		caller1(d+1, &pc, 1, 1)
+		fillCallerData(pc, &bl.callerData)
+	}
 	if bl.jsonMode {
 		bl.writeInitialJSON(LevelPanic)
 		bl.writeFinalJSON(msg, args...)
@@ -167,7 +202,7 @@ func (l *logger) BufferSliceLinePanic(msg string, args ...interface{}) {
 }
 
 func (l *logger) BufferSliceLinePanicf(format string, args ...interface{}) {
-	if l.Level > LevelPanic {
+	if l.Level() > LevelPanic {
 		return
 	}
 	msg := fmt.Sprintf(format, args...)
@@ -175,10 +210,15 @@ func (l *logger) BufferSliceLinePanicf(format string, args ...interface{}) {
 }
 
 func (l *logger) BufferSliceLineFatal(msg string, args ...interface{}) {
-	if l.Level > LevelFatal {
+	if l.Level() > LevelFatal {
 		return
 	}
 	bl := emptybufferLineNL(l)
+	if d := int(l.CallerDepth.Load()); d > 0 {
+		var pc PC
+		caller1(d+1, &pc, 1, 1)
+		fillCallerData(pc, &bl.callerData)
+	}
 	if bl.jsonMode {
 		bl.writeInitialJSON(LevelFatal)
 		bl.writeFinalJSON(msg, args...)
@@ -192,7 +232,7 @@ func (l *logger) BufferSliceLineFatal(msg string, args ...interface{}) {
 }
 
 func (l *logger) BufferSliceLineFatalf(format string, args ...interface{}) {
-	if l.Level > LevelFatal {
+	if l.Level() > LevelFatal {
 		return
 	}
 	msg := fmt.Sprintf(format, args...)
@@ -201,10 +241,15 @@ func (l *logger) BufferSliceLineFatalf(format string, args ...interface{}) {
 
 // Log writes a log message at the level
 func (l *logger) BufferSliceLineLog(level Level, msg string, args ...interface{}) {
-	if l.Level > level {
+	if l.Level() > level {
 		return
 	}
 	bl := emptybufferLineNL(l)
+	if d := int(l.CallerDepth.Load()); d > 0 {
+		var pc PC
+		caller1(d+1, &pc, 1, 1)
+		fillCallerData(pc, &bl.callerData)
+	}
 	if bl.jsonMode {
 		bl.writeInitialJSON(level)
 		bl.writeFinalJSON(msg, args...)
@@ -215,7 +260,7 @@ func (l *logger) BufferSliceLineLog(level Level, msg string, args ...interface{}
 }
 
 func (l *logger) BufferSliceLineLogf(level Level, format string, args ...interface{}) {
-	if l.Level > level {
+	if l.Level() > level {
 		return
 	}
 	msg := fmt.Sprintf(format, args...)
