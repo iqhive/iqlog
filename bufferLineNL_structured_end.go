@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 )
 
 // finish writes the assembled line under the logger mutex (serializing with
@@ -19,9 +20,18 @@ func (bl *bufferLineNL) finish() {
 
 	bl.logger.writeLocked(line)
 
+	doPanic := bl.panicAfterWrite
+	var panicMsg string
+	if doPanic {
+		panicMsg = strings.TrimRight(string(line), "\n")
+	}
 	bl.exitAfterWrite = false
+	bl.panicAfterWrite = false
 	bufferLineNLPool.Put(bl)
 
+	if doPanic {
+		panic(panicMsg)
+	}
 	if exit {
 		os.Exit(1)
 	}

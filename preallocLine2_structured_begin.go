@@ -14,6 +14,7 @@ func emptypreallocLine2(l *logger) *preallocLine2 {
 	pal.includeTime = l.IncludeTime.Load()
 	pal.captureCaller = int(l.CallerDepth.Load())
 	pal.exitAfterWrite = false
+	pal.panicAfterWrite = false
 	pal.callerData.callerFuncLen = 0
 	// zero the output
 	// pal.output = pal.output[:0]
@@ -216,7 +217,7 @@ func (l *logger) WithPreallocLine2Panic() *preallocLine2 {
 		pal.writeInitialConsole(LevelPanic)
 	}
 	// exit after the final write so the record is not lost
-	pal.exitAfterWrite = true
+	pal.panicAfterWrite = true
 	return pal
 }
 

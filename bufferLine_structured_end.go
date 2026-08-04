@@ -2,8 +2,35 @@ package iqlog
 
 import (
 	"fmt"
+	"os"
 	"strconv"
+	"strings"
 )
+
+// finish writes the completed line under the logger mutex, recycles the
+// builder, and honors any pending fatal/panic termination after the record
+// has been written.
+func (bl *bufferLine) finish(line []byte) {
+	exit := bl.exitAfterWrite
+	doPanic := bl.panicAfterWrite
+
+	bl.logger.writeLocked(line)
+
+	var panicMsg string
+	if doPanic {
+		panicMsg = strings.TrimRight(string(line), "\n")
+	}
+	bl.exitAfterWrite = false
+	bl.panicAfterWrite = false
+	bufferLinePool.Put(bl)
+
+	if doPanic {
+		panic(panicMsg)
+	}
+	if exit {
+		os.Exit(1)
+	}
+}
 
 func (bl *bufferLine) Msg(msg string) {
 	if bl.buffer == nil {
@@ -71,9 +98,7 @@ func (bl *bufferLine) writeFinalConsole(msg string, args ...interface{}) {
 		bl.buffer.WriteByte('\n')
 	}
 
-	line := sanitizeConsoleLine(bl.buffer.Bytes())
-	bl.logger.writeLocked(line)
-	bufferLinePool.Put(bl)
+	bl.finish(sanitizeConsoleLine(bl.buffer.Bytes()))
 }
 
 func (bl *bufferLine) writeFinalConsoleF(format string, args ...interface{}) {
@@ -95,9 +120,7 @@ func (bl *bufferLine) writeFinalConsoleF(format string, args ...interface{}) {
 		bl.buffer.WriteByte('\n')
 	}
 
-	line := sanitizeConsoleLine(bl.buffer.Bytes())
-	bl.logger.writeLocked(line)
-	bufferLinePool.Put(bl)
+	bl.finish(sanitizeConsoleLine(bl.buffer.Bytes()))
 }
 
 func (bl *bufferLine) writeFinalJSON(msg string, args ...interface{}) {
@@ -137,8 +160,7 @@ func (bl *bufferLine) writeFinalJSON(msg string, args ...interface{}) {
 	} else {
 		bl.buffer.Write([]byte("\"}"))
 	}
-	bl.logger.writeLocked(bl.buffer.Bytes())
-	bufferLinePool.Put(bl)
+	bl.finish(bl.buffer.Bytes())
 }
 
 func (bl *bufferLine) writeFinalJSONF(format string, args ...interface{}) {
@@ -155,6 +177,5 @@ func (bl *bufferLine) writeFinalJSONF(format string, args ...interface{}) {
 	} else {
 		bl.buffer.Write([]byte("\"}"))
 	}
-	bl.logger.writeLocked(bl.buffer.Bytes())
-	bufferLinePool.Put(bl)
+	bl.finish(bl.buffer.Bytes())
 }

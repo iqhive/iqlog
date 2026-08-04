@@ -14,6 +14,7 @@ func emptybufferLineNL(l *logger) *bufferLineNL {
 	bl.jsonMode = l.jsonMode.Load()
 	bl.captureCaller = int(l.CallerDepth.Load())
 	bl.exitAfterWrite = false
+	bl.panicAfterWrite = false
 	bl.callerData.callerFuncLen = 0
 
 	return bl
@@ -246,7 +247,7 @@ func (l *logger) WithBufferLineNLPanic() *bufferLineNL {
 		bl.writeInitialConsole(LevelPanic)
 	}
 	// exit after the final write so the record is not lost
-	bl.exitAfterWrite = true
+	bl.panicAfterWrite = true
 	return bl
 }
 

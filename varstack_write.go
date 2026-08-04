@@ -2,19 +2,38 @@ package iqlog
 
 import (
 	"fmt"
+	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
 // finish writes the assembled line under the logger mutex (serializing with
-// all other builders) and returns the varStack to the pool.
+// all other builders), returns the varStack to the pool, and honors any
+// pending fatal/panic termination after the record has been written.
 func (vs *varStack) finish(output []byte) {
+	exit := vs.exitAfterWrite
+	doPanic := vs.panicAfterWrite
+
 	if !vs.jsonMode {
 		output = sanitizeConsoleLine(output)
 	}
 	vs.logger.writeLocked(output)
 
+	var panicMsg string
+	if doPanic {
+		panicMsg = strings.TrimRight(string(output), "\n")
+	}
+	vs.exitAfterWrite = false
+	vs.panicAfterWrite = false
 	varStackPool.Put(vs)
+
+	if doPanic {
+		panic(panicMsg)
+	}
+	if exit {
+		os.Exit(1)
+	}
 }
 
 // appendCallers appends the captured caller func/file info to the line, in

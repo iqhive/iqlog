@@ -16,6 +16,10 @@ type varStack struct {
 	varValue      [maxVars]any
 	varCount      int
 	callerData    callerData
+	// exitAfterWrite / panicAfterWrite terminate after the completed
+	// record has been written, so Fatal/Panic lines are not lost
+	exitAfterWrite  bool
+	panicAfterWrite bool
 	// varValueStr    [maxVars]string
 }
 
@@ -66,6 +70,8 @@ func (vs *varStack) applyDefaults(l *logger, level Level) {
 	vs.includeTime = l.IncludeTime.Load()
 	vs.captureCaller = int(l.CallerDepth.Load())
 	vs.varCount = 0
+	vs.exitAfterWrite = level == LevelFatal
+	vs.panicAfterWrite = level == LevelPanic
 	// release references held from a previous pooled use so they can be
 	// garbage collected
 	vs.varName = [maxVars]string{}

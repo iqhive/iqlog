@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 )
 
 // finish writes the assembled line under the logger mutex (serializing with
@@ -24,9 +25,18 @@ func (pal *preallocLine2) finish() {
 
 	pal.logger.writeLocked(line)
 
+	doPanic := pal.panicAfterWrite
+	var panicMsg string
+	if doPanic {
+		panicMsg = strings.TrimRight(string(line), "\n")
+	}
 	pal.exitAfterWrite = false
+	pal.panicAfterWrite = false
 	preallocLine2Pool.Put(pal)
 
+	if doPanic {
+		panic(panicMsg)
+	}
 	if exit {
 		os.Exit(1)
 	}

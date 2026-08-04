@@ -57,10 +57,14 @@ Global helpers exist for every level: `Trace`, `Debug`, `Info`, `Warn`,
 (`Infof`, `Errorf`, ...) and a fluent `...With` variant (`InfoWith`,
 `ErrorWith`, ...). The same methods are available on logger instances.
 
-Note: `Fatal`/`Panic` via the fluent `getWith` path log at the respective
-level but do not terminate the process. The dedicated per-builder
-`...Fatal`/`...Panic` helpers (and their `With...` variants) call
-`os.Exit(1)` after the message has been written.
+`Fatal` writes its record and then calls `os.Exit(1)`; `Panic` writes its
+record and then panics with the message (recoverable, like the standard
+library's `log.Panic`). This applies to every path — the global helpers,
+instance methods, and all per-builder `...Fatal`/`...Panic` helpers and
+their `With...` variants — and termination always happens after the record
+has been written, so the final line is never lost. Note that a `Fatal`/
+`Panic` call filtered out by the configured level (only possible for
+`Panic` when the level is set to `LevelFatal`) does not terminate.
 
 The level can be changed at any time with `SetLevel(Level)` and read with
 the `Level()` method; level, JSON mode, timestamp inclusion, newline mode,

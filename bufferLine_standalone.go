@@ -11,6 +11,10 @@ type bufferLine struct {
 	// level  Level
 	buffer     *bytes.Buffer
 	callerData callerData
+	// exitAfterWrite / panicAfterWrite terminate after the completed
+	// record has been written, so Fatal/Panic lines are not lost
+	exitAfterWrite  bool
+	panicAfterWrite bool
 }
 
 func (l *logger) BufferLineTrace(msg string, args ...interface{}) {
@@ -159,8 +163,7 @@ func (l *logger) BufferLinePanic(msg string, args ...interface{}) {
 		bl.writeFinalConsole(msg, args...)
 	}
 	bl.logger.Flush()
-	os.Exit(1)
-	return
+	panic(msg)
 }
 
 func (l *logger) BufferLinePanicf(format string, args ...interface{}) {

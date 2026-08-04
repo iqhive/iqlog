@@ -15,6 +15,7 @@ func emptybytesliceLine(l *logger) *bytesliceLine {
 	bsl.includeTime = l.IncludeTime.Load()
 	bsl.captureCaller = int(l.CallerDepth.Load())
 	bsl.exitAfterWrite = false
+	bsl.panicAfterWrite = false
 	bsl.callerData.callerFuncLen = 0
 	bsl.callerData.callerFileLen = 0
 	return bsl
@@ -210,7 +211,7 @@ func (l *logger) WithByteSliceLinePanic() *bytesliceLine {
 	}
 	// exit after the final message has been written, not before the
 	// caller has had a chance to add fields and the message itself
-	bsl.exitAfterWrite = true
+	bsl.panicAfterWrite = true
 	return bsl
 }
 

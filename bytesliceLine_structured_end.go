@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 )
 
 // finish writes the completed line to the logger's writer under the
@@ -21,8 +22,18 @@ func (bsl *bytesliceLine) finish() {
 	// cannot leave us writing to a closed writer
 	bsl.logger.writeLocked(line)
 
+	doPanic := bsl.panicAfterWrite
+	var panicMsg string
+	if doPanic {
+		panicMsg = strings.TrimRight(string(line), "\n")
+	}
+	bsl.exitAfterWrite = false
+	bsl.panicAfterWrite = false
 	bytesliceLinePool.Put(bsl)
 
+	if doPanic {
+		panic(panicMsg)
+	}
 	if exit {
 		os.Exit(1)
 	}

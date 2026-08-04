@@ -2,7 +2,6 @@ package iqlog
 
 import (
 	"io"
-	"os"
 	"sync"
 	"time"
 )
@@ -26,6 +25,8 @@ func emptybufferLine(l *logger) *bufferLine {
 	bl := bufferLinePool.Get().(*bufferLine)
 	bl.logger = l
 	bl.buffer.Reset()
+	bl.exitAfterWrite = false
+	bl.panicAfterWrite = false
 	return bl
 }
 
@@ -175,8 +176,9 @@ func (l *logger) WithBufferLinePanic() *bufferLine {
 	} else {
 		bl.writeInitialConsole(LevelPanic)
 	}
-	bl.logger.Flush()
-	os.Exit(1)
+	// panic after the final message has been written, not before the
+	// caller has had a chance to add fields and the message itself
+	bl.panicAfterWrite = true
 	return bl
 }
 
@@ -190,7 +192,8 @@ func (l *logger) WithBufferLineFatal() *bufferLine {
 	} else {
 		bl.writeInitialConsole(LevelFatal)
 	}
-	bl.logger.Flush()
-	os.Exit(1)
+	// exit after the final message has been written, not before the
+	// caller has had a chance to add fields and the message itself
+	bl.exitAfterWrite = true
 	return bl
 }

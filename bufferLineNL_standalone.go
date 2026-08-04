@@ -13,7 +13,9 @@ type bufferLineNL struct {
 	includeTime    bool
 	captureCaller  int
 	exitAfterWrite bool
-	callerData     callerData
+	// panicAfterWrite panics with the completed line after it is written
+	panicAfterWrite bool
+	callerData      callerData
 }
 
 func (l *logger) BufferSliceLineTrace(msg string, args ...interface{}) {
@@ -197,8 +199,7 @@ func (l *logger) BufferSliceLinePanic(msg string, args ...interface{}) {
 		bl.writeFinalConsole(msg, args...)
 	}
 	// bl.logger.Flush()
-	os.Exit(1)
-	return
+	panic(msg)
 }
 
 func (l *logger) BufferSliceLinePanicf(format string, args ...interface{}) {

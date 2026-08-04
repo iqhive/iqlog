@@ -13,7 +13,9 @@ type preallocLine struct {
 	includeTime    bool
 	captureCaller  int
 	exitAfterWrite bool
-	callerData     callerData
+	// panicAfterWrite panics with the completed line after it is written
+	panicAfterWrite bool
+	callerData      callerData
 }
 
 func (l *logger) PreAllocLineTrace(msg string, args ...interface{}) {
@@ -197,8 +199,7 @@ func (l *logger) PreAllocLinePanic(msg string, args ...interface{}) {
 		pal.writeFinalConsole(msg, args...)
 	}
 	// pal.logger.Flush()
-	os.Exit(1)
-	return
+	panic(msg)
 }
 
 func (l *logger) PreAllocLinePanicf(format string, args ...interface{}) {

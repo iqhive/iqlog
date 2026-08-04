@@ -42,6 +42,10 @@ func (l *logger) getWith(level Level) *bytesliceLine {
 		fillCallerData(pc, &callerData)
 	}
 	bl.callerData = callerData
+	// terminate after the final message has been written so Fatal/Panic
+	// records through this path are not lost and the process actually stops
+	bl.exitAfterWrite = level == LevelFatal
+	bl.panicAfterWrite = level == LevelPanic
 
 	if bl.jsonMode {
 		bl.writeInitialJSON(level)
