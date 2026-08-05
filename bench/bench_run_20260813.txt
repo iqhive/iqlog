@@ -1,0 +1,68 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/iqhive/iqlog/bench
+cpu: Apple M3 Max
+BenchmarkSlogDisabled
+BenchmarkSlogDisabled-4                  	1000000000	         4.727 ns/op	       0 B/op	       0 allocs/op
+BenchmarkSlogSimple
+BenchmarkSlogSimple-4                    	19007157	       632.9 ns/op	     120 B/op	       3 allocs/op
+BenchmarkSlogPrintf
+BenchmarkSlogPrintf-4                    	22406854	       521.5 ns/op	      80 B/op	       1 allocs/op
+BenchmarkSlogAny
+BenchmarkSlogAny-4                       	17171209	       694.2 ns/op	     112 B/op	       2 allocs/op
+BenchmarkIQLogDisabled
+BenchmarkIQLogDisabled-4                 	1000000000	         4.404 ns/op	       0 B/op	       0 allocs/op
+BenchmarkIQLogSimple
+BenchmarkIQLogSimple-4                   	65883823	       182.8 ns/op	       0 B/op	       0 allocs/op
+BenchmarkIQLogPrintf
+BenchmarkIQLogPrintf-4                   	55417982	       217.9 ns/op	       0 B/op	       0 allocs/op
+BenchmarkIQLogAny
+BenchmarkIQLogAny-4                      	25010068	       485.8 ns/op	      80 B/op	       7 allocs/op
+BenchmarkDisabledPreallocLine
+BenchmarkDisabledPreallocLine-4          	1000000000	         4.449 ns/op	       0 B/op	       0 allocs/op
+BenchmarkDisabledPreallocLine2
+BenchmarkDisabledPreallocLine2-4         	1000000000	         4.736 ns/op	       0 B/op	       0 allocs/op
+BenchmarkDisabledBytesliceLine
+BenchmarkDisabledBytesliceLine-4         	1000000000	         4.460 ns/op	       0 B/op	       0 allocs/op
+BenchmarkDisabledBufferLine
+BenchmarkDisabledBufferLine-4            	1000000000	         4.464 ns/op	       0 B/op	       0 allocs/op
+BenchmarkDisabledBufferLineNL
+BenchmarkDisabledBufferLineNL-4          	1000000000	         4.489 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPreallocLine
+BenchmarkPreallocLine-4                  	65888917	       182.7 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPreallocLine2
+BenchmarkPreallocLine2-4                 	67059460	       181.8 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBytesliceLine
+BenchmarkBytesliceLine-4                 	65860380	       181.6 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBufferLine
+BenchmarkBufferLine-4                    	52822732	       228.4 ns/op	       0 B/op	       0 allocs/op
+BenchmarkBufferLineNL
+BenchmarkBufferLineNL-4                  	53039240	       230.0 ns/op	       0 B/op	       0 allocs/op
+BenchmarkVarsTimestampMsg
+BenchmarkVarsTimestampMsg-4              	65244975	       186.2 ns/op	       0 B/op	       0 allocs/op
+BenchmarkVarsTimestampMsgInfo
+BenchmarkVarsTimestampMsgInfo-4          	100000000	       107.6 ns/op	       0 B/op	       0 allocs/op
+BenchmarkGlobalVarsTimestampMsg
+BenchmarkGlobalVarsTimestampMsg-4        	41724103	       289.4 ns/op	       0 B/op	       0 allocs/op
+BenchmarkGlobalVarsTimestampMsgInfo
+BenchmarkGlobalVarsTimestampMsgInfo-4    	59263550	       201.9 ns/op	       0 B/op	       0 allocs/op
+BenchmarkPreallocLineF
+BenchmarkPreallocLineF-4                 	45599750	       268.7 ns/op	       8 B/op	       1 allocs/op
+BenchmarkPreallocLine2F
+BenchmarkPreallocLine2F-4                	44940824	       268.1 ns/op	       8 B/op	       1 allocs/op
+BenchmarkBytesliceLineF
+BenchmarkBytesliceLineF-4                	43898878	       282.8 ns/op	       8 B/op	       1 allocs/op
+BenchmarkBufferLineF
+BenchmarkBufferLineF-4                   	38926777	       315.8 ns/op	       8 B/op	       1 allocs/op
+BenchmarkBufferLineNLF
+BenchmarkBufferLineNLF-4                 	38295472	       318.2 ns/op	       8 B/op	       1 allocs/op
+BenchmarkVarsTimestampMsgf
+BenchmarkVarsTimestampMsgf-4             	42744937	       282.8 ns/op	       8 B/op	       1 allocs/op
+BenchmarkVarsTimestampMsgInfof
+BenchmarkVarsTimestampMsgInfof-4         	59536408	       207.0 ns/op	       8 B/op	       1 allocs/op
+BenchmarkGlobalVarsTimestampMsgf
+BenchmarkGlobalVarsTimestampMsgf-4       	32702488	       375.1 ns/op	       8 B/op	       1 allocs/op
+BenchmarkGlobalVarsTimestampMsgInfof
+BenchmarkGlobalVarsTimestampMsgInfof-4   	42588423	       280.2 ns/op	       8 B/op	       1 allocs/op
+PASS
+ok  	github.com/iqhive/iqlog/bench	331.637s
