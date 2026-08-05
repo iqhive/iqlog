@@ -1,0 +1,28 @@
+direct io.Writer:
+-----------------
+BenchmarkPreallocLine-16                        50786529               235.0 ns/op             0 B/op          0 allocs/op
+BenchmarkPreallocLine2-16                       51157906               239.6 ns/op             0 B/op          0 allocs/op
+BenchmarkBytesliceLine-16                       43244550               272.7 ns/op             0 B/op          0 allocs/op
+BenchmarkBufferLine-16                          40908380               300.8 ns/op             0 B/op          0 allocs/op
+BenchmarkBufferLineNL-16                        38909810               295.1 ns/op             0 B/op          0 allocs/op
+
+BenchmarkPreallocLineF-16       34276719               349.3 ns/op             8 B/op          1 allocs/op
+BenchmarkPreallocLine2F-16      32116353               353.0 ns/op             8 B/op          1 allocs/op
+BenchmarkBytesliceLineF-16      29738264               406.7 ns/op             8 B/op          1 allocs/op
+BenchmarkBufferLineF-16         28469929               421.7 ns/op             8 B/op          1 allocs/op
+BenchmarkBufferLineNLF-16       28049613               422.3 ns/op             8 B/op          1 allocs/op
+
+ringbuffer io Writer:
+---------------------
+BenchmarkPreallocLine-16                        43791111               239.1 ns/op             0 B/op          0 allocs/op
+BenchmarkPreallocLine2-16                       47857550               239.4 ns/op             0 B/op          0 allocs/op
+BenchmarkBytesliceLine-16                       41763342               278.9 ns/op             0 B/op          0 allocs/op
+BenchmarkBufferLine-16                          40369405               296.0 ns/op             0 B/op          0 allocs/op
+BenchmarkBufferLineNL-16                        39216813               300.7 ns/op             0 B/op          0 allocs/op
+
+BenchmarkPreallocLineF-16       33757114               356.4 ns/op             8 B/op          1 allocs/op
+BenchmarkPreallocLine2F-16      32873402               360.8 ns/op             8 B/op          1 allocs/op
+BenchmarkBytesliceLineF-16      29647521               404.2 ns/op             8 B/op          1 allocs/op
+BenchmarkBufferLineF-16         27715140               434.8 ns/op             8 B/op          1 allocs/op
+BenchmarkBufferLineNLF-16       28104962               423.8 ns/op             8 B/op          1 allocs/op
+
