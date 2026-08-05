@@ -8,7 +8,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/iqhive/iqlog/v3"
+	"github.com/iqhive/iqlog"
 )
 
 // TestBasicLogs ensures that each log level can produce output without error.

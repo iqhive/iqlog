@@ -7,7 +7,7 @@ import (
 	"log/slog"
 	"testing"
 
-	"github.com/iqhive/iqlog/v3"
+	"github.com/iqhive/iqlog"
 )
 
 const msg = "The quick brown fox jumps over the lazy dog"

@@ -8,7 +8,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/iqhive/iqlog/v3/ringbuffer"
+	"github.com/iqhive/iqlog/ringbuffer"
 )
 
 // syncBuffer is a goroutine-safe buffer for capturing log output in tests.

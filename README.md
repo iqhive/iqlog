@@ -5,7 +5,7 @@ line builders and hand-rolled formatting to minimise garbage-collector
 pressure on hot logging paths.
 
 ```go
-import "github.com/iqhive/iqlog/v3"
+import "github.com/iqhive/iqlog"
 ```
 
 Requires Go 1.23+.
@@ -15,7 +15,7 @@ Requires Go 1.23+.
 ```go
 package main
 
-import "github.com/iqhive/iqlog/v3"
+import "github.com/iqhive/iqlog"
 
 func main() {
     // One-call setup of the global logger: application name, optional

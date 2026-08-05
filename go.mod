@@ -1,4 +1,4 @@
-module github.com/iqhive/iqlog/v3
+module github.com/iqhive/iqlog
 
 go 1.23
 

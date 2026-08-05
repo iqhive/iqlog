@@ -7,7 +7,7 @@ import (
 	"os"
 	"sync"
 
-	"github.com/iqhive/iqlog/v3/ringbuffer"
+	"github.com/iqhive/iqlog/ringbuffer"
 )
 
 type ringWriter struct {

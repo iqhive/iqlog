@@ -5,7 +5,7 @@ import (
 	"io"
 	"testing"
 
-	"github.com/iqhive/iqlog/v3"
+	"github.com/iqhive/iqlog"
 )
 
 func BenchmarkPreallocLineF(b *testing.B) {

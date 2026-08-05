@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/iqhive/iqlog/v3/ringbuffer"
+	"github.com/iqhive/iqlog/ringbuffer"
 )
 
 func TestVarStackEmitsCallerFields(t *testing.T) {
