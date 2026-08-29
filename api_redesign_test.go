@@ -21,7 +21,6 @@ func TestSetDefaultRoutesPackageFunctions(t *testing.T) {
 	t.Cleanup(func() { SetDefault(old) })
 
 	l := MustNew(Config{})
-	l.setIncludeTime(false)
 	l.setCallerDepth(0)
 	l.setUseColor(false)
 	sb := &syncBuffer{}
@@ -45,7 +44,6 @@ func TestSetDefaultRejectsNil(t *testing.T) {
 
 func TestWithFieldsUsesOriginatingLoggerAndPreservesTypes(t *testing.T) {
 	l := MustNew(Config{Format: FormatJSON})
-	l.setIncludeTime(false)
 	l.setCallerDepth(0)
 	sb := &syncBuffer{}
 	l.setWriter(sb)
@@ -67,7 +65,6 @@ func TestWithFieldsUsesOriginatingLoggerAndPreservesTypes(t *testing.T) {
 func TestWithErrorAndContextChaining(t *testing.T) {
 	ctx := context.WithValue(context.Background(), struct{}{}, "value")
 	l := MustNew(Config{Format: FormatJSON})
-	l.setIncludeTime(false)
 	l.setCallerDepth(0)
 	sb := &syncBuffer{}
 	l.setWriter(sb)
@@ -89,7 +86,6 @@ func TestWithErrorAndContextChaining(t *testing.T) {
 
 func TestLogAndLogContextAPIs(t *testing.T) {
 	l := MustNew(Config{})
-	l.setIncludeTime(false)
 	l.setCallerDepth(0)
 	l.setUseColor(false)
 	sb := &syncBuffer{}
@@ -112,7 +108,6 @@ func TestPackageLogAndLogContextAPIs(t *testing.T) {
 	t.Cleanup(func() { SetDefault(old) })
 
 	l := MustNew(Config{})
-	l.setIncludeTime(false)
 	l.setCallerDepth(0)
 	l.setUseColor(false)
 	sb := &syncBuffer{}
@@ -136,7 +131,6 @@ func TestConcurrentDefaultAccess(t *testing.T) {
 
 	loggers := []*Logger{MustNew(Config{}), MustNew(Config{})}
 	for _, l := range loggers {
-		l.setIncludeTime(false)
 		l.setCallerDepth(0)
 		l.setWriter(&syncBuffer{})
 	}

@@ -2,27 +2,50 @@ goos: linux
 goarch: amd64
 pkg: github.com/iqhive/iqlog/bench
 cpu: AMD EPYC 9474F 48-Core Processor               
-BenchmarkSlogDisabled-64                  	177917756	         6.760 ns/op	       0 B/op	       0 allocs/op
-BenchmarkSlogSimple-64                    	  898365	      1135 ns/op	      16 B/op	       2 allocs/op
-BenchmarkSlogPrintf-64                    	 1553428	       750.4 ns/op	      80 B/op	       1 allocs/op
-BenchmarkSlogAny-64                       	  770920	      1311 ns/op	       0 B/op	       0 allocs/op
-BenchmarkIQLogDisabled-64                 	121785018	        10.05 ns/op	       0 B/op	       0 allocs/op
-BenchmarkIQLogDisabledGuarded-64          	509075857	         2.311 ns/op	       0 B/op	       0 allocs/op
-BenchmarkIQLogSimple-64                   	 7986060	       147.9 ns/op	       0 B/op	       0 allocs/op
-BenchmarkIQLogPrintf-64                   	 5164584	       225.7 ns/op	       0 B/op	       0 allocs/op
-BenchmarkIQLogAny-64                      	 2500920	       476.1 ns/op	      48 B/op	       1 allocs/op
-BenchmarkZerologSimple-64                 	 7923423	       147.9 ns/op	       0 B/op	       0 allocs/op
-BenchmarkPhusluSimple-64                  	 5703397	       192.8 ns/op	       0 B/op	       0 allocs/op
-BenchmarkZerologDisabled-64               	140302201	         8.513 ns/op	       0 B/op	       0 allocs/op
-BenchmarkPhusluDisabled-64                	625903964	         1.929 ns/op	       0 B/op	       0 allocs/op
-BenchmarkIQLogParallel-64                 	274488574	         4.171 ns/op	       0 B/op	       0 allocs/op
-BenchmarkZerologParallel-64               	140672228	         7.639 ns/op	       0 B/op	       0 allocs/op
-BenchmarkPhusluParallel-64                	270074677	         4.524 ns/op	       0 B/op	       0 allocs/op
-BenchmarkIQLogInfo-64                     	24386320	        54.98 ns/op	       0 B/op	       0 allocs/op
-BenchmarkIQLogPackageInfo-64              	19989422	        60.45 ns/op	       0 B/op	       0 allocs/op
-BenchmarkIQLogLegacyConstructorInfo-64    	 4496203	       261.7 ns/op	       0 B/op	       0 allocs/op
-BenchmarkIQLogLegacyInfoWith-64           	15515086	        72.82 ns/op	       0 B/op	       0 allocs/op
-BenchmarkIQLogLegacyWarning-64            	19094403	        59.50 ns/op	       0 B/op	       0 allocs/op
-BenchmarkIQLogLegacyLogWithFields-64      	 1450828	       799.1 ns/op	     193 B/op	       3 allocs/op
-PASS
-ok  	github.com/iqhive/iqlog/bench	33.852s
+BenchmarkPhusluDisabled-64                      1000000000               1.915 ns/op           0 B/op          0 allocs/op
+BenchmarkIQLogDisabled-64                       1000000000               2.253 ns/op           0 B/op          0 allocs/op
+BenchmarkSlogDisabled-64                        1000000000               6.719 ns/op
+BenchmarkZerologDisabled-64                     1000000000               8.899 ns/op           0 B/op          0 allocs/op
+
+goos: linux
+goarch: amd64
+pkg: github.com/iqhive/iqlog/bench
+cpu: AMD EPYC 9474F 48-Core Processor               
+BenchmarkIQLogSimple-64                         81989342               143.6 ns/op
+BenchmarkZerologSimple-64                       71877546               163.6 ns/op             0 B/op          0 allocs/op
+BenchmarkPhusluSimple-64                        58870310               202.8 ns/op             0 B/op          0 allocs/op
+BenchmarkSlogSimple-64                          10207639              1171 ns/op
+
+goos: linux
+goarch: amd64
+pkg: github.com/iqhive/iqlog/bench
+cpu: AMD EPYC 9474F 48-Core Processor               
+BenchmarkIQLogPrintf-64                         44171035               270.0 ns/op
+BenchmarkZerologPrintf-64                       35939132               327.1 ns/op            48 B/op          1 allocs/op
+BenchmarkPhusluPrintf-64                        32145062               374.3 ns/op             0 B/op          0 allocs/op
+BenchmarkSlogPrintf-64                          16193246               744.2 ns/op
+
+goos: linux
+goarch: amd64
+pkg: github.com/iqhive/iqlog/bench
+cpu: AMD EPYC 9474F 48-Core Processor               
+BenchmarkIQLogAny-64                            24497982               476.1 ns/op
+BenchmarkPhusluAny-64                           16412431               719.4 ns/op           113 B/op          1 allocs/op
+BenchmarkZerologAny-64                          16436528               750.3 ns/op           225 B/op          3 allocs/op
+BenchmarkSlogAny-64                              9076539              1328 ns/op
+
+goos: linux
+goarch: amd64
+pkg: github.com/iqhive/iqlog/bench
+cpu: AMD EPYC 9474F 48-Core Processor               
+BenchmarkIQLogSimpleWithTimestamp-64            57923340               207.8 ns/op
+BenchmarkPhusluSimpleWithTimestamp-64           50179921               237.6 ns/op             0 B/op          0 allocs/op
+BenchmarkZerologSimpleWithTimestamp-64          43816539               271.2 ns/op             0 B/op          0 allocs/op
+
+goos: linux
+goarch: amd64
+pkg: github.com/iqhive/iqlog/bench
+cpu: AMD EPYC 9474F 48-Core Processor               
+BenchmarkPhusluParallel-64                      1000000000               4.037 ns/op           0 B/op          0 allocs/op
+BenchmarkIQLogParallel-64                       1000000000               4.765 ns/op           0 B/op          0 allocs/op
+BenchmarkZerologParallel-64                     1000000000               8.263 ns/op           0 B/op          0 allocs/op

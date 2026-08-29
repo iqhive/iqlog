@@ -9,12 +9,18 @@ import (
 )
 
 func (bsl *Event) appendJSONKey(name string) {
-	bsl.output = append(bsl.output, ',', '"')
 	if bsl.config.escapeFieldNames {
-		bsl.output = appendJSONEscaped(bsl.output, name)
+		bsl.appendEscapedJSONKey(name)
 	} else {
+		bsl.output = append(bsl.output, ',', '"')
 		bsl.output = append(bsl.output, name...)
+		bsl.output = append(bsl.output, '"', ':')
 	}
+}
+
+func (bsl *Event) appendEscapedJSONKey(name string) {
+	bsl.output = append(bsl.output, ',', '"')
+	bsl.output = appendJSONEscaped(bsl.output, name)
 	bsl.output = append(bsl.output, '"', ':')
 }
 
@@ -34,11 +40,11 @@ func (bsl *Event) Int(name string, val int) *Event {
 	name = eventFieldName(name)
 	if bsl.jsonMode {
 		bsl.appendJSONKey(name)
-		bsl.output, _ = appendIntDecimal(bsl.output, int64(val))
+		bsl.output = strconv.AppendInt(bsl.output, int64(val), 10)
 	} else {
 		bsl.output = append(bsl.output, name...)
 		bsl.output = append(bsl.output, '=')
-		bsl.output, _ = appendIntDecimal(bsl.output, int64(val))
+		bsl.output = strconv.AppendInt(bsl.output, int64(val), 10)
 		bsl.output = append(bsl.output, ' ')
 	}
 	return bsl
@@ -51,11 +57,11 @@ func (bsl *Event) Int64(name string, val int64) *Event {
 	name = eventFieldName(name)
 	if bsl.jsonMode {
 		bsl.appendJSONKey(name)
-		bsl.output, _ = appendIntDecimal(bsl.output, int64(val))
+		bsl.output = strconv.AppendInt(bsl.output, val, 10)
 	} else {
 		bsl.output = append(bsl.output, name...)
 		bsl.output = append(bsl.output, '=')
-		bsl.output, _ = appendIntDecimal(bsl.output, int64(val))
+		bsl.output = strconv.AppendInt(bsl.output, val, 10)
 		bsl.output = append(bsl.output, ' ')
 	}
 	return bsl

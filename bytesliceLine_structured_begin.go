@@ -3,6 +3,7 @@ package iqlog
 import (
 	"context"
 	"sort"
+	"time"
 )
 
 func (l *Logger) newEvent(level Level, callerSkip int) *Event {
@@ -37,6 +38,7 @@ func (l *Logger) newEventContextAt(ctx context.Context, level Level, callerSkip 
 	e.exitAfterWrite = level == LevelFatal
 	e.panicAfterWrite = level == LevelPanic
 	if explicitCaller {
+		e.timeSecond = invalidTimestampSecond
 		e.captureCaller = 0
 		if function != "" {
 			e.captureCaller = 1
@@ -44,6 +46,7 @@ func (l *Logger) newEventContextAt(ctx context.Context, level Level, callerSkip 
 			e.callerData.callerFileLen = uint(copy(e.callerData.callerFile[:], file))
 		}
 	} else if cfg.callerDepth > 0 {
+		e.timeSecond = invalidTimestampSecond
 		captureCaller(cfg.callerDepth+callerSkip+1, &e.callerData)
 	}
 	if e.jsonMode {
@@ -90,9 +93,6 @@ func (l *Logger) DebugEvent() *Event {
 	return l.newEvent(LevelDebug, 1)
 }
 func (l *Logger) InfoEvent() *Event {
-	if Level(l.level.Load()) > LevelInfo {
-		return nil
-	}
 	return l.newEvent(LevelInfo, 1)
 }
 func (l *Logger) WarnEvent() *Event {
@@ -120,7 +120,11 @@ func FatalEvent() *Event { return Default().FatalEvent() }
 
 func (e *Event) writeInitialJSON(level Level) {
 	if e.includeTime {
-		e.output = appendTimestamp(e.output, e.config.now(), e.config, true)
+		if e.config.jsonTimeMode == JSONTimeUTC {
+			e.writeDefaultJSONTimestamp(e.config.now())
+		} else {
+			e.output = appendTimestamp(e.output, e.config.now(), e.config, true)
+		}
 	} else {
 		e.output = append(e.output, '{')
 	}
@@ -141,6 +145,53 @@ func (e *Event) writeInitialJSON(level Level) {
 		e.output = append(e.output, `"level":"FATAL"`...)
 	}
 	e.addCallers()
+}
+
+func (e *Event) writeDefaultJSONTimestamp(now time.Time) {
+	if e.captureCaller != 0 {
+		e.output = appendDefaultJSONTimestamp(e.output, now.UTC())
+		return
+	}
+	second := now.Unix()
+	p := &e.callerData.callerFunc
+	if e.timeSecond != second {
+		e.timeSecond = second
+		utc := now.UTC()
+		year, month, day := utc.Date()
+		hour, minute, sec := utc.Clock()
+		p[0] = byte('0' + year/1000%10)
+		p[1] = byte('0' + year/100%10)
+		p[2] = byte('0' + year/10%10)
+		p[3] = byte('0' + year%10)
+		p[4] = '-'
+		p[5] = byte('0' + int(month)/10)
+		p[6] = byte('0' + int(month)%10)
+		p[7] = '-'
+		p[8] = byte('0' + day/10)
+		p[9] = byte('0' + day%10)
+		p[10] = 'T'
+		p[11] = byte('0' + hour/10)
+		p[12] = byte('0' + hour%10)
+		p[13] = ':'
+		p[14] = byte('0' + minute/10)
+		p[15] = byte('0' + minute%10)
+		p[16] = ':'
+		p[17] = byte('0' + sec/10)
+		p[18] = byte('0' + sec%10)
+	}
+	e.output = append(e.output, `{"time":"`...)
+	e.output = append(e.output, p[:19]...)
+	e.output = append(e.output, '.')
+	usec := now.Nanosecond() / 1000
+	e.output = append(e.output,
+		byte('0'+usec/100000),
+		byte('0'+usec/10000%10),
+		byte('0'+usec/1000%10),
+		byte('0'+usec/100%10),
+		byte('0'+usec/10%10),
+		byte('0'+usec%10),
+		'Z', '"', ',',
+	)
 }
 
 func (e *Event) writeInitialConsole(level Level) {

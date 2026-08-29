@@ -10,7 +10,7 @@ import (
 func TestJSONDefaultsAndFieldOrder(t *testing.T) {
 	sb := &syncBuffer{}
 	now := time.Date(2026, time.August, 29, 12, 34, 56, 123000000, time.UTC)
-	l := MustNew(Config{Format: FormatJSON, Writer: sb, Level: LevelDebug, Now: func() time.Time { return now }})
+	l := MustNew(Config{Format: FormatJSON, JSONTimeMode: JSONTimeUTC, Writer: sb, Level: LevelDebug, Now: func() time.Time { return now }})
 
 	l.ErrorEvent().Int("err_code", 500).Str("err_field", "").Str("err_message", "operation failed").
 		Str("source_file", "apierror/examples/log-output/main.go:49").
@@ -25,10 +25,36 @@ func TestJSONDefaultsAndFieldOrder(t *testing.T) {
 func TestJSONDefaultTimestampUsesUTC(t *testing.T) {
 	sb := &syncBuffer{}
 	now := time.Date(2026, time.August, 29, 12, 34, 56, 123000000, time.FixedZone("test", -(3*60+30)*60))
-	l := MustNew(Config{Format: FormatJSON, Writer: sb, Now: func() time.Time { return now }})
+	l := MustNew(Config{Format: FormatJSON, JSONTimeMode: JSONTimeUTC, Writer: sb, Now: func() time.Time { return now }})
 	l.InfoEvent().Msg("message")
 
 	want := "{\"time\":\"2026-08-29T16:04:56.123000Z\",\"level\":\"INFO\",\"message\":\"message\"}\n"
+	if got := sb.String(); got != want {
+		t.Fatalf("output = %q, want %q", got, want)
+	}
+}
+
+func TestJSONDefaultTimestampCacheTracksClockChanges(t *testing.T) {
+	sb := &syncBuffer{}
+	times := []time.Time{
+		time.Date(2026, time.August, 29, 23, 59, 59, 999999000, time.UTC),
+		time.Date(2026, time.August, 30, 0, 0, 0, 1000, time.UTC),
+		time.Date(1969, time.December, 31, 23, 59, 59, 123456000, time.UTC),
+	}
+	index := 0
+	l := MustNew(Config{Format: FormatJSON, JSONTimeMode: JSONTimeUTC, Writer: sb, Now: func() time.Time {
+		now := times[index]
+		index++
+		return now
+	}})
+
+	for range times {
+		l.InfoEvent().Msg("message")
+	}
+
+	want := "{\"time\":\"2026-08-29T23:59:59.999999Z\",\"level\":\"INFO\",\"message\":\"message\"}\n" +
+		"{\"time\":\"2026-08-30T00:00:00.000001Z\",\"level\":\"INFO\",\"message\":\"message\"}\n" +
+		"{\"time\":\"1969-12-31T23:59:59.123456Z\",\"level\":\"INFO\",\"message\":\"message\"}\n"
 	if got := sb.String(); got != want {
 		t.Fatalf("output = %q, want %q", got, want)
 	}
@@ -64,7 +90,7 @@ func TestJSONCustomTimestampFormat(t *testing.T) {
 
 func TestEventAtConsoleCaller(t *testing.T) {
 	sb := &syncBuffer{}
-	l := MustNew(Config{Writer: sb, CallerDepth: 1, DisableTime: true})
+	l := MustNew(Config{Writer: sb, CallerDepth: 1})
 	l.EventAt(LevelError, "main.runCases.func1", "log-output/main.go:49").Msg("operation failed")
 	want := "ERRR [main.runCases.func1 log-output/main.go:49] operation failed\n"
 	if got := sb.String(); got != want {

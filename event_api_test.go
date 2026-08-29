@@ -78,7 +78,7 @@ func TestTimestampLayouts(t *testing.T) {
 func TestInjectedClockAndReservedFields(t *testing.T) {
 	sb := &syncBuffer{}
 	now := time.Date(2026, 2, 3, 4, 5, 6, 7, time.UTC)
-	l := MustNew(Config{Format: FormatJSON, Writer: sb, IncludeTime: true, Now: func() time.Time { return now }})
+	l := MustNew(Config{Format: FormatJSON, Writer: sb, JSONTimeMode: JSONTimeUTC, Now: func() time.Time { return now }})
 	l.InfoEvent().Str("message", "field").Str("level", "field").Msg("actual")
 	var record map[string]any
 	if err := json.Unmarshal([]byte(sb.String()), &record); err != nil {

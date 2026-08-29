@@ -3,6 +3,7 @@ package iqlog
 import (
 	"fmt"
 	"strconv"
+	"strings"
 )
 
 func sprintMessage(msg string, args ...interface{}) string {
@@ -40,8 +41,6 @@ func (bsl *Event) terminateDisabled(message string) bool {
 // logger's lock, recycles the line, and exits if the line was started
 // by a Fatal/Panic builder.
 func (bsl *Event) finish() {
-	exit := bsl.exitAfterWrite
-
 	line := bsl.output
 	if !bsl.jsonMode {
 		line = sanitizeConsoleLine(line)
@@ -49,22 +48,22 @@ func (bsl *Event) finish() {
 
 	owned := bsl.logger.writeRecord(line)
 
-	doPanic := bsl.panicAfterWrite
-	panicMsg := bsl.panicMessage
-	bsl.exitAfterWrite = false
-	bsl.panicAfterWrite = false
-	bsl.panicMessage = ""
+	if !bsl.panicAfterWrite && !bsl.exitAfterWrite {
+		bsl.release(!owned)
+		return
+	}
+
+	exit := bsl.exitAfterWrite
 	logger := bsl.logger
 	exitFunc := bsl.config.exitFunc
+	panicMsg := bsl.panicMessage
 	bsl.release(!owned)
 
-	if doPanic {
+	if !exit {
 		panic(panicMsg)
 	}
-	if exit {
-		_ = logger.Flush()
-		exitFunc(1)
-	}
+	_ = logger.Flush()
+	exitFunc(1)
 }
 
 func (bsl *Event) Msg(msg string) {
@@ -74,7 +73,9 @@ func (bsl *Event) Msg(msg string) {
 	if bsl.consumed {
 		return
 	}
-	bsl.panicMessage = msg
+	if bsl.panicAfterWrite {
+		bsl.panicMessage = msg
+	}
 	if bsl.jsonMode {
 		bsl.writeFinalJSON(msg)
 	} else {
@@ -111,7 +112,9 @@ func (bsl *Event) Msgs(msg string, args ...interface{}) {
 	if bsl.consumed {
 		return
 	}
-	bsl.panicMessage = panicMessage
+	if bsl.panicAfterWrite {
+		bsl.panicMessage = panicMessage
+	}
 	if bsl.jsonMode {
 		bsl.writeFinalJSON(msg, args...)
 	} else {
@@ -120,6 +123,10 @@ func (bsl *Event) Msgs(msg string, args ...interface{}) {
 }
 func (bsl *Event) Msgf(format string, args ...interface{}) {
 	if bsl == nil {
+		return
+	}
+	if len(args) == 0 && !strings.Contains(format, "%") {
+		bsl.Msg(format)
 		return
 	}
 	panicMessage := ""

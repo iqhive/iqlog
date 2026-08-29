@@ -41,10 +41,10 @@ const (
 type JSONTimeMode uint8
 
 const (
-	// JSONTimeUTC emits the default fixed-width UTC timestamp using the fast path.
-	JSONTimeUTC JSONTimeMode = iota
 	// JSONTimeDisabled omits the timestamp from JSON records.
-	JSONTimeDisabled
+	JSONTimeDisabled JSONTimeMode = iota
+	// JSONTimeUTC emits the default fixed-width UTC timestamp using the fast path.
+	JSONTimeUTC
 	// JSONTimeCustom formats JSON timestamps with Config.TimestampLayout.
 	JSONTimeCustom
 )
@@ -68,16 +68,16 @@ type Config struct {
 	// EscapeFieldNames enables JSON escaping for dynamic field names. It is
 	// optional because trusted identifier-style keys are substantially faster.
 	EscapeFieldNames bool
-	IncludeTime      bool
-	// DisableTime disables timestamps when Format is FormatJSON. JSON output
-	// includes timestamps by default.
-	DisableTime     bool
+	// IncludeTime controls console timestamps. JSON timestamps are
+	// controlled by JSONTimeMode.
+	IncludeTime bool
 	// TimestampLayout is passed to time.Format when JSONTimeMode is
 	// JSONTimeCustom. It also controls console timestamps.
 	TimestampLayout string
-	// JSONTimeMode selects UTC, disabled, or custom JSON timestamps. The zero
-	// value is the high-performance UTC mode.
-	JSONTimeMode    JSONTimeMode
+	// JSONTimeMode controls timestamp output for JSON records. The zero
+	// value (JSONTimeDisabled) omits the timestamp; set JSONTimeUTC or
+	// JSONTimeCustom to opt in.
+	JSONTimeMode JSONTimeMode
 	CallerDepth     int
 	// Color forces ANSI colors for console output. Terminal writers are
 	// detected automatically unless DisableColor is set.
@@ -116,9 +116,6 @@ type loggerConfig struct {
 
 func normalizeConfig(cfg Config) Config {
 	if cfg.Format == FormatJSON {
-		if cfg.DisableTime {
-			cfg.JSONTimeMode = JSONTimeDisabled
-		}
 		cfg.IncludeTime = cfg.JSONTimeMode != JSONTimeDisabled
 	}
 	if cfg.Format == FormatConsole && !cfg.DisableColor && terminalWriter(cfg.Writer) {
@@ -260,7 +257,7 @@ func (l *Logger) Config() Config {
 		Format: cfg.format, Level: cfg.level, Writer: w,
 		ConcurrentWriter: cfg.concurrentWriter,
 		EscapeFieldNames: cfg.escapeFieldNames,
-		IncludeTime:      cfg.includeTime, DisableTime: cfg.format == FormatJSON && cfg.jsonTimeMode == JSONTimeDisabled, TimestampLayout: cfg.timestampLayout, JSONTimeMode: cfg.jsonTimeMode,
+		IncludeTime:      cfg.includeTime, TimestampLayout: cfg.timestampLayout, JSONTimeMode: cfg.jsonTimeMode,
 		CallerDepth: cfg.callerDepth, Color: cfg.color, DisableColor: !cfg.color,
 		ApplicationName: cfg.applicationName, SyslogHost: cfg.syslogHost,
 		ContextExtractor: cfg.contextExtractor, ExitFunc: cfg.exitFunc, Now: cfg.now,

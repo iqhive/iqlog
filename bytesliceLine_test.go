@@ -8,10 +8,9 @@ import (
 
 func TestByteSliceLineConsoleMsg(t *testing.T) {
 	buf := &bytes.Buffer{}
-	logger := MustNew(Config{IncludeTime: true})
+	logger := MustNew(Config{})
 	logger.setWriter(buf)
 	logger.setLevel(LevelDebug)
-	logger.setIncludeTime(false)
 	logger.InfoEvent().Msg("Test 1 message")
 	logOutput := buf.String()
 
@@ -24,10 +23,9 @@ func TestByteSliceLineConsoleMsg(t *testing.T) {
 
 func TestByteSliceLineConsoleMsgWithVars(t *testing.T) {
 	buf := &bytes.Buffer{}
-	logger := MustNew(Config{IncludeTime: true})
+	logger := MustNew(Config{})
 	logger.setWriter(buf)
 	logger.setLevel(LevelDebug)
-	logger.setIncludeTime(false)
 	logger.InfoEvent().Str("string", "value").Int("int", 42).Float32("float", 3.14).Msg("Test 2 message")
 	logOutput := buf.String()
 
@@ -43,7 +41,6 @@ func TestByteSliceLineConsoleMsgWithTimestamp(t *testing.T) {
 	logger := MustNew(Config{IncludeTime: true})
 	logger.setWriter(buf)
 	logger.setLevel(LevelDebug)
-	logger.setIncludeTime(true)
 	logger.InfoEvent().Msg("Test 3 message")
 	logOutput := buf.String()
 
@@ -63,7 +60,6 @@ func TestByteSliceLineConsoleMsgWithVarsTimestamp(t *testing.T) {
 	logger := MustNew(Config{IncludeTime: true})
 	logger.setWriter(buf)
 	logger.setLevel(LevelDebug)
-	logger.setIncludeTime(true)
 	logger.InfoEvent().Str("string", "value").Int("int", 42).Float32("float", 3.14).Msg("Test 4 message")
 	logOutput := buf.String()
 
@@ -81,10 +77,9 @@ func TestByteSliceLineConsoleMsgWithVarsTimestamp(t *testing.T) {
 
 func TestByteSliceLineConsoleMsgf(t *testing.T) {
 	buf := &bytes.Buffer{}
-	logger := MustNew(Config{IncludeTime: true})
+	logger := MustNew(Config{})
 	logger.setWriter(buf)
 	logger.setLevel(LevelDebug)
-	logger.setIncludeTime(false)
 	logger.InfoEvent().Msgf("Test 5 message %d %s %f", 42, "string", 3.14)
 	logOutput := buf.String()
 	expected := "INFO Test 5 message 42 string 3.140000\n"
@@ -93,12 +88,22 @@ func TestByteSliceLineConsoleMsgf(t *testing.T) {
 	}
 }
 
+func TestByteSliceLineMsgfWithoutArgumentsStillFormatsPercent(t *testing.T) {
+	buf := &bytes.Buffer{}
+	logger := MustNew(Config{Format: FormatJSON, Writer: buf})
+
+	logger.InfoEvent().Msgf("100%% complete")
+
+	if got, want := buf.String(), "{\"level\":\"INFO\",\"message\":\"100% complete\"}\n"; got != want {
+		t.Fatalf("expected %q, got %q", want, got)
+	}
+}
+
 func TestByteSliceLineConsoleMsgfWithVars(t *testing.T) {
 	buf := &bytes.Buffer{}
 	logger := MustNew(Config{IncludeTime: true})
 	logger.setWriter(buf)
 	logger.setLevel(LevelDebug)
-	logger.setIncludeTime(true)
 	logger.InfoEvent().Msgf("Test 6 message %d %s %f", 42, "string", 3.14)
 	logOutput := buf.String()
 
@@ -115,7 +120,6 @@ func TestByteSliceLineConsoleMsgfTimestamp(t *testing.T) {
 	logger := MustNew(Config{IncludeTime: true})
 	logger.setWriter(buf)
 	logger.setLevel(LevelDebug)
-	logger.setIncludeTime(true)
 	logger.InfoEvent().Msgf("Test 7 message %d %s %f", 42, "string", 3.14)
 	logOutput := buf.String()
 
@@ -132,7 +136,6 @@ func TestByteSliceLineConsoleMsgfVarsTimestamp(t *testing.T) {
 	logger := MustNew(Config{IncludeTime: true})
 	logger.setWriter(buf)
 	logger.setLevel(LevelDebug)
-	logger.setIncludeTime(true)
 	logger.InfoEvent().Msgf("Test 8 message %d %s %f", 42, "string", 3.14)
 	logOutput := buf.String()
 
@@ -146,10 +149,9 @@ func TestByteSliceLineConsoleMsgfVarsTimestamp(t *testing.T) {
 
 func TestByteSliceLineJSONMsg(t *testing.T) {
 	buf := &bytes.Buffer{}
-	logger := MustNew(Config{Format: FormatJSON, IncludeTime: true})
+	logger := MustNew(Config{Format: FormatJSON})
 	logger.setWriter(buf)
 	logger.setLevel(LevelDebug)
-	logger.setIncludeTime(false)
 	logger.InfoEvent().Msg("Test 9 message")
 	logOutput := buf.String()
 	expectedRegexStr := `^\{"level":"INFO","message":"Test 9 message"\}\n$`
@@ -161,10 +163,9 @@ func TestByteSliceLineJSONMsg(t *testing.T) {
 
 func TestByteSliceLineJSONMsgWithVars(t *testing.T) {
 	buf := &bytes.Buffer{}
-	logger := MustNew(Config{Format: FormatJSON, IncludeTime: true})
+	logger := MustNew(Config{Format: FormatJSON})
 	logger.setWriter(buf)
 	logger.setLevel(LevelDebug)
-	logger.setIncludeTime(false)
 	logger.InfoEvent().Str("string", "value").Int("int", 42).Float32("float", 3.14).Msg("Test 10 message")
 	logOutput := buf.String()
 	expectedRegexStr := `^\{"level":"INFO","string":"value","int":42,"float":3.14,"message":"Test 10 message"\}\n$`
@@ -176,10 +177,9 @@ func TestByteSliceLineJSONMsgWithVars(t *testing.T) {
 
 func TestByteSliceLineJSONMsgWithTimestamp(t *testing.T) {
 	buf := &bytes.Buffer{}
-	logger := MustNew(Config{Format: FormatJSON, IncludeTime: true})
+	logger := MustNew(Config{Format: FormatJSON, JSONTimeMode: JSONTimeUTC})
 	logger.setWriter(buf)
 	logger.setLevel(LevelDebug)
-	logger.setIncludeTime(true)
 	logger.InfoEvent().Msg("Test 11 message")
 	logOutput := buf.String()
 	expectedRegexStr := `^\{"time":"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z","level":"INFO","message":"Test 11 message"\}\n$`
@@ -191,10 +191,9 @@ func TestByteSliceLineJSONMsgWithTimestamp(t *testing.T) {
 
 func TestByteSliceLineJSONMsgWithVarsTimestamp(t *testing.T) {
 	buf := &bytes.Buffer{}
-	logger := MustNew(Config{Format: FormatJSON, IncludeTime: true})
+	logger := MustNew(Config{Format: FormatJSON, JSONTimeMode: JSONTimeUTC})
 	logger.setWriter(buf)
 	logger.setLevel(LevelDebug)
-	logger.setIncludeTime(true)
 	logger.InfoEvent().Str("string", "value").Int("int", 42).Float32("float", 3.14).Msg("Test 12 message")
 	logOutput := buf.String()
 	expectedRegexStr := `^\{"time":"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z","level":"INFO","string":"value","int":42,"float":3.14,"message":"Test 12 message"\}\n$`
@@ -206,10 +205,9 @@ func TestByteSliceLineJSONMsgWithVarsTimestamp(t *testing.T) {
 
 func TestByteSliceLineJSONMsgf(t *testing.T) {
 	buf := &bytes.Buffer{}
-	logger := MustNew(Config{Format: FormatJSON, IncludeTime: true})
+	logger := MustNew(Config{Format: FormatJSON})
 	logger.setWriter(buf)
 	logger.setLevel(LevelDebug)
-	logger.setIncludeTime(false)
 	logger.InfoEvent().Msgf("Test 13 message %d %s %f", 42, "string", 3.14)
 	logOutput := buf.String()
 	expectedRegexStr := `^\{"level":"INFO","message":"Test 13 message 42 string 3.140000"\}\n$`
@@ -221,10 +219,9 @@ func TestByteSliceLineJSONMsgf(t *testing.T) {
 
 func TestByteSliceLineJSONMsgWithVarf(t *testing.T) {
 	buf := &bytes.Buffer{}
-	logger := MustNew(Config{Format: FormatJSON, IncludeTime: true})
+	logger := MustNew(Config{Format: FormatJSON})
 	logger.setWriter(buf)
 	logger.setLevel(LevelDebug)
-	logger.setIncludeTime(false)
 	logger.InfoEvent().Str("string", "value").Int("int", 42).Float32("float", 3.14).Msgf("Test 14 message %d %s %f", 42, "string", 3.14)
 	logOutput := buf.String()
 	expectedRegexStr := `^\{"level":"INFO","string":"value","int":42,"float":3.14,"message":"Test 14 message 42 string 3.140000"\}\n$`
@@ -236,10 +233,9 @@ func TestByteSliceLineJSONMsgWithVarf(t *testing.T) {
 
 func TestByteSliceLineJSONMsgWithTimestampf(t *testing.T) {
 	buf := &bytes.Buffer{}
-	logger := MustNew(Config{Format: FormatJSON, IncludeTime: true})
+	logger := MustNew(Config{Format: FormatJSON, JSONTimeMode: JSONTimeUTC})
 	logger.setWriter(buf)
 	logger.setLevel(LevelDebug)
-	logger.setIncludeTime(true)
 	logger.InfoEvent().Msgf("Test 15 message %d %s %f", 42, "string", 3.14)
 	logOutput := buf.String()
 	expectedRegexStr := `^\{"time":"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z","level":"INFO","message":"Test 15 message 42 string 3.140000"\}\n$`
@@ -251,10 +247,9 @@ func TestByteSliceLineJSONMsgWithTimestampf(t *testing.T) {
 
 func TestByteSliceLineJSONMsgWithVarsTimestampf(t *testing.T) {
 	buf := &bytes.Buffer{}
-	logger := MustNew(Config{Format: FormatJSON, IncludeTime: true})
+	logger := MustNew(Config{Format: FormatJSON, JSONTimeMode: JSONTimeUTC})
 	logger.setWriter(buf)
 	logger.setLevel(LevelDebug)
-	logger.setIncludeTime(true)
 	logger.InfoEvent().Str("string", "value").Int("int", 42).Float32("float", 3.14).Msgf("Test 16 message %d %s %f", 42, "string", 3.14)
 	logOutput := buf.String()
 	expectedRegexStr := `^\{"time":"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z","level":"INFO","string":"value","int":42,"float":3.14,"message":"Test 16 message 42 string 3.140000"\}\n$`

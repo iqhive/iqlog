@@ -7,6 +7,7 @@ import (
 	"log"
 	"log/slog"
 	"testing"
+	"time"
 
 	"github.com/iqhive/iqlog"
 	phuslog "github.com/phuslu/log"
@@ -14,6 +15,7 @@ import (
 )
 
 const msg = "The quick brown fox jumps over the lazy dog"
+const msgf = "The race was %d minutes and %d seconds long"
 
 var obj = struct {
 	Rate string
@@ -28,87 +30,13 @@ func BenchmarkSlogDisabled(b *testing.B) {
 	}
 }
 
-func BenchmarkSlogSimple(b *testing.B) {
-	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
-	for i := 0; i < b.N; i++ {
-		logger.Info(msg, "rate", "15", "low", 16, "high", 123.2)
-	}
-}
-
-func BenchmarkSlogPrintf(b *testing.B) {
-	slog.SetDefault(slog.New(slog.NewJSONHandler(io.Discard, nil)))
-	for i := 0; i < b.N; i++ {
-		log.Printf("rate=%s low=%d high=%f msg=%s", "15", 16, 123.2, msg)
-	}
-}
-
-func BenchmarkSlogAny(b *testing.B) {
-	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
-	for i := 0; i < b.N; i++ {
-		logger.Info(msg, "rate", "15", "low", 16, "object", &obj)
-	}
-}
-
 func BenchmarkIQLogDisabled(b *testing.B) {
-	// logger := phuslog.Logger{Level: phuslog.InfoLevel, Writer: phuslog.IOWriter{io.Discard}}
-	logger := iqlog.MustNew(iqlog.Config{Format: iqlog.FormatJSON, Level: iqlog.LevelInfo, Writer: io.Discard})
-	for i := 0; i < b.N; i++ {
-		// logger.Str("rate", "15").Int("low", 16).Float32("high", 123.2).Debug(msg)
-		logger.DebugEvent().Str("rate", "15").Int("low", 16).Float32("high", 123.2).Msg(msg)
-		// logger.Debug(msg)
-	}
-}
-
-func BenchmarkIQLogDisabledGuarded(b *testing.B) {
 	logger := iqlog.MustNew(iqlog.Config{Format: iqlog.FormatJSON, Level: iqlog.LevelInfo, Writer: io.Discard})
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
 		if event := logger.DebugEvent(); event != nil {
 			event.Str("rate", "15").Int("low", 16).Float32("high", 123.2).Msg(msg)
 		}
-	}
-}
-
-func BenchmarkIQLogSimple(b *testing.B) {
-	logger := iqlog.MustNew(iqlog.Config{Format: iqlog.FormatJSON, Writer: io.Discard})
-	for i := 0; i < b.N; i++ {
-		// logger.Str("rate", "15").Int("low", 16).Float32("high", 123.2).Info(msg)
-		logger.InfoEvent().Str("rate", "15").Int("low", 16).Float32("high", 123.2).Msg(msg)
-		// logger.Info(msg)
-	}
-}
-
-func BenchmarkIQLogPrintf(b *testing.B) {
-	logger := iqlog.MustNew(iqlog.Config{Format: iqlog.FormatJSON, Writer: io.Discard})
-	for i := 0; i < b.N; i++ {
-		// logger.Infof("rate=%s low=%d high=%f msg=%s", "15", 16, 123.2, msg)
-		logger.InfoEvent().Str("rate", "15").Int("low", 16).Float32("high", 123.2).Msgf(msg)
-		// logger.Info(msg)
-	}
-}
-
-func BenchmarkIQLogAny(b *testing.B) {
-	logger := iqlog.MustNew(iqlog.Config{Format: iqlog.FormatJSON, Writer: io.Discard})
-	for i := 0; i < b.N; i++ {
-		// logger.Any("rate", "15").Any("low", 16).Any("object", &obj).Info(msg)
-		logger.InfoEvent().Any("rate", "15").Any("low", 16).Any("object", &obj).Msg(msg)
-		// logger.Info(msg)
-	}
-}
-
-func BenchmarkZerologSimple(b *testing.B) {
-	logger := zerolog.New(io.Discard)
-	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
-		logger.Info().Str("rate", "15").Int("low", 16).Float32("high", 123.2).Msg(msg)
-	}
-}
-
-func BenchmarkPhusluSimple(b *testing.B) {
-	logger := phuslog.Logger{Level: phuslog.InfoLevel, Writer: phuslog.IOWriter{Writer: io.Discard}}
-	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
-		logger.Info().Str("rate", "15").Int("low", 16).Float32("high", 123.2).Msg(msg)
 	}
 }
 
@@ -130,8 +58,130 @@ func BenchmarkPhusluDisabled(b *testing.B) {
 	}
 }
 
+func BenchmarkSlogSimple(b *testing.B) {
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	for i := 0; i < b.N; i++ {
+		logger.Info(msg, "rate", "15", "low", 16, "high", 123.2)
+	}
+}
+
+func BenchmarkIQLogSimple(b *testing.B) {
+	logger := iqlog.MustNew(iqlog.Config{Format: iqlog.FormatJSON, Writer: io.Discard, JSONTimeMode: iqlog.JSONTimeDisabled})
+	for i := 0; i < b.N; i++ {
+		logger.InfoEvent().Str("rate", "15").Int("low", 16).Float32("high", 123.2).Msg(msg)
+	}
+}
+
+func BenchmarkZerologSimple(b *testing.B) {
+	logger := zerolog.New(io.Discard)
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		logger.Info().Str("rate", "15").Int("low", 16).Float32("high", 123.2).Msg(msg)
+	}
+}
+
+func BenchmarkPhusluSimple(b *testing.B) {
+	logger := phuslog.Logger{Level: phuslog.InfoLevel, Writer: phuslog.IOWriter{Writer: io.Discard}, TimeField: ""}
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		logger.Info().Str("rate", "15").Int("low", 16).Float32("high", 123.2).Msg(msg)
+	}
+}
+
+func BenchmarkSlogPrintf(b *testing.B) {
+	slog.SetDefault(slog.New(slog.NewJSONHandler(io.Discard, nil)))
+	for i := 0; i < b.N; i++ {
+		log.Printf("rate=%s low=%d high=%f msg=%s", "15", 16, 123.2, msg)
+	}
+}
+
+func BenchmarkIQLogPrintf(b *testing.B) {
+	logger := iqlog.MustNew(iqlog.Config{Format: iqlog.FormatJSON, Writer: io.Discard, JSONTimeMode: iqlog.JSONTimeDisabled})
+	for i := 0; i < b.N; i++ {
+		logger.InfoEvent().Str("rate", "15").Int("low", 16).Float32("high", 123.2).Msgf(msgf, 16, 32)
+	}
+}
+
+func BenchmarkZerologPrintf(b *testing.B) {
+	logger := zerolog.New(io.Discard)
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		logger.Info().Str("rate", "15").Int("low", 16).Float32("high", 123.2).Msgf(msgf, 16, 32)
+	}
+}
+
+func BenchmarkPhusluPrintf(b *testing.B) {
+	logger := phuslog.Logger{Level: phuslog.InfoLevel, Writer: phuslog.IOWriter{Writer: io.Discard}, TimeField: ""}
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		logger.Info().Str("rate", "15").Int("low", 16).Float32("high", 123.2).Msgf(msgf, 16, 32)
+	}
+}
+
+func BenchmarkSlogAny(b *testing.B) {
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	for i := 0; i < b.N; i++ {
+		logger.Info(msg, "rate", "15", "low", 16, "object", &obj)
+	}
+}
+
+func BenchmarkIQLogAny(b *testing.B) {
+	logger := iqlog.MustNew(iqlog.Config{Format: iqlog.FormatJSON, Writer: io.Discard, JSONTimeMode: iqlog.JSONTimeDisabled})
+	for i := 0; i < b.N; i++ {
+		// logger.Any("rate", "15").Any("low", 16).Any("object", &obj).Info(msg)
+		logger.InfoEvent().Any("rate", "15").Any("low", 16).Any("object", &obj).Msg(msg)
+		// logger.Info(msg)
+	}
+}
+
+func BenchmarkZerologAny(b *testing.B) {
+	logger := zerolog.New(io.Discard)
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		logger.Info().Str("rate", "15").Int("low", 16).Float32("high", 123.2).Any("object", &obj).Msg(msg)
+	}
+}
+
+func BenchmarkPhusluAny(b *testing.B) {
+	logger := phuslog.Logger{Level: phuslog.InfoLevel, Writer: phuslog.IOWriter{Writer: io.Discard}, TimeField: ""}
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		logger.Info().Str("rate", "15").Int("low", 16).Float32("high", 123.2).Any("object", &obj).Msg(msg)
+	}
+}
+
+func BenchmarkIQLogSimpleWithTimestamp(b *testing.B) {
+	logger := iqlog.MustNew(iqlog.Config{Format: iqlog.FormatJSON, Writer: io.Discard, JSONTimeMode: iqlog.JSONTimeUTC})
+	for i := 0; i < b.N; i++ {
+		logger.InfoEvent().Str("rate", "15").Int("low", 16).Float32("high", 123.2).Msg(msg)
+	}
+}
+
+func BenchmarkZerologSimpleWithTimestamp(b *testing.B) {
+	logger := zerolog.New(io.Discard).With().Timestamp().Logger()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		logger.Info().Str("rate", "15").Int("low", 16).Float32("high", 123.2).Msg(msg)
+	}
+}
+
+func BenchmarkPhusluSimpleWithTimestamp(b *testing.B) {
+	logger := phuslog.Logger{Level: phuslog.InfoLevel, Writer: phuslog.IOWriter{Writer: io.Discard}, TimeField: "time", TimeLocation: time.UTC, TimeFormat: time.RFC3339Nano}
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		logger.Info().Str("rate", "15").Int("low", 16).Float32("high", 123.2).Msg(msg)
+	}
+}
+
+// func BenchmarkIQLogPrintfWithTimestamp(b *testing.B) {
+// 	logger := iqlog.MustNew(iqlog.Config{Format: iqlog.FormatJSON, Writer: io.Discard, JSONTimeMode: iqlog.JSONTimeUTC})
+// 	for i := 0; i < b.N; i++ {
+// 		logger.InfoEvent().Str("rate", "15").Int("low", 16).Float32("high", 123.2).Msgf(msg)
+// 	}
+// }
+
 func BenchmarkIQLogParallel(b *testing.B) {
-	logger := iqlog.MustNew(iqlog.Config{Format: iqlog.FormatJSON, Writer: io.Discard})
+	logger := iqlog.MustNew(iqlog.Config{Format: iqlog.FormatJSON, Writer: io.Discard, JSONTimeMode: iqlog.JSONTimeUTC})
 	b.ReportAllocs()
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {

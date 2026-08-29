@@ -145,7 +145,7 @@ func TestLogFormatStringInfo(t *testing.T) {
 // TestLogFormatJSONInfo checks json output
 func TestLogFormatJSONInfo(t *testing.T) {
 	buf := &bytes.Buffer{}
-	logger := iqlog.MustNew(iqlog.Config{Format: iqlog.FormatJSON, IncludeTime: true, Writer: buf, Level: iqlog.LevelDebug})
+	logger := iqlog.MustNew(iqlog.Config{Format: iqlog.FormatJSON, JSONTimeMode: iqlog.JSONTimeUTC, Writer: buf, Level: iqlog.LevelDebug})
 
 	logger.Info("Format check")
 	logOutput := buf.String()
@@ -179,7 +179,7 @@ func TestLogFormatStringWarn(t *testing.T) {
 // TestLogFormatJSONWarn checks json output
 func TestLogFormatJSONWarn(t *testing.T) {
 	buf := &bytes.Buffer{}
-	logger := iqlog.MustNew(iqlog.Config{Format: iqlog.FormatJSON, IncludeTime: true, Writer: buf, Level: iqlog.LevelDebug})
+	logger := iqlog.MustNew(iqlog.Config{Format: iqlog.FormatJSON, JSONTimeMode: iqlog.JSONTimeUTC, Writer: buf, Level: iqlog.LevelDebug})
 
 	logger.Warn("Format check")
 	logOutput := buf.String()

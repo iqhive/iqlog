@@ -80,18 +80,6 @@ func (l *Logger) setCallerDepth(d int) {
 	l.updateConfig(func(cfg *loggerConfig) { cfg.callerDepth = d })
 }
 func (l *Logger) setUseColor(d bool) { l.updateConfig(func(cfg *loggerConfig) { cfg.color = d }) }
-func (l *Logger) setIncludeTime(d bool) {
-	l.updateConfig(func(cfg *loggerConfig) {
-		cfg.includeTime = d
-		if cfg.format == FormatJSON {
-			if d {
-				cfg.jsonTimeMode = JSONTimeUTC
-			} else {
-				cfg.jsonTimeMode = JSONTimeDisabled
-			}
-		}
-	})
-}
 func (l *Logger) setTimestampLayout(layout string) {
 	l.updateConfig(func(cfg *loggerConfig) { cfg.timestampLayout = normalizeTimestampLayout(layout) })
 }

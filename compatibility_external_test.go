@@ -23,7 +23,7 @@ var (
 	_ func(bool)                                                                        = iqlog.SetDebugMode
 	_ func(int)                                                                         = iqlog.SetCallerDepth
 	_ func(bool)                                                                        = iqlog.SetUseColour
-	_ func(bool)                                                                        = iqlog.SetJSONMode
+	_ func(iqlog.JSONTimeMode)                                                           = iqlog.SetJSONTimeMode
 	_ func(bool)                                                                        = iqlog.SetNewLine
 	_ func(string)                                                                      = iqlog.SetApplicationName
 	_ func(string)                                                                      = iqlog.SetSyslogHost
@@ -48,7 +48,7 @@ var (
 	_ func(*iqlog.Logger, int)                                                          = (*iqlog.Logger).SetCallerDepth
 	_ func(*iqlog.Logger, bool)                                                         = (*iqlog.Logger).SetUseColour
 	_ func(*iqlog.Logger, bool)                                                         = (*iqlog.Logger).SetUseColor
-	_ func(*iqlog.Logger, bool)                                                         = (*iqlog.Logger).SetJSONMode
+	_ func(*iqlog.Logger, iqlog.JSONTimeMode)                                           = (*iqlog.Logger).SetJSONTimeMode
 	_ func(*iqlog.Logger, bool)                                                         = (*iqlog.Logger).SetNewLine
 	_ func(*iqlog.Logger, string)                                                       = (*iqlog.Logger).SetApplicationName
 	_ func(*iqlog.Logger, string)                                                       = (*iqlog.Logger).SetSyslogHost
@@ -91,7 +91,7 @@ func TestLegacyConfigurationAdapters(t *testing.T) {
 	if logger.Level() != iqlog.LevelDebug {
 		t.Fatal("debug mode did not set debug level")
 	}
-	logger.SetJSONMode(true)
+	logger.SetJSONTimeMode(iqlog.JSONTimeUTC)
 	if logger.Config().Format != iqlog.FormatJSON || !logger.Config().IncludeTime {
 		t.Fatal("JSON mode not applied")
 	}

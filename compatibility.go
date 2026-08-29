@@ -115,17 +115,14 @@ func (l *Logger) SetUseColour(enabled bool) { l.setUseColor(enabled) }
 func SetUseColour(enabled bool)             { Default().SetUseColour(enabled) }
 func (l *Logger) SetUseColor(enabled bool)  { l.setUseColor(enabled) }
 func SetUseColor(enabled bool)              { Default().SetUseColor(enabled) }
-func (l *Logger) SetJSONMode(enabled bool) {
+func (l *Logger) SetJSONTimeMode(mode JSONTimeMode) {
 	l.updateConfig(func(cfg *loggerConfig) {
-		if enabled {
-			cfg.format = FormatJSON
-		} else {
-			cfg.format = FormatConsole
-		}
-		cfg.includeTime = enabled
+		cfg.format = FormatJSON
+		cfg.jsonTimeMode = mode
+		cfg.includeTime = mode != JSONTimeDisabled
 	})
 }
-func SetJSONMode(enabled bool)                   { Default().SetJSONMode(enabled) }
+func SetJSONTimeMode(mode JSONTimeMode) { Default().SetJSONTimeMode(mode) }
 func (l *Logger) SetNewLine(bool)                {}
 func SetNewLine(enabled bool)                    { Default().SetNewLine(enabled) }
 func (l *Logger) SetApplicationName(name string) { l.setApplicationName(name) }

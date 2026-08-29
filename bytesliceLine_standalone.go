@@ -1,5 +1,7 @@
 package iqlog
 
+const invalidTimestampSecond int64 = -1 << 63
+
 // Event is a single-use structured log event. It is not safe for concurrent
 // use. Msg, Msgs, or Msgf consumes the event.
 type Event struct {
@@ -17,15 +19,29 @@ type Event struct {
 	callerData      callerData
 	consumed        bool
 	buildErr        error
+	timeSecond      int64
 }
 
 func acquireEvent(l *Logger, cfg *loggerConfig) *Event {
 	e := eventPool.Get().(*Event)
-	buf := e.output
-	if cap(buf) == 0 {
-		buf = acquireEventBuffer()
+	if cap(e.output) == 0 {
+		e.output = acquireEventBuffer()
 	}
-	*e = Event{logger: l, config: cfg, output: buf[:0]}
+	e.logger = l
+	e.config = cfg
+	e.jsonMode = false
+	e.output = e.output[:0]
+	e.includeTime = false
+	e.color = false
+	e.captureCaller = 0
+	e.disabled = false
+	e.exitAfterWrite = false
+	e.panicAfterWrite = false
+	e.panicMessage = ""
+	e.callerData.callerFuncLen = 0
+	e.callerData.callerFileLen = 0
+	e.consumed = false
+	e.buildErr = nil
 	return e
 }
 
@@ -34,6 +50,20 @@ func (e *Event) release(releaseBuffer bool) {
 	if !releaseBuffer || cap(buf) > maxPooledCapacity {
 		buf = nil
 	}
-	*e = Event{output: buf, consumed: true}
+	e.logger = nil
+	e.config = nil
+	e.jsonMode = false
+	e.output = buf
+	e.includeTime = false
+	e.color = false
+	e.captureCaller = 0
+	e.disabled = false
+	e.exitAfterWrite = false
+	e.panicAfterWrite = false
+	e.panicMessage = ""
+	e.callerData.callerFuncLen = 0
+	e.callerData.callerFileLen = 0
+	e.consumed = true
+	e.buildErr = nil
 	eventPool.Put(e)
 }

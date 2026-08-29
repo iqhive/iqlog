@@ -10,7 +10,7 @@ const (
 )
 
 var eventPool = sync.Pool{
-	New: func() any { return new(Event) },
+	New: func() any { return &Event{timeSecond: invalidTimestampSecond} },
 }
 
 var eventBufferPool = sync.Pool{

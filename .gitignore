@@ -7,3 +7,5 @@ AGENTS.md
 bench/bench.test
 target/
 .nope
+iqlog.test
+.vhs-bin/chromium-browser

@@ -18,7 +18,7 @@ func Example() {
 
 func ExampleLogger_InfoEvent() {
 	var out bytes.Buffer
-	logger := iqlog.MustNew(iqlog.Config{Format: iqlog.FormatJSON, DisableTime: true, Writer: &out})
+	logger := iqlog.MustNew(iqlog.Config{Format: iqlog.FormatJSON, Writer: &out})
 	logger.InfoEvent().Str("user", "alice").Int("count", 2).Msg("handled")
 	fmt.Print(out.String())
 	// Output: {"level":"INFO","user":"alice","count":2,"message":"handled"}
