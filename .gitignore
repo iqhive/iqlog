@@ -1,3 +1,9 @@
 *~
 testlog
-
+.agents
+.agent
+AGENT.md
+AGENTS.md
+bench/bench.test
+target/
+.nope
