@@ -53,6 +53,9 @@ type Config struct {
 	// optional because trusted identifier-style keys are substantially faster.
 	EscapeFieldNames bool
 	IncludeTime      bool
+	// DisableTime disables timestamps when Format is FormatJSON. JSON output
+	// includes timestamps by default.
+	DisableTime      bool
 	TimestampLayout  string
 	CallerDepth      int
 	Color            bool
@@ -86,6 +89,9 @@ type loggerConfig struct {
 }
 
 func normalizeConfig(cfg Config) Config {
+	if cfg.Format == FormatJSON && !cfg.DisableTime {
+		cfg.IncludeTime = true
+	}
 	if cfg.Level == LevelUnknown {
 		cfg.Level = LevelInfo
 	}
@@ -210,7 +216,7 @@ func (l *Logger) Config() Config {
 		Format: cfg.format, Level: cfg.level, Writer: w,
 		ConcurrentWriter: cfg.concurrentWriter,
 		EscapeFieldNames: cfg.escapeFieldNames,
-		IncludeTime:      cfg.includeTime, TimestampLayout: cfg.timestampLayout,
+		IncludeTime:      cfg.includeTime, DisableTime: !cfg.includeTime, TimestampLayout: cfg.timestampLayout,
 		CallerDepth: cfg.callerDepth, Color: cfg.color,
 		ApplicationName: cfg.applicationName, SyslogHost: cfg.syslogHost,
 		ContextExtractor: cfg.contextExtractor, ExitFunc: cfg.exitFunc, Now: cfg.now,

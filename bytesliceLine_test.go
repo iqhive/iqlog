@@ -152,7 +152,7 @@ func TestByteSliceLineJSONMsg(t *testing.T) {
 	logger.setIncludeTime(false)
 	logger.InfoEvent().Msg("Test 9 message")
 	logOutput := buf.String()
-	expectedRegexStr := `^\{"level":"info","message":"Test 9 message"\}\n$`
+	expectedRegexStr := `^\{"level":"INFO","message":"Test 9 message"\}\n$`
 	expected := regexp.MustCompile(expectedRegexStr)
 	if !expected.MatchString(logOutput) {
 		t.Errorf("Expected |%q|, got |%q|", expectedRegexStr, logOutput)
@@ -167,7 +167,7 @@ func TestByteSliceLineJSONMsgWithVars(t *testing.T) {
 	logger.setIncludeTime(false)
 	logger.InfoEvent().Str("string", "value").Int("int", 42).Float32("float", 3.14).Msg("Test 10 message")
 	logOutput := buf.String()
-	expectedRegexStr := `^\{"level":"info","string":"value","int":42,"float":3.14,"message":"Test 10 message"\}\n$`
+	expectedRegexStr := `^\{"level":"INFO","string":"value","int":42,"float":3.14,"message":"Test 10 message"\}\n$`
 	expected := regexp.MustCompile(expectedRegexStr)
 	if !expected.MatchString(logOutput) {
 		t.Errorf("Expected |%q|, got |%q|", expectedRegexStr, logOutput)
@@ -182,7 +182,7 @@ func TestByteSliceLineJSONMsgWithTimestamp(t *testing.T) {
 	logger.setIncludeTime(true)
 	logger.InfoEvent().Msg("Test 11 message")
 	logOutput := buf.String()
-	expectedRegexStr := `^\{"time":"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}","level":"info","message":"Test 11 message"\}\n$`
+	expectedRegexStr := `^\{"time":"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}","level":"INFO","message":"Test 11 message"\}\n$`
 	expected := regexp.MustCompile(expectedRegexStr)
 	if !expected.MatchString(logOutput) {
 		t.Errorf("Expected |%q|, got |%q|", expectedRegexStr, logOutput)
@@ -197,7 +197,7 @@ func TestByteSliceLineJSONMsgWithVarsTimestamp(t *testing.T) {
 	logger.setIncludeTime(true)
 	logger.InfoEvent().Str("string", "value").Int("int", 42).Float32("float", 3.14).Msg("Test 12 message")
 	logOutput := buf.String()
-	expectedRegexStr := `^\{"time":"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}","level":"info","string":"value","int":42,"float":3.14,"message":"Test 12 message"\}\n$`
+	expectedRegexStr := `^\{"time":"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}","level":"INFO","string":"value","int":42,"float":3.14,"message":"Test 12 message"\}\n$`
 	expected := regexp.MustCompile(expectedRegexStr)
 	if !expected.MatchString(logOutput) {
 		t.Errorf("Expected |%q|, got |%q|", expectedRegexStr, logOutput)
@@ -212,7 +212,7 @@ func TestByteSliceLineJSONMsgf(t *testing.T) {
 	logger.setIncludeTime(false)
 	logger.InfoEvent().Msgf("Test 13 message %d %s %f", 42, "string", 3.14)
 	logOutput := buf.String()
-	expectedRegexStr := `^\{"level":"info","message":"Test 13 message 42 string 3.140000"\}\n$`
+	expectedRegexStr := `^\{"level":"INFO","message":"Test 13 message 42 string 3.140000"\}\n$`
 	expected := regexp.MustCompile(expectedRegexStr)
 	if !expected.MatchString(logOutput) {
 		t.Errorf("Expected |%q|, got |%q|", expectedRegexStr, logOutput)
@@ -227,7 +227,7 @@ func TestByteSliceLineJSONMsgWithVarf(t *testing.T) {
 	logger.setIncludeTime(false)
 	logger.InfoEvent().Str("string", "value").Int("int", 42).Float32("float", 3.14).Msgf("Test 14 message %d %s %f", 42, "string", 3.14)
 	logOutput := buf.String()
-	expectedRegexStr := `^\{"level":"info","string":"value","int":42,"float":3.14,"message":"Test 14 message 42 string 3.140000"\}\n$`
+	expectedRegexStr := `^\{"level":"INFO","string":"value","int":42,"float":3.14,"message":"Test 14 message 42 string 3.140000"\}\n$`
 	expected := regexp.MustCompile(expectedRegexStr)
 	if !expected.MatchString(logOutput) {
 		t.Errorf("Expected |%q|, got |%q|", expectedRegexStr, logOutput)
@@ -242,7 +242,7 @@ func TestByteSliceLineJSONMsgWithTimestampf(t *testing.T) {
 	logger.setIncludeTime(true)
 	logger.InfoEvent().Msgf("Test 15 message %d %s %f", 42, "string", 3.14)
 	logOutput := buf.String()
-	expectedRegexStr := `^\{"time":"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}","level":"info","message":"Test 15 message 42 string 3.140000"\}\n$`
+	expectedRegexStr := `^\{"time":"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}","level":"INFO","message":"Test 15 message 42 string 3.140000"\}\n$`
 	expected := regexp.MustCompile(expectedRegexStr)
 	if !expected.MatchString(logOutput) {
 		t.Errorf("Expected |%q|, got |%q|", expectedRegexStr, logOutput)
@@ -257,7 +257,7 @@ func TestByteSliceLineJSONMsgWithVarsTimestampf(t *testing.T) {
 	logger.setIncludeTime(true)
 	logger.InfoEvent().Str("string", "value").Int("int", 42).Float32("float", 3.14).Msgf("Test 16 message %d %s %f", 42, "string", 3.14)
 	logOutput := buf.String()
-	expectedRegexStr := `^\{"time":"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}","level":"info","string":"value","int":42,"float":3.14,"message":"Test 16 message 42 string 3.140000"\}\n$`
+	expectedRegexStr := `^\{"time":"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}","level":"INFO","string":"value","int":42,"float":3.14,"message":"Test 16 message 42 string 3.140000"\}\n$`
 	expected := regexp.MustCompile(expectedRegexStr)
 	if !expected.MatchString(logOutput) {
 		t.Errorf("Expected |%q|, got |%q|", expectedRegexStr, logOutput)

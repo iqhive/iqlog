@@ -10,6 +10,10 @@ func (l *Logger) newEvent(level Level, callerSkip int) *Event {
 }
 
 func (l *Logger) newEventContext(ctx context.Context, level Level, callerSkip int) *Event {
+	return l.newEventContextAt(ctx, level, callerSkip+1, "", "", false)
+}
+
+func (l *Logger) newEventContextAt(ctx context.Context, level Level, callerSkip int, function, file string, explicitCaller bool) *Event {
 	if Level(l.level.Load()) > level {
 		if level != LevelFatal && level != LevelPanic {
 			return nil
@@ -32,7 +36,14 @@ func (l *Logger) newEventContext(ctx context.Context, level Level, callerSkip in
 	e.captureCaller = cfg.callerDepth
 	e.exitAfterWrite = level == LevelFatal
 	e.panicAfterWrite = level == LevelPanic
-	if cfg.callerDepth > 0 {
+	if explicitCaller {
+		e.captureCaller = 0
+		if function != "" {
+			e.captureCaller = 1
+			e.callerData.callerFuncLen = uint(copy(e.callerData.callerFunc[:], function))
+			e.callerData.callerFileLen = uint(copy(e.callerData.callerFile[:], file))
+		}
+	} else if cfg.callerDepth > 0 {
 		captureCaller(cfg.callerDepth+callerSkip+1, &e.callerData)
 	}
 	if e.jsonMode {
@@ -59,6 +70,12 @@ func (l *Logger) newEventContext(ctx context.Context, level Level, callerSkip in
 
 // Event creates a structured event at level.
 func (l *Logger) Event(level Level) *Event { return l.newEvent(normalizeLevel(level), 1) }
+
+// EventAt creates a structured event with an explicit caller. Empty function
+// and file values suppress caller output regardless of CallerDepth.
+func (l *Logger) EventAt(level Level, function, file string) *Event {
+	return l.newEventContextAt(l.ctx, normalizeLevel(level), 1, function, file, true)
+}
 func (l *Logger) TraceEvent() *Event {
 	if Level(l.level.Load()) > LevelTrace {
 		return nil
@@ -108,19 +125,19 @@ func (e *Event) writeInitialJSON(level Level) {
 	}
 	switch level {
 	case LevelTrace:
-		e.output = append(e.output, `"level":"trace"`...)
+		e.output = append(e.output, `"level":"TRACE"`...)
 	case LevelDebug:
-		e.output = append(e.output, `"level":"debug"`...)
+		e.output = append(e.output, `"level":"DEBUG"`...)
 	case LevelInfo:
-		e.output = append(e.output, `"level":"info"`...)
+		e.output = append(e.output, `"level":"INFO"`...)
 	case LevelWarn:
-		e.output = append(e.output, `"level":"warn"`...)
+		e.output = append(e.output, `"level":"WARN"`...)
 	case LevelError:
-		e.output = append(e.output, `"level":"error"`...)
+		e.output = append(e.output, `"level":"ERROR"`...)
 	case LevelPanic:
-		e.output = append(e.output, `"level":"panic"`...)
+		e.output = append(e.output, `"level":"PANIC"`...)
 	case LevelFatal:
-		e.output = append(e.output, `"level":"fatal"`...)
+		e.output = append(e.output, `"level":"FATAL"`...)
 	}
 	e.addCallers()
 }

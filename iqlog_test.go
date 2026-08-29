@@ -152,7 +152,7 @@ func TestLogFormatJSONInfo(t *testing.T) {
 
 	// Example format check: [INFO]: Format check
 	// re := regexp.MustCompile(`^\{"time":"[A-Za-z]{3}\s\d{1,2}\s\d{2}:\d{2}:\d{2}\.\d+","level":\d+,"message":"[^"]+"\}\n$`)
-	re := regexp.MustCompile(`^\{"time":"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}","level":"info","message":"Format check"\}\n$`)
+	re := regexp.MustCompile(`^\{"time":"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}","level":"INFO","message":"Format check"\}\n$`)
 	if !re.MatchString(logOutput) {
 		t.Errorf("Log output did not match expected format. Output:\n|%s|", logOutput)
 	}
@@ -186,7 +186,7 @@ func TestLogFormatJSONWarn(t *testing.T) {
 
 	// Example format check: [INFO]: Format check
 	// re := regexp.MustCompile(`^\{"time":"[A-Za-z]{3}\s\d{1,2}\s\d{2}:\d{2}:\d{2}\.\d+","level":\d+,"message":"[^"]+"\}\n$`)
-	re := regexp.MustCompile(`^\{"time":"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}","level":"warn","message":"Format check"\}\n$`)
+	re := regexp.MustCompile(`^\{"time":"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}","level":"WARN","message":"Format check"\}\n$`)
 	if !re.MatchString(logOutput) {
 		t.Errorf("Log output did not match expected format. Output:\n|%s|", logOutput)
 	}
