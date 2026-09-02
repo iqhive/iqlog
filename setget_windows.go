@@ -25,10 +25,8 @@ func (l *Logger) replaceWriter(w io.Writer) error {
 	if old.out == w {
 		return nil
 	}
-	if async, ok := old.out.(*asyncWriter); ok {
-		return async.Close()
-	}
-	return nil
+	l.clearNativeLog()
+	return retireWriter(old.out, w)
 }
 
 func (l *Logger) setWriter(w io.Writer) error       { return l.replaceWriter(w) }

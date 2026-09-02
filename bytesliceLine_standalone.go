@@ -20,6 +20,7 @@ type Event struct {
 	consumed        bool
 	buildErr        error
 	timeSecond      int64
+	level           Level
 }
 
 func acquireEvent(l *Logger, cfg *loggerConfig) *Event {
@@ -42,6 +43,7 @@ func acquireEvent(l *Logger, cfg *loggerConfig) *Event {
 	e.callerData.callerFileLen = 0
 	e.consumed = false
 	e.buildErr = nil
+	e.level = LevelUnknown
 	return e
 }
 

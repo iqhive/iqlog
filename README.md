@@ -617,6 +617,38 @@ Accuracy constraints:
   drop, and synchronous fallback overflow policies."
 -->
 
+## Native System Logs
+
+Set `NativeLog` to route records to the platform-native system log instead of
+an `io.Writer`: Apple's unified logging (`os_log`) on macOS and the Windows
+Event Log (Application log) on Windows. Records keep their severity, so they
+filter correctly in Console.app / `log stream` and Event Viewer.
+
+```go
+log := iqlog.MustNew(iqlog.Config{
+	ApplicationName: "myapp", // os_log subsystem / event source name
+	NativeLog:       true,
+})
+defer log.Close()
+```
+
+`NativeLog` takes precedence over `Writer` and `SyslogHost`, works with every
+`WriterMode`, and is fully opt-in: when it is off, the default path does no
+native-log work. On other platforms, and on macOS builds with
+`CGO_ENABLED=0`, `New` returns an error.
+
+Platform notes:
+
+- **macOS:** messages are logged with the `%{public}s` privacy marker so they
+  are not redacted as `<private>`. Browse them with
+  `log stream --predicate 'subsystem == "myapp"'`.
+- **Windows:** register the source once with administrator privileges so
+  records render without a "description cannot be found" notice:
+
+  ```go
+  err := iqlog.InstallEventLogSource("myapp") // remove with RemoveEventLogSource
+  ```
+
 ## Flush, Errors, And Shutdown
 
 `Flush` waits until all accepted queued records have been processed. It returns
@@ -666,8 +698,9 @@ matters, call both explicitly instead of relying only on deferred calls.
 | `CallerDepth` | Capture caller frames | Disabled |
 | `Color` | Force ANSI console color | Terminal auto-detection |
 | `DisableColor` | Disable forced and automatic color | `false` |
-| `ApplicationName` | Application metadata, including syslog setup | Empty |
+| `ApplicationName` | Application metadata, including syslog and native log setup | Empty |
 | `SyslogHost` | Select syslog output | Empty |
+| `NativeLog` | Route output to the platform system log (os_log / Event Log) | `false` |
 | `ContextExtractor` | Convert context values to fields | Disabled |
 | `WriterMode` | Sync, async, or ring compatibility mode | `WriterSync` |
 | `BufferSize` | Number of queued records | `1000` |

@@ -44,7 +44,10 @@ type outputState struct {
 	out        io.Writer
 	configured io.Writer
 	concurrent bool
-	mu         sync.Mutex
+	// native is non-nil only when Config.NativeLog selected the platform
+	// system log, keeping the level-aware branch off the default path.
+	native nativeLogWriter
+	mu     sync.Mutex
 }
 
 // New creates an independently configured logger.
@@ -99,11 +102,14 @@ type writeErrBox struct {
 	pending error
 }
 
-func (l *Logger) writeRecord(line []byte) bool {
+func (l *Logger) writeRecord(line []byte, level Level) bool {
 	state := l.writer.active.Load()
 	if async, ok := state.out.(*asyncWriter); ok {
-		async.WriteOwned(line)
+		async.WriteOwned(line, level)
 		return true
+	}
+	if state.native != nil {
+		return l.writeNativeRecord(state.native, line, level)
 	}
 	var n int
 	var err error
@@ -114,6 +120,19 @@ func (l *Logger) writeRecord(line []byte) bool {
 		n, err = state.out.Write(line)
 		state.mu.Unlock()
 	}
+	if err == nil && n != len(line) {
+		err = io.ErrShortWrite
+	}
+	l.recordWriteErr(err)
+	return false
+}
+
+// writeNativeRecord delivers the record to the platform system log. Native
+// writers are safe for concurrent use and frame records themselves, so they
+// bypass the serializing writer path. Kept out of writeRecord so the
+// default sync path stays compact.
+func (l *Logger) writeNativeRecord(native nativeLogWriter, line []byte, level Level) bool {
+	n, err := native.writeLevel(level, line)
 	if err == nil && n != len(line) {
 		err = io.ErrShortWrite
 	}

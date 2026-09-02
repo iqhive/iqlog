@@ -46,7 +46,7 @@ func (bsl *Event) finish() {
 		line = sanitizeConsoleLine(line)
 	}
 
-	owned := bsl.logger.writeRecord(line)
+	owned := bsl.logger.writeRecord(line, bsl.level)
 
 	if !bsl.panicAfterWrite && !bsl.exitAfterWrite {
 		bsl.release(!owned)

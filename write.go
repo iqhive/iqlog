@@ -7,13 +7,15 @@ import (
 )
 
 type asyncItem struct {
-	buf  []byte
-	done chan struct{}
+	buf   []byte
+	done  chan struct{}
+	level Level
 }
 
 type asyncWriter struct {
 	ch      chan asyncItem
 	out     io.Writer
+	native  nativeLogWriter
 	onErr   func(error)
 	policy  OverflowPolicy
 	closed  atomic.Bool
@@ -23,7 +25,8 @@ type asyncWriter struct {
 }
 
 func newAsyncWriter(out io.Writer, bufferCount int, policy OverflowPolicy, onErr func(error)) *asyncWriter {
-	aw := &asyncWriter{ch: make(chan asyncItem, bufferCount), out: out, onErr: onErr, policy: policy}
+	native, _ := out.(nativeLogWriter)
+	aw := &asyncWriter{ch: make(chan asyncItem, bufferCount), out: out, native: native, onErr: onErr, policy: policy}
 	aw.wg.Add(1)
 	go aw.loop()
 	return aw
@@ -36,14 +39,20 @@ func (aw *asyncWriter) loop() {
 			close(item.done)
 			continue
 		}
-		aw.write(item.buf)
+		aw.write(item.buf, item.level)
 		releaseEventBuffer(item.buf)
 	}
 }
 
-func (aw *asyncWriter) write(buf []byte) {
+func (aw *asyncWriter) write(buf []byte, level Level) {
 	aw.writeMu.Lock()
-	n, err := aw.out.Write(buf)
+	var n int
+	var err error
+	if aw.native != nil {
+		n, err = aw.native.writeLevel(level, buf)
+	} else {
+		n, err = aw.out.Write(buf)
+	}
 	aw.writeMu.Unlock()
 	if err == nil && n != len(buf) {
 		err = io.ErrShortWrite
@@ -57,21 +66,21 @@ func (aw *asyncWriter) write(buf []byte) {
 func (aw *asyncWriter) Write(p []byte) (int, error) {
 	buf := acquireEventBuffer()
 	buf = append(buf, p...)
-	aw.WriteOwned(buf)
+	aw.WriteOwned(buf, LevelUnknown)
 	return len(p), nil
 }
 
 // WriteOwned transfers ownership of buf to the writer. The buffer must not be
 // accessed after this call.
-func (aw *asyncWriter) WriteOwned(buf []byte) {
+func (aw *asyncWriter) WriteOwned(buf []byte, level Level) {
 	aw.sendMu.RLock()
 	if aw.closed.Load() {
 		aw.sendMu.RUnlock()
-		aw.write(buf)
+		aw.write(buf, level)
 		releaseEventBuffer(buf)
 		return
 	}
-	item := asyncItem{buf: buf}
+	item := asyncItem{buf: buf, level: level}
 	switch aw.policy {
 	case OverflowDrop:
 		select {
@@ -91,7 +100,7 @@ func (aw *asyncWriter) WriteOwned(buf []byte) {
 			done := make(chan struct{})
 			aw.ch <- asyncItem{done: done}
 			<-done
-			aw.write(buf)
+			aw.write(buf, level)
 			releaseEventBuffer(buf)
 		}
 	default:
@@ -142,10 +151,8 @@ func (l *Logger) Close() error {
 	}
 	old := l.writer.active.Swap(&outputState{out: io.Discard, configured: io.Discard, concurrent: true})
 	l.writer.mu.Unlock()
-	if aw, ok := old.out.(*asyncWriter); ok {
-		if err := aw.Close(); err != nil {
-			return err
-		}
+	if err := retireWriter(old.out, nil); err != nil {
+		return err
 	}
 	return l.takeWriteError()
 }

@@ -22,6 +22,7 @@ func (l *Logger) newEventContextAt(ctx context.Context, level Level, callerSkip 
 		cfg := l.config.Load()
 		e := acquireEvent(l, cfg)
 		e.disabled = true
+		e.level = level
 		e.exitAfterWrite = level == LevelFatal
 		e.panicAfterWrite = level == LevelPanic
 		return e
@@ -31,6 +32,7 @@ func (l *Logger) newEventContextAt(ctx context.Context, level Level, callerSkip 
 		return nil
 	}
 	e := acquireEvent(l, cfg)
+	e.level = level
 	e.jsonMode = cfg.format == FormatJSON
 	e.includeTime = cfg.includeTime
 	e.color = cfg.color

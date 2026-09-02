@@ -86,6 +86,12 @@ type Config struct {
 	DisableColor     bool
 	ApplicationName  string
 	SyslogHost       string
+	// NativeLog routes output to the platform-native system log: os_log on
+	// macOS (requires cgo) and the Event Log on Windows. ApplicationName
+	// becomes the os_log subsystem / event source name. When set it takes
+	// precedence over Writer and SyslogHost. The feature is opt-in; the
+	// default path does no native-log work.
+	NativeLog        bool
 	ContextExtractor func(context.Context) map[string]any
 	WriterMode       WriterMode
 	BufferSize       int
@@ -104,6 +110,7 @@ type loggerConfig struct {
 	color            bool
 	applicationName  string
 	syslogHost       string
+	nativeLog        bool
 	contextExtractor func(context.Context) map[string]any
 	exitFunc         func(int)
 	now              func() time.Time
@@ -118,7 +125,7 @@ func normalizeConfig(cfg Config) Config {
 	if cfg.Format == FormatJSON {
 		cfg.IncludeTime = cfg.JSONTimeMode != JSONTimeDisabled
 	}
-	if cfg.Format == FormatConsole && !cfg.DisableColor && terminalWriter(cfg.Writer) {
+	if cfg.Format == FormatConsole && !cfg.DisableColor && !cfg.NativeLog && terminalWriter(cfg.Writer) {
 		cfg.Color = true
 	}
 	if cfg.DisableColor {
@@ -205,12 +212,21 @@ func (l *Logger) setConfig(input Config) error {
 	}
 	cfg := normalizeConfig(input)
 	configured := cfg.Writer
-	if cfg.SyslogHost != "" {
+	if cfg.SyslogHost != "" && !cfg.NativeLog {
 		var err error
 		configured, err = prepareSyslog(cfg.SyslogHost, cfg.ApplicationName)
 		if err != nil {
 			return err
 		}
+	}
+	var native nativeLogWriter
+	if cfg.NativeLog {
+		var err error
+		native, err = prepareNativeLog(cfg)
+		if err != nil {
+			return err
+		}
+		configured = native
 	}
 	if nilWriter(configured) {
 		return errNilWriter
@@ -225,21 +241,16 @@ func (l *Logger) setConfig(input Config) error {
 	l.writer.mu.Lock()
 	if l.writer.closed.Load() {
 		l.writer.mu.Unlock()
-		if async, ok := active.(*asyncWriter); ok {
-			_ = async.Close()
-		}
+		_ = retireWriter(active, nil)
 		return ErrClosed
 	}
 	old := l.writer.active.Load()
 	concurrent := cfg.ConcurrentWriter || configured == io.Discard || cfg.WriterMode != WriterSync
-	l.writer.active.Store(&outputState{out: active, configured: configured, concurrent: concurrent})
+	l.writer.active.Store(&outputState{out: active, configured: configured, concurrent: concurrent, native: native})
 	l.config.Store(cfg.snapshot())
 	l.level.Store(int32(cfg.Level))
 	l.writer.mu.Unlock()
-	if async, ok := old.out.(*asyncWriter); ok {
-		return async.Close()
-	}
-	return nil
+	return retireWriter(old.out, configured)
 }
 
 func (l *Logger) queueError(err error) {
@@ -259,7 +270,7 @@ func (l *Logger) Config() Config {
 		EscapeFieldNames: cfg.escapeFieldNames,
 		IncludeTime:      cfg.includeTime, TimestampLayout: cfg.timestampLayout, JSONTimeMode: cfg.jsonTimeMode,
 		CallerDepth: cfg.callerDepth, Color: cfg.color, DisableColor: !cfg.color,
-		ApplicationName: cfg.applicationName, SyslogHost: cfg.syslogHost,
+		ApplicationName: cfg.applicationName, SyslogHost: cfg.syslogHost, NativeLog: cfg.nativeLog,
 		ContextExtractor: cfg.contextExtractor, ExitFunc: cfg.exitFunc, Now: cfg.now,
 		WriterMode: cfg.writerMode, BufferSize: cfg.bufferSize, OverflowPolicy: cfg.overflowPolicy,
 	}
@@ -294,6 +305,7 @@ func (cfg Config) snapshot() *loggerConfig {
 		color:            cfg.Color,
 		applicationName:  cfg.ApplicationName,
 		syslogHost:       cfg.SyslogHost,
+		nativeLog:        cfg.NativeLog,
 		contextExtractor: cfg.ContextExtractor,
 		exitFunc:         cfg.ExitFunc,
 		now:              cfg.Now,
