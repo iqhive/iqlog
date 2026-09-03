@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"errors"
 	"io"
+	"reflect"
+	"sync"
 )
 
 var (
@@ -28,16 +30,57 @@ type nativeLogWriter interface {
 	release()
 }
 
-// retireWriter shuts down a writer that is no longer active: async writers
-// are drained and stopped, and native system log handles are released
-// unless keep still uses the same underlying writer. That reuse happens
-// legitimately when Config().Writer or GetWriter() is fed back into
-// SetConfig or the Set*Writer methods, and releasing the handle then would
-// leave the logger silently dead.
+// ownedWriter wraps a writer this package opened itself, currently the syslog
+// connection dialled by prepareSyslog and setSyslogHost. Caller-supplied
+// writers must never be closed by the logger, so ownership is recorded here
+// rather than inferred from an io.Closer assertion: retireWriter closes only
+// what iqlog opened.
+type ownedWriter struct {
+	io.Writer
+	closer io.Closer
+	once   sync.Once
+}
+
+func newOwnedWriter(w io.Writer) io.Writer {
+	closer, ok := w.(io.Closer)
+	if !ok {
+		return w
+	}
+	return &ownedWriter{Writer: w, closer: closer}
+}
+
+// release satisfies the releasable interface retireWriter looks for.
+func (w *ownedWriter) release() {
+	w.once.Do(func() { _ = w.closer.Close() })
+}
+
+// sameWriter reports whether a and b are the same writer.
 //
-// Only this package's native writers implement release, and they are
-// pointer types, so the interface comparison cannot panic on
-// non-comparable dynamic types.
+// Comparing two io.Writer values directly panics when their dynamic type is
+// identical and not comparable, which a caller-supplied writer may well be:
+// any struct with a slice, map, or func field qualifies. Writer identity is
+// only ever used to skip work that is harmless to repeat, so a writer whose
+// type cannot be compared is simply reported as different.
+func sameWriter(a, b io.Writer) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	ta := reflect.TypeOf(a)
+	if ta != reflect.TypeOf(b) || !ta.Comparable() {
+		return false
+	}
+	return a == b
+}
+
+// retireWriter shuts down a writer that is no longer active: async writers
+// are drained and stopped, and native system log handles and connections
+// iqlog opened itself are released unless keep still uses the same
+// underlying writer. That reuse happens legitimately when Config().Writer or
+// GetWriter() is fed back into SetConfig or the Set*Writer methods, and
+// releasing the handle then would leave the logger silently dead.
+//
+// Writer identity goes through sameWriter because keep may be a
+// caller-supplied value whose type cannot be compared.
 func retireWriter(old, keep io.Writer) error {
 	inner := old
 	var err error
@@ -48,7 +91,7 @@ func retireWriter(old, keep io.Writer) error {
 	if async, ok := keep.(*asyncWriter); ok {
 		keep = async.out
 	}
-	if native, ok := inner.(interface{ release() }); ok && inner != keep {
+	if native, ok := inner.(interface{ release() }); ok && !sameWriter(inner, keep) {
 		native.release()
 	}
 	return err
@@ -94,6 +137,31 @@ func nativeSeverityFor(level Level) nativeSeverity {
 	default:
 		return nativeSeverityNotice
 	}
+}
+
+// sanitizeSyslogTag replaces control bytes in a syslog tag. The tag is
+// written into the record header ahead of the message, so a newline in it
+// splits one datagram into what a line-oriented collector reads as two
+// records. ApplicationName often comes from a config file or the environment,
+// so it is not trusted to be a bare identifier.
+func sanitizeSyslogTag(tag string) string {
+	needs := false
+	for i := 0; i < len(tag); i++ {
+		if c := tag[i]; c < 0x20 || c == 0x7f {
+			needs = true
+			break
+		}
+	}
+	if !needs {
+		return tag
+	}
+	out := []byte(tag)
+	for i, c := range out {
+		if c < 0x20 || c == 0x7f {
+			out[i] = '_'
+		}
+	}
+	return string(out)
 }
 
 // trimRecordNewline drops the single trailing newline the record encoders

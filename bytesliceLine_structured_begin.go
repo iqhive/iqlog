@@ -15,21 +15,28 @@ func (l *Logger) newEventContext(ctx context.Context, level Level, callerSkip in
 }
 
 func (l *Logger) newEventContextAt(ctx context.Context, level Level, callerSkip int, function, file string, explicitCaller bool) *Event {
-	if Level(l.level.Load()) > level {
-		if level != LevelFatal && level != LevelPanic {
+	// Fatal and Panic always produce an event: even when their record is
+	// suppressed they still have to terminate.
+	terminal := level == LevelFatal || level == LevelPanic
+	gate := Level(l.level.Load())
+	if gate > level && !terminal {
+		// disabled fast path: no configuration load, no allocation
+		return nil
+	}
+	cfg := l.config.Load()
+	// Both gates are consulted because a copy or an in-flight reconfiguration
+	// can briefly publish one before the other; a terminal level is never
+	// dropped by either.
+	if gate > level || cfg.level > level {
+		if !terminal {
 			return nil
 		}
-		cfg := l.config.Load()
 		e := acquireEvent(l, cfg)
 		e.disabled = true
 		e.level = level
 		e.exitAfterWrite = level == LevelFatal
 		e.panicAfterWrite = level == LevelPanic
 		return e
-	}
-	cfg := l.config.Load()
-	if cfg.level > level {
-		return nil
 	}
 	e := acquireEvent(l, cfg)
 	e.level = level
@@ -206,6 +213,8 @@ func (e *Event) writeInitialConsole(level Level) {
 		e.output = append(e.output, levelPrefix(level)...)
 	}
 	e.addCallers()
+	// everything appended from here on is caller-supplied
+	e.prefixLen = len(e.output)
 }
 
 func (e *Event) addCallers() {
@@ -225,9 +234,14 @@ func (e *Event) addCallers() {
 	} else {
 		e.output = append(e.output, '[')
 	}
+	start := len(e.output)
 	e.output = append(e.output, e.callerData.callerFunc[:e.callerData.callerFuncLen]...)
 	e.output = append(e.output, ' ')
 	e.output = append(e.output, e.callerData.callerFile[:e.callerData.callerFileLen]...)
+	// EventAt lets the caller supply these, and they land in the envelope,
+	// which the whole-line scan does not cover. The colour sequences above
+	// and below stay outside the escaped range.
+	e.output = escapeConsoleTail(e.output, start)
 	if e.color {
 		e.output = append(e.output, "]\x1b[0m "...)
 	} else {

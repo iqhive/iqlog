@@ -155,7 +155,7 @@ log.InfoEvent().
 {"time":"2026-08-29T14:03:12.481947Z","level":"INFO","request_id":"req-7f3a","status":200,"elapsed":"18ms","message":"request complete"}
 ```
 
-Omit the timestamp when another system adds them — this is the default:
+Omit the timestamp when another system adds them (this is the default):
 
 ```go
 log := iqlog.MustNew(iqlog.Config{
@@ -335,11 +335,25 @@ shared between goroutines.
 
 The reserved event keys `time`, `level`, `message`, `func`, and `file` are
 automatically prefixed with `field_` when supplied as user fields. This preserves
-the record envelope.
+the record envelope: a user field can never overwrite it.
 
-For maximum JSON throughput, field names are assumed to be trusted
-identifier-style strings. If keys can contain quotes, control characters, or
-other untrusted input, enable defensive escaping:
+The prefixing is not injective. A record that carries both `time` and an
+explicit `field_time` emits the key `field_time` twice, and a JSON parser keeps
+only one of the two values. Closing that would mean prefixing every name that
+already begins with `field_`, which costs about 3% of a three-field record and
+renames keys that are not reserved at all. Duplicate keys are reachable without
+the escape anyway -- nothing stops `Str("x", 1).Str("x", 2)` -- so if you log
+reserved names, avoid `field_`-prefixed ones alongside them.
+
+Field names are always safe to pass untrusted input. Keys are scanned on the
+way out and escaped whenever they contain a quote, a backslash, a control
+character, or a non-ASCII byte, so a hostile key cannot break out of the JSON
+string and forge fields. The scan is a single allocation-free pass, and the
+plain append path is still used for the identifier-style keys that dominate
+real workloads.
+
+`EscapeFieldNames` forces escaping for every key, skipping that scan. It is not
+needed for correctness:
 
 ```go
 log := iqlog.MustNew(iqlog.Config{
@@ -348,6 +362,9 @@ log := iqlog.MustNew(iqlog.Config{
 	EscapeFieldNames: true,
 })
 ```
+
+Field *values* and messages are always escaped, and bytes that are not valid
+UTF-8 are replaced with U+FFFD so records stay parseable by strict JSON readers.
 
 ## Persistent Fields
 
@@ -691,7 +708,7 @@ matters, call both explicitly instead of relying only on deferred calls.
 | `Level` | Minimum emitted level | `LevelInfo` |
 | `Writer` | Destination implementing `io.Writer` | `os.Stderr` |
 | `ConcurrentWriter` | Skip synchronous writer serialization | `false` |
-| `EscapeFieldNames` | Escape dynamic JSON keys defensively | `false` |
+| `EscapeFieldNames` | Always escape dynamic JSON keys, skipping the safety scan | `false` |
 | `IncludeTime` | Include console timestamp | `false` |
 | `TimestampLayout` | Console/custom JSON time layout | Microsecond console layout |
 | `JSONTimeMode` | Disabled, UTC, or custom JSON timestamp | `JSONTimeDisabled` |
@@ -713,13 +730,81 @@ complete value makes dependencies explicit and installs a coherent immutable
 configuration snapshot. `Config()` returns a copy of the current configuration;
 `SetConfig` replaces it and transitions the writer lifecycle safely.
 
+## Record Safety
+
+Logged values routinely carry untrusted input, so the encoders defend the record
+envelope by default. No configuration is required.
+
+- **JSON.** Field names, field values, and messages are escaped. Bytes that are
+  not valid UTF-8 become U+FFFD, matching `encoding/json`, so strict parsers
+  accept every record. `RawJSON` validates its argument and substitutes `null`
+  on failure, reporting the problem through `BuildError`.
+- **Console.** Control characters in the caller-supplied part of a line are
+  escaped: CR and LF (which would otherwise forge additional log lines) become
+  `\n` and `\r`, and ESC, backspace, DEL, and the rest of the C0 range become
+  `\xNN` so a logged value cannot drive the reader's terminal. The C1 range
+  U+0080-U+009F becomes `\u00NN` for the same reason -- U+009B is CSI, which a
+  terminal honoring C1 treats exactly like `ESC [`. Tab is left alone, and so
+  is ordinary multi-byte text. The record envelope this package generates is
+  exempt, which is what keeps its own ANSI color sequences intact.
+- **System logs.** NUL bytes are escaped before a record reaches `os_log` or the
+  Windows Event Log, where they would otherwise truncate or reject it. Control
+  characters in `ApplicationName` are replaced before it is used as the syslog
+  tag, which is written into the record header ahead of the message.
+- **One record, one line.** `RawJSON` compacts its argument, because valid JSON
+  may carry newlines between tokens that would split the record for a
+  newline-delimited reader. A raw newline inside a JSON string is not valid
+  JSON, so compaction is lossless. It also rejects arguments that are not
+  valid UTF-8 -- `encoding/json` does not check that, but JSON text has to be
+  UTF-8 -- substituting `null` and reporting the reason through `BuildError`.
+  `Any` falls back to escaped text when a custom `MarshalJSON` returns
+  ill-formed UTF-8, for the same reason.
+- **The envelope too.** Text that reaches the envelope from configuration or
+  from an explicit caller is escaped where it is written: a custom
+  `TimestampLayout`, and the function and file passed to `EventAt`. The
+  whole-line console scan exempts the envelope so this package's own ANSI
+  colour sequences survive, which is why those two inputs are handled
+  separately.
+
+These checks are not free. Measured on a three-field JSON record, scanning field
+names costs about 5 ns (roughly 4%). The console control-byte scan is word-at-a-
+time rather than the two `bytes.IndexByte` passes that a CR/LF-only check could
+use, which is immaterial for typical records but does show up on very long
+console lines. JSON is the production path and is unaffected by the console
+scan.
+
+## Writer Serialization
+
+A writer that is not declared `ConcurrentWriter` is serialized on a mutex held
+by the logger rather than by its current configuration, so replacing the writer,
+switching between sync and async modes, or reconfiguring under load cannot let a
+retiring writer and its replacement write to the same destination at once.
+Logger copies from `WithFields`, `WithError`, and `WithContext` share that lock
+with the original. Separate `Logger` values do not: two loggers pointed at one
+destination serialize only if that destination does it itself.
+
+A destination that panics does not take the logger with it. A synchronous
+write releases the shared lock on its way out, so the panic reaches the call
+site that chose to log and later records still go through. A background write
+has no call site to propagate to, so the async writer reports the panic as a
+write error through `LastWriteError` and keeps running rather than taking the
+host process down.
+
+## Writer Ownership
+
+The logger closes only the writers it opened itself. A syslog connection dialled
+from `SyslogHost` is closed when it is replaced or when the logger is closed, and
+an async or ring writer is drained and stopped. A writer supplied through
+`Config.Writer` or `SetWriter` belongs to the caller and is never closed, so
+handing the logger `os.Stderr` or a shared file stays safe.
+
 ## Performance Guidance
 
 For predictable hot-path performance:
 
 1. Prefer `Str`, `Int`, `Bool`, and the other typed field methods over `Any`.
-2. Leave caller lookup, context extraction, custom timestamps, field-name
-   escaping, and color disabled unless their information is needed.
+2. Leave caller lookup, context extraction, custom timestamps, and color
+   disabled unless their information is needed.
 3. Guard expensive field construction with `Enabled`.
 4. Use async output only when moving destination latency off the caller is worth
    the queue and lifecycle complexity.

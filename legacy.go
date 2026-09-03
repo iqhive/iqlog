@@ -26,6 +26,9 @@ func Println(args ...any) {
 }
 
 func (l *Logger) Print(args ...any) {
+	if l.skipRecord(LevelInfo) {
+		return
+	}
 	l.Log(LevelInfo, fmt.Sprint(args...))
 }
 
@@ -34,6 +37,9 @@ func (l *Logger) Printf(format string, args ...any) {
 }
 
 func (l *Logger) Println(args ...any) {
+	if l.skipRecord(LevelInfo) {
+		return
+	}
 	l.Log(LevelInfo, sprintln(args...))
 }
 
@@ -54,6 +60,10 @@ func Logf(level Level, format string, args ...any) {
 }
 
 func (l *Logger) Logln(level Level, args ...any) {
+	level = normalizeLevel(level)
+	if l.skipRecord(level) {
+		return
+	}
 	l.Log(level, sprintln(args...))
 }
 
@@ -70,7 +80,7 @@ func LogContext(ctx context.Context, level Level, msg string, args ...any) {
 }
 
 func (l *Logger) LogContextf(ctx context.Context, level Level, format string, args ...any) {
-	l.logContext(ctx, level, nil, fmt.Sprintf(format, args...))
+	l.logContextf(ctx, level, format, args...)
 }
 
 func LogContextf(ctx context.Context, level Level, format string, args ...any) {
@@ -93,6 +103,22 @@ func (l *Logger) logContext(ctx context.Context, level Level, fields map[string]
 		addField(line, k, v)
 	}
 	line.Msgs(msg, args...)
+}
+
+// logContextf keeps the same call depth as logContext so caller attribution
+// is unchanged, and hands the format to Msgf rather than formatting up front:
+// a record the level gate drops must not pay for fmt.Sprintf.
+func (l *Logger) logContextf(ctx context.Context, level Level, format string, args ...any) {
+	l.newEventContext(ctx, normalizeLevel(level), 2).Msgf(format, args...)
+}
+
+// skipRecord reports whether an event at level would neither be written nor
+// terminate the process, so callers can skip formatting their arguments.
+func (l *Logger) skipRecord(level Level) bool {
+	if level == LevelFatal || level == LevelPanic {
+		return false
+	}
+	return Level(l.level.Load()) > level
 }
 
 func normalizeLevel(level Level) Level {

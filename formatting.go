@@ -1,21 +1,14 @@
 package iqlog
 
 import (
-	"bytes"
+	"encoding/binary"
 	"math"
 	"strconv"
-	"time"
 )
-
-// floatNeedsFallback reports whether f cannot be formatted by the fast
-// integer-based float paths (int64 conversion would overflow or is invalid).
-func floatNeedsFallback(f float64) bool {
-	return math.IsNaN(f) || math.IsInf(f, 0) || f >= maxExactInt64Float || f <= -maxExactInt64Float
-}
 
 // fallbackFloatString formats floats the fast paths cannot handle. Non-finite
 // values are quoted so JSON output stays parseable (bare NaN/Inf are not
-// valid JSON tokens), matching appendFastFloat64.
+// valid JSON tokens).
 func fallbackFloatString(f float64) string {
 	switch {
 	case math.IsNaN(f):
@@ -67,328 +60,133 @@ func levelPrefix(level Level) []byte {
 	}
 }
 
-func safeStringCopy(dst *[maxStringLen]byte, s string) int {
-	n := len(s)
-	if n > maxStringLen {
-		n = maxStringLen
+const (
+	// SWAR lane masks: one byte per lane of a uint64.
+	swarLo = 0x0101010101010101
+	swarHi = 0x8080808080808080
+)
+
+// consoleEscapeLen reports how many bytes at b[i] must not reach a terminal
+// verbatim, or 0 when the byte can be copied through.
+//
+// Two things qualify. The C0 range covers CR and LF (used to forge extra log
+// lines) as well as ESC and backspace (used to rewrite what the reader sees);
+// DEL goes with them. Tab is left alone: it is common in logged values and
+// cannot forge a line or drive the terminal. The C1 range U+0080-U+009F is
+// the other half of the same threat -- U+009B is CSI, which a terminal
+// honouring C1 treats exactly like "ESC [" -- and in valid UTF-8 it can only
+// be written as 0xC2 followed by 0x80-0x9F, so the pair is matched directly.
+// A bare 0x80-0x9F byte is not valid UTF-8 and a UTF-8 terminal will not
+// decode it as C1, so it is left alone; escaping it byte-wise would corrupt
+// the continuation bytes of ordinary multi-byte text.
+func consoleEscapeLen(b []byte, i int) int {
+	c := b[i]
+	if (c < 0x20 && c != '\t') || c == 0x7f {
+		return 1
 	}
-	copy(dst[:n], s)
-	if n < maxStringLen {
-		dst[n] = 0
+	if c == 0xc2 && i+1 < len(b) && b[i+1] >= 0x80 && b[i+1] <= 0x9f {
+		return 2
 	}
-	return n
+	return 0
 }
 
-// sanitizeConsoleLine escapes any CR/LF embedded in a console-mode line
-// (excluding the trailing newline) so logged values cannot forge additional
-// log lines. Returns the input unchanged when no escaping is needed.
-func sanitizeConsoleLine(line []byte) []byte {
+// indexConsoleEscape returns the index of the first byte in b that starts
+// something consoleEscapeLen rejects, or -1 when there is none.
+//
+// Records are usually clean, so the common case is a full scan that finds
+// nothing; doing that a byte at a time is the dominant cost on long lines.
+// Eight bytes are tested at once instead, with the classic word tests for "a
+// lane below 0x20" and "a lane equal to" 0x7f and 0xC2. All three can
+// over-report -- a borrow between lanes, a tab, or a 0xC2 that does not begin
+// a C1 sequence -- so a word that tests positive is rechecked a byte at a
+// time. None of them can under-report, which is what makes the fast path safe
+// to trust.
+func indexConsoleEscape(b []byte) int {
+	i := 0
+	for ; i+8 <= len(b); i += 8 {
+		w := binary.LittleEndian.Uint64(b[i:])
+		del := w ^ (swarLo * 0x7f)
+		lead := w ^ (swarLo * 0xc2)
+		if (w-swarLo*0x20)&^w&swarHi == 0 &&
+			(del-swarLo)&^del&swarHi == 0 &&
+			(lead-swarLo)&^lead&swarHi == 0 {
+			continue
+		}
+		for j := i; j < i+8; j++ {
+			if consoleEscapeLen(b, j) > 0 {
+				return j
+			}
+		}
+	}
+	for ; i < len(b); i++ {
+		if consoleEscapeLen(b, i) > 0 {
+			return i
+		}
+	}
+	return -1
+}
+
+// appendConsoleEscaped appends src to dst with everything consoleEscapeLen
+// rejects replaced by a printable escape.
+func appendConsoleEscaped(dst, src []byte) []byte {
+	for i := 0; i < len(src); {
+		n := consoleEscapeLen(src, i)
+		if n == 0 {
+			dst = append(dst, src[i])
+			i++
+			continue
+		}
+		switch c := src[i]; {
+		case n == 2:
+			// name the C1 code point rather than its UTF-8 bytes
+			dst = append(dst, '\\', 'u', '0', '0', hex[src[i+1]>>4], hex[src[i+1]&0x0f])
+		case c == '\n':
+			dst = append(dst, '\\', 'n')
+		case c == '\r':
+			dst = append(dst, '\\', 'r')
+		default:
+			dst = append(dst, '\\', 'x', hex[c>>4], hex[c&0x0f])
+		}
+		i += n
+	}
+	return dst
+}
+
+// escapeConsoleTail escapes dst[from:], which holds envelope text that came
+// from configuration or from an explicit caller rather than from the encoder
+// itself. The envelope is exempt from the whole-line scan in
+// sanitizeConsoleLine because it carries this package's own ANSI sequences, so
+// the parts of it that are not this package's own bytes have to be escaped
+// where they are written. Callers keep their ANSI sequences outside from.
+func escapeConsoleTail(dst []byte, from int) []byte {
+	if indexConsoleEscape(dst[from:]) < 0 {
+		return dst
+	}
+	tail := append([]byte(nil), dst[from:]...)
+	return appendConsoleEscaped(dst[:from], tail)
+}
+
+// sanitizeConsoleLine escapes control bytes in the caller-supplied part of a
+// console-mode line: everything from prefixLen up to the trailing newline.
+// Bytes before prefixLen are the record envelope this package generated, so
+// they are left alone -- they legitimately contain the ANSI colour sequences
+// the console encoder emits. Returns the input unchanged when no escaping is
+// needed.
+func sanitizeConsoleLine(line []byte, prefixLen int) []byte {
 	end := len(line)
 	if end > 0 && line[end-1] == '\n' {
 		end--
 	}
-	if bytes.IndexByte(line[:end], '\n') < 0 && bytes.IndexByte(line[:end], '\r') < 0 {
+	if prefixLen > end {
+		prefixLen = end
+	}
+	first := indexConsoleEscape(line[prefixLen:end])
+	if first < 0 {
 		return line
 	}
-	out := make([]byte, 0, len(line)+8)
-	for i := 0; i < end; i++ {
-		switch line[i] {
-		case '\n':
-			out = append(out, '\\', 'n')
-		case '\r':
-			out = append(out, '\\', 'r')
-		default:
-			out = append(out, line[i])
-		}
-	}
+	first += prefixLen
+	out := make([]byte, 0, len(line)+16)
+	out = append(out, line[:first]...)
+	out = appendConsoleEscaped(out, line[first:end])
 	return append(out, line[end:]...)
-}
-
-func safeOutputCopy(dst []byte, offset int, s string) int {
-	n := len(s)
-	if n > maxLineLen-offset {
-		n = maxLineLen - offset
-	}
-	copy(dst[offset:offset+n], s)
-	return n
-}
-
-func safeOutputCopyMaxLineLen(dst *[maxLineLen]byte, offset int, s string) int {
-	n := len(s)
-	if n > maxLineLen-offset {
-		n = maxLineLen - offset
-	}
-	copy(dst[offset:offset+n], s)
-	return n
-}
-
-// appendTimeRFC3339Micro encodes t as:  yyyy-mm-ddThh:mm:ss.uuuuuu
-// returning how many bytes were written. trying to avoid string allocs from time.Format
-func appendTimeRFC3339Micro(t time.Time, dst []byte) int {
-	year, month, day := t.Date()
-	hour, min, sec := t.Clock()
-	usec := t.Nanosecond() / 1000
-
-	pos := 0
-	pos += setIntBytes(dst[pos:], int64(year), 4)
-	dst[pos] = '-'
-	pos++
-	pos += setIntBytes(dst[pos:], int64(month), 2)
-	dst[pos] = '-'
-	pos++
-	pos += setIntBytes(dst[pos:], int64(day), 2)
-	dst[pos] = 'T'
-	pos++
-	pos += setIntBytes(dst[pos:], int64(hour), 2)
-	dst[pos] = ':'
-	pos++
-	pos += setIntBytes(dst[pos:], int64(min), 2)
-	dst[pos] = ':'
-	pos++
-	pos += setIntBytes(dst[pos:], int64(sec), 2)
-	dst[pos] = '.'
-	pos++
-	pos += setIntBytes(dst[pos:], int64(usec), 6)
-	return pos
-}
-
-func writeIntDecimal(dst []byte, i int64) int {
-	neg := (i < 0)
-	u := uint64(i)
-	if neg {
-		u = -u
-	}
-	var tmp [20]byte
-	pos := len(tmp)
-
-	if u == 0 {
-		pos--
-		tmp[pos] = '0'
-	} else {
-		for u > 0 {
-			pos--
-			tmp[pos] = byte('0' + (u % 10))
-			u /= 10
-		}
-	}
-	if neg {
-		pos--
-		tmp[pos] = '-'
-	}
-
-	n := copy(dst, tmp[pos:])
-	if n < len(dst) {
-		dst[n] = 0
-	}
-	return n
-}
-
-func appendIntDecimal(src []byte, i int64) ([]byte, int) {
-	neg := (i < 0)
-	u := uint64(i)
-	if neg {
-		u = -u
-	}
-	var tmp [20]byte
-	pos := len(tmp)
-
-	if u == 0 {
-		pos--
-		tmp[pos] = '0'
-	} else {
-		for u > 0 {
-			pos--
-			tmp[pos] = byte('0' + (u % 10))
-			u /= 10
-		}
-	}
-	if neg {
-		pos--
-		tmp[pos] = '-'
-	}
-
-	src = append(src, tmp[pos:]...)
-	return src, len(tmp) - pos
-}
-
-func writeIntToBuffer(buf *bytes.Buffer, num int) {
-	// Pre-allocate a byte slice with enough space for the largest int
-	var b [21]byte // enough for a 64-bit integer plus sign
-	i := len(b)
-
-	neg := num < 0
-	u := uint64(num)
-	if neg {
-		u = -u
-	}
-
-	// Convert the integer to a string in reverse order
-	for u >= 10 {
-		i--
-		b[i] = byte('0' + u%10)
-		u /= 10
-	}
-	i--
-	b[i] = byte('0' + u)
-
-	// If the number is negative, add the minus sign
-	if neg {
-		i--
-		b[i] = '-'
-	}
-
-	// Write the slice to the buffer
-	buf.Write(b[i:])
-}
-
-func appendBufferIntDecimal(buf *bytes.Buffer, i int64) (int, error) {
-	neg := (i < 0)
-	u := uint64(i)
-	if neg {
-		u = -u
-	}
-	var tmp [20]byte
-	pos := len(tmp)
-
-	if u == 0 {
-		pos--
-		tmp[pos] = '0'
-	} else {
-		for u > 0 {
-			pos--
-			tmp[pos] = byte('0' + (u % 10))
-			u /= 10
-		}
-	}
-	if neg {
-		pos--
-		tmp[pos] = '-'
-	}
-
-	return buf.Write(tmp[pos:])
-}
-
-func fastFloatFill(dst []byte, f float64, decimals int) int {
-	if floatNeedsFallback(f) {
-		return copy(dst, fallbackFloatString(f))
-	}
-	neg := (f < 0)
-	if neg {
-		f = -f
-	}
-
-	intPart := int64(f)
-	written := 0
-
-	if neg {
-		if written < len(dst) {
-			dst[written] = '-'
-			written++
-		}
-	}
-
-	written += writeIntDecimal(dst[written:], intPart)
-	frac := f - float64(intPart)
-	if frac == 0.0 {
-		return written
-	}
-	if written < len(dst) {
-		dst[written] = '.'
-		written++
-	}
-	for i := 0; i < decimals; i++ {
-		frac *= 10
-		d := int64(frac)
-		if written < len(dst) {
-			dst[written] = byte('0' + d)
-			written++
-		}
-		frac -= float64(d)
-		if frac == 0.0 {
-			break
-		}
-	}
-	if written < len(dst) {
-		dst[written] = 0
-	}
-	return written
-}
-
-func appendfastFloatFill(src []byte, f float64, decimals int) ([]byte, int) {
-	if floatNeedsFallback(f) {
-		s := fallbackFloatString(f)
-		return append(src, s...), len(s)
-	}
-	neg := (f < 0)
-	if neg {
-		f = -f
-	}
-
-	intPart := int64(f)
-	var working [32]byte // should be ok?
-	written := 0
-
-	if neg {
-		working[written] = '-'
-		written++
-	}
-
-	n := writeIntDecimal(working[written:], intPart)
-	written += n
-	frac := f - float64(intPart)
-	if frac == 0.0 {
-		return append(src, working[:written]...), written
-	}
-	working[written] = '.'
-	written++
-	for i := 0; i < decimals; i++ {
-		frac *= 10
-		d := int64(frac)
-		working[written] = byte('0' + d)
-		written++
-		frac -= float64(d)
-		if frac == 0.0 {
-			break
-		}
-	}
-	return append(src, working[:written]...), written
-}
-
-func appendBufferfastFloatFill(buf *bytes.Buffer, f float64, decimals int) (int, error) {
-	if floatNeedsFallback(f) {
-		return buf.WriteString(fallbackFloatString(f))
-	}
-	neg := (f < 0)
-	if neg {
-		f = -f
-	}
-
-	intPart := int64(f)
-	var working [32]byte // Use a predefined length byte array
-	written := 0
-
-	if neg {
-		working[written] = '-'
-		written++
-	}
-
-	n := writeIntDecimal(working[written:], intPart)
-	written += n
-	frac := f - float64(intPart)
-	if frac == 0.0 {
-		return buf.Write(working[:written])
-	}
-	working[written] = '.'
-	written++
-	for i := 0; i < decimals; i++ {
-		frac *= 10
-		d := int64(frac)
-		working[written] = byte('0' + d)
-		written++
-		frac -= float64(d)
-		if frac == 0.0 {
-			break
-		}
-	}
-	return buf.Write(working[:written])
 }

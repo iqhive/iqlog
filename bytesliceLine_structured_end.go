@@ -43,7 +43,7 @@ func (bsl *Event) terminateDisabled(message string) bool {
 func (bsl *Event) finish() {
 	line := bsl.output
 	if !bsl.jsonMode {
-		line = sanitizeConsoleLine(line)
+		line = sanitizeConsoleLine(line, bsl.prefixLen)
 	}
 
 	owned := bsl.logger.writeRecord(line, bsl.level)
@@ -94,7 +94,7 @@ func (bsl *Event) Discard() {
 	}
 	if bsl.panicAfterWrite {
 		bsl.release(true)
-		panic("")
+		panic("iqlog: panic event discarded without a message")
 	}
 	if bsl.exitAfterWrite {
 		exitFunc := bsl.config.exitFunc
@@ -105,15 +105,26 @@ func (bsl *Event) Discard() {
 	bsl.release(true)
 }
 func (bsl *Event) Msgs(msg string, args ...interface{}) {
-	panicMessage := sprintMessage(msg, args...)
-	if bsl.terminateDisabled(panicMessage) {
+	if bsl == nil {
+		// dropped by the level gate: do not format the arguments
+		return
+	}
+	// Only a panic needs the arguments joined up front, as the panic value.
+	// Formatting them for a record that will not be written would allocate on
+	// the disabled path.
+	if bsl.disabled {
+		panicMessage := ""
+		if bsl.panicAfterWrite {
+			panicMessage = sprintMessage(msg, args...)
+		}
+		bsl.terminateDisabled(panicMessage)
 		return
 	}
 	if bsl.consumed {
 		return
 	}
 	if bsl.panicAfterWrite {
-		bsl.panicMessage = panicMessage
+		bsl.panicMessage = sprintMessage(msg, args...)
 	}
 	if bsl.jsonMode {
 		bsl.writeFinalJSON(msg, args...)
@@ -188,11 +199,10 @@ func (bsl *Event) writeFinalConsole(msg string, args ...interface{}) {
 
 func (bsl *Event) writeFinalConsoleF(format string, args ...interface{}) {
 	// the growable appender keeps formatted output longer than maxLineLen
-	ba := baPool.Get().(*bytesAppender)
-	ba.Bytes = ba.Bytes[:0]
+	ba := acquireBytesAppender()
 	fmt.Fprintf(ba, format, args...)
 	bsl.output = append(bsl.output, ba.Bytes...)
-	baPool.Put(ba)
+	releaseBytesAppender(ba)
 
 	bsl.output = append(bsl.output, '\n')
 
@@ -245,11 +255,10 @@ func (bsl *Event) writeFinalJSON(msg string, args ...interface{}) {
 func (bsl *Event) writeFinalJSONF(format string, args ...interface{}) {
 	bsl.output = append(bsl.output, []byte(",\"message\":\"")...)
 
-	ba := baPool.Get().(*bytesAppender)
-	ba.Bytes = ba.Bytes[:0] // Clear the slice before use
+	ba := acquireBytesAppender()
 	fmt.Fprintf(ba, format, args...)
 	bsl.output = appendJSONEscaped(bsl.output, unsafeString(ba.Bytes))
-	baPool.Put(ba)
+	releaseBytesAppender(ba)
 
 	// bia := biapool.Get().(*byteIndexAppender)
 	// bia.Index = 0

@@ -1,7 +1,7 @@
 package iqlog
 
 import (
-	"bytes"
+	"math/rand"
 	"testing"
 	"time"
 )
@@ -10,30 +10,6 @@ var testTime time.Time
 
 func init() {
 	testTime = time.Now()
-}
-
-func BenchmarkTimeAddTimeConsoleToBuffer(b *testing.B) {
-	b.StopTimer()
-	buffer := bytes.NewBuffer(make([]byte, 1000))
-	timeNow := testTime
-	b.StartTimer()
-
-	for i := 0; i < b.N; i++ {
-		buffer.Reset()
-		addTimeConsoleToBuffer(timeNow, buffer)
-	}
-}
-
-func BenchmarkTimeAddTimeConsoleAppend(b *testing.B) {
-	b.StopTimer()
-	emptySlice := make([]byte, 0)
-	timeNow := testTime
-	b.StartTimer()
-
-	for i := 0; i < b.N; i++ {
-		emptySlice = emptySlice[:0]
-		addTimeConsoleAppend(timeNow, &emptySlice)
-	}
 }
 
 func BenchmarkTimeAddTimeConsoleInPlaceCopy(b *testing.B) {
@@ -108,32 +84,6 @@ func BenchmarkTimeAddTimeJSONInPlaceCopy(b *testing.B) {
 // 		AddTimeJSONInPlaceOverwrite(timeNow, byteSlice[:])
 // 	}
 // }
-
-func BenchmarkTimeAddTimeJSONToBuffer(b *testing.B) {
-	b.StopTimer()
-	buffer := bytes.NewBuffer(make([]byte, 1000))
-	timeNow := testTime
-	b.StartTimer()
-
-	for i := 0; i < b.N; i++ {
-		buffer.Reset()
-		addTimeJSONToBuffer(timeNow, buffer)
-	}
-}
-
-func BenchmarkTimeAddTimeJSONAppend(b *testing.B) {
-	b.StopTimer()
-	emptySlice := make([]byte, 0)
-	timeNow := testTime
-	b.StartTimer()
-	_ = emptySlice
-	_ = timeNow
-	for i := 0; i < b.N; i++ {
-		// emptySlice = make([]byte, 0)
-		emptySlice = emptySlice[:0]
-		addTimeJSONAppend(timeNow, &emptySlice)
-	}
-}
 
 // func BenchmarkTimeTimeJSONAppendFormat(b *testing.B) {
 // 	b.StopTimer()
@@ -210,3 +160,63 @@ func TestAddTimeJSONInPlaceCopy(t *testing.T) {
 // 	}
 //
 // }
+
+// the fixed-width timestamp encoders must agree with time.Format
+func TestAuditTimestampEncodersMatchFormat(t *testing.T) {
+	check := func(tm time.Time) {
+		t.Helper()
+		var c [64]byte
+		addTimeConsoleInPlaceCopy(tm, c[:])
+		if got, want := string(c[:29]), tm.Format("[2006-01-02T15:04:05.000000] "); got != want {
+			t.Errorf("console: time %v -> %q, want %q", tm, got, want)
+		}
+		var j [64]byte
+		addTimeJSONInPlaceCopy(tm, j[:])
+		if got, want := string(j[:37]), tm.Format(`{"time":"2006-01-02T15:04:05.000000",`); got != want {
+			t.Errorf("json: time %v -> %q, want %q", tm, got, want)
+		}
+	}
+	// boundaries
+	for _, tm := range []time.Time{
+		time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, 12, 31, 23, 59, 59, 999999000, time.UTC),
+		time.Date(2000, 2, 29, 12, 0, 0, 0, time.UTC),
+		time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(9999, 12, 31, 23, 59, 59, 999999999, time.UTC),
+		time.Date(1000, 10, 10, 10, 10, 10, 100000, time.UTC),
+		time.Date(2026, 10, 20, 20, 20, 20, 202020000, time.UTC),
+	} {
+		check(tm)
+	}
+	// every month/day/hour/minute/second decade boundary
+	for mo := 1; mo <= 12; mo++ {
+		for _, d := range []int{1, 9, 10, 19, 20, 28} {
+			for _, h := range []int{0, 9, 10, 19, 20, 23} {
+				check(time.Date(2026, time.Month(mo), d, h, h%60, (h*7)%60, h*1000, time.UTC))
+			}
+		}
+	}
+	r := rand.New(rand.NewSource(3))
+	for i := 0; i < 200000; i++ {
+		tm := time.Unix(r.Int63n(253402300799), r.Int63n(1e9)).UTC()
+		check(tm)
+	}
+}
+
+// the per-second timestamp cache must track a moving clock
+func TestAuditJSONTimestampCacheAcrossSeconds(t *testing.T) {
+	var now time.Time
+	sb := &syncBuffer{}
+	l := MustNew(Config{Format: FormatJSON, Writer: sb, Level: LevelInfo,
+		JSONTimeMode: JSONTimeUTC, Now: func() time.Time { return now }})
+	base := time.Date(2026, 3, 4, 5, 6, 7, 0, time.UTC)
+	for i := 0; i < 5000; i++ {
+		now = base.Add(time.Duration(i) * 371 * time.Millisecond)
+		sb.Reset()
+		l.Info("m")
+		want := now.UTC().Format(`{"time":"2006-01-02T15:04:05.000000Z"`)
+		if got := sb.String(); len(got) < len(want) || got[:len(want)] != want {
+			t.Fatalf("i=%d now=%v\n got %q\nwant prefix %q", i, now, got, want)
+		}
+	}
+}

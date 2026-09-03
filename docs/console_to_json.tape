@@ -1,4 +1,4 @@
-# iqlog — "Format Switch" (README VCR: CONSOLE_TO_JSON)
+# iqlog: "Format Switch" (README VCR: CONSOLE_TO_JSON)
 # Render: PATH=/tmp/opencode/bin:$PATH vhs docs/console_to_json.tape
 Output docs/console_to_json.gif
 Set FontSize 15

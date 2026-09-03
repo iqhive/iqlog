@@ -1,4 +1,4 @@
-# iqlog — "Request Signal Trace" (README VCR: CONTEXT_TRACE)
+# iqlog: "Request Signal Trace" (README VCR: CONTEXT_TRACE)
 # Render: PATH=/tmp/opencode/bin:$PATH vhs docs/context_trace.tape
 Output docs/context_trace.gif
 Set FontSize 14

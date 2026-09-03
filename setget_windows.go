@@ -20,9 +20,9 @@ func (l *Logger) replaceWriter(w io.Writer) error {
 		return ErrClosed
 	}
 	old := l.writer.active.Load()
-	l.writer.active.Store(&outputState{out: w, configured: w})
+	l.writer.active.Store(l.newOutputState(w))
 	l.writer.mu.Unlock()
-	if old.out == w {
+	if sameWriter(old.out, w) {
 		return nil
 	}
 	l.clearNativeLog()
@@ -40,7 +40,7 @@ func (l *Logger) setAsyncWriter(w io.Writer, capacity int, policy OverflowPolicy
 			l.writer.dropped.Add(1)
 		}
 		l.recordWriteErr(err)
-	}))
+	}, &l.writer.writeMu))
 }
 func (l *Logger) setAsyncWriterLegacy(w io.Writer) error {
 	return l.setAsyncWriter(w, 1000, OverflowBlock)

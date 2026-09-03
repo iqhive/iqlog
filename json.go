@@ -1,62 +1,57 @@
 package iqlog
 
 import (
-	"bytes"
-	"encoding/json"
-	"fmt"
 	"math"
 	"strconv"
+	"unicode/utf8"
 	"unsafe"
 )
 
-// maxExactInt64Float is 2^63; float64 values at or beyond this magnitude
-// cannot be converted to int64 safely.
-const maxExactInt64Float = float64(1 << 63)
-
 var hex = "0123456789abcdef"
 
-func appendJSONString(dst *bytes.Buffer, s string) {
-	dst.WriteByte('"')
-	start := 0
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		if c < 0x20 || c == '\\' || c == '"' {
-			if i > start {
-				dst.WriteString(s[start:i])
-			}
-			switch c {
-			case '\\', '"':
-				dst.WriteByte('\\')
-				dst.WriteByte(c)
-			case '\n':
-				dst.WriteString(`\n`)
-			case '\r':
-				dst.WriteString(`\r`)
-			case '\t':
-				dst.WriteString(`\t`)
-			default:
-				dst.WriteString(`\u00`)
-				dst.WriteByte(hex[c>>4])
-				dst.WriteByte(hex[c&0x0f])
-			}
-			start = i + 1
-		}
+// jsonEscapeTable marks the bytes that cannot be copied into a JSON string
+// verbatim: the C0 control range, the quote and backslash, and every byte
+// >= 0x80, which has to be validated as UTF-8 first. jsonKeyNeedsEscaping
+// uses it because one indexed load per byte measured faster there than the
+// equivalent comparisons; appendJSONEscaped uses comparisons instead, where
+// they measured faster.
+var jsonEscapeTable = func() (t [256]bool) {
+	for c := 0; c < 0x20; c++ {
+		t[c] = true
 	}
-	if start < len(s) {
-		dst.WriteString(s[start:])
+	t['"'] = true
+	t['\\'] = true
+	for c := utf8.RuneSelf; c < 256; c++ {
+		t[c] = true
 	}
-	dst.WriteByte('"')
-}
+	return t
+}()
 
 // appendJSONEscaped appends s to dst with JSON string escaping
 // (without surrounding quotes).
+//
+// Bytes that are not part of a well-formed UTF-8 sequence are replaced with
+// U+FFFD, matching encoding/json. JSON strings must be valid UTF-8, and
+// emitting the raw bytes produces records that strict parsers reject.
 func appendJSONEscaped(dst []byte, s string) []byte {
-	start := 0
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		if c < 0x20 || c == '\\' || c == '"' {
+	for {
+		start := 0
+		i := 0
+		for ; i < len(s); i++ {
+			c := s[i]
+			// c-0x20 wraps, so this one unsigned compare rejects both the C0
+			// range and every byte >= 0x80 in a single test, keeping the
+			// ASCII fast path at the three comparisons it had before UTF-8
+			// validation was added.
+			if c-0x20 < 0x60 && c != '"' && c != '\\' {
+				continue
+			}
 			if i > start {
 				dst = append(dst, s[start:i]...)
+			}
+			if c >= utf8.RuneSelf {
+				// hand the multi-byte run to the rune loop below
+				break
 			}
 			switch c {
 			case '\\', '"':
@@ -72,40 +67,47 @@ func appendJSONEscaped(dst []byte, s string) []byte {
 			}
 			start = i + 1
 		}
+		if i == len(s) {
+			if start < len(s) {
+				dst = append(dst, s[start:]...)
+			}
+			return dst
+		}
+		var n int
+		dst, n = appendJSONEscapedRunes(dst, s[i:])
+		s = s[i+n:]
 	}
-	if start < len(s) {
-		dst = append(dst, s[start:]...)
-	}
-	return dst
 }
 
-// repairTruncatedJSONLine repairs a partially assembled JSON object that hit
-// the fixed line-buffer limit, so the emitted record stays parseable. It
-// walks back from the end looking for the longest prefix that forms a valid
-// object once closed (with `"}` when the cut lands inside a string, or `}`
-// otherwise) and returns the new length. Only called on the rare truncation
-// path, so validating candidates with json.Valid is acceptable.
-func repairTruncatedJSONLine(buf []byte, used, max int) int {
-	if used > max {
-		used = max
-	}
-	for cut := used; cut > 1; cut-- {
-		for _, closer := range []string{"\"}", "}"} {
-			if cut+len(closer) > max {
-				continue
-			}
-			cand := make([]byte, 0, cut+len(closer))
-			cand = append(cand, buf[:cut]...)
-			cand = append(cand, closer...)
-			if json.Valid(cand) {
-				copy(buf[cut:], closer)
-				return cut + len(closer)
-			}
+// appendJSONEscapedRunes appends the leading run of non-ASCII bytes of s,
+// replacing ill-formed sequences with U+FFFD, and reports how many bytes it
+// consumed. It stops at the first ASCII byte so the caller's ASCII loop takes
+// over again; keeping rune decoding out of that loop is what makes the common
+// all-ASCII record cost nothing for UTF-8 correctness.
+func appendJSONEscapedRunes(dst []byte, s string) ([]byte, int) {
+	i := 0
+	for i < len(s) && s[i] >= utf8.RuneSelf {
+		r, size := utf8.DecodeRuneInString(s[i:])
+		if r == utf8.RuneError && size == 1 {
+			dst = append(dst, '\\', 'u', 'f', 'f', 'f', 'd')
+		} else {
+			dst = append(dst, s[i:i+size]...)
 		}
+		i += size
 	}
-	// give up: emit an empty object rather than an invalid record
-	copy(buf, "{}")
-	return 2
+	return dst, i
+}
+
+// escapeJSONTail re-encodes dst[from:] with JSON string escaping when it holds
+// bytes that would break out of the string being built. It is for envelope
+// text that came from configuration rather than from a field encoder, which
+// escapes as it writes.
+func escapeJSONTail(dst []byte, from int) []byte {
+	if !jsonKeyNeedsEscaping(unsafeString(dst[from:])) {
+		return dst
+	}
+	tail := string(dst[from:])
+	return appendJSONEscaped(dst[:from], tail)
 }
 
 // appendJSONFloat appends f as a JSON-safe value: quoted for non-finite
@@ -137,199 +139,8 @@ func appendJSONStringFloat(dst []byte, f float64, bitSize int) []byte {
 	return appendJSONEscaped(dst, s)
 }
 
-func appendFastFloat64(dst *bytes.Buffer, f float64) error {
-	if math.IsNaN(f) {
-		dst.WriteString(`"NaN"`)
-		return nil
-	}
-	if math.IsInf(f, 1) {
-		dst.WriteString(`"Infinity"`)
-		return nil
-	}
-	if math.IsInf(f, -1) {
-		dst.WriteString(`"-Infinity"`)
-		return nil
-	}
-
-	if f >= maxExactInt64Float || f <= -maxExactInt64Float {
-		// Out of int64 range: the fast integer/decimal paths would overflow,
-		// so fall back to the standard library formatter.
-		dst.WriteString(strconv.FormatFloat(f, 'f', -1, 64))
-		return nil
-	}
-
-	if f == float64(int64(f)) {
-		appendIntBuffer(dst, int64(f))
-		return nil
-	}
-
-	var scratch [64]byte
-	b := scratch[:0]
-	b = setfastFloatDecimal(b, f, 6)
-	dst.Write(b)
-	return nil
-}
-
-func setfastFloatDecimal(b []byte, f float64, dec int) []byte {
-	if f < 0 {
-		b = append(b, '-')
-		f = -f
-	}
-	intPart := int64(f)
-	b = setIntDecimal(b, intPart)
-	f -= float64(intPart)
-
-	if f == 0.0 {
-		return b
-	}
-	b = append(b, '.')
-
-	for i := 0; i < dec; i++ {
-		f *= 10
-		digit := int64(f)
-		b = append(b, byte('0'+digit))
-		f -= float64(digit)
-		if f == 0.0 {
-			break
-		}
-	}
-	return b
-}
-
-func setIntDecimal(b []byte, i int64) []byte {
-	var tmp [20]byte
-	pos := len(tmp)
-	if i == 0 {
-		pos--
-		tmp[pos] = '0'
-	} else {
-		for i > 0 {
-			pos--
-			tmp[pos] = byte('0' + i%10)
-			i /= 10
-		}
-	}
-	return append(b, tmp[pos:]...)
-}
-
-func valToString(v any) string {
-	return unsafeString([]byte(sprintf("%v", v)))
-}
-
+// unsafeString views b as a string without copying. The result must not
+// outlive b, and b must not be mutated while it is in use.
 func unsafeString(b []byte) string {
 	return *(*string)(unsafe.Pointer(&b))
-}
-
-// jsonEscapedString returns s with JSON string escaping applied.
-// It returns s unchanged when no escaping is needed.
-func jsonEscapedString(s string) string {
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		if c < 0x20 || c == '\\' || c == '"' {
-			return string(appendJSONEscaped(make([]byte, 0, len(s)+8), s))
-		}
-	}
-	return s
-}
-
-func sprintf(format string, args ...any) string {
-	// TODO: implement a fast sprintf
-	return fmt.Sprintf(format, args...)
-}
-
-func appendJSONField(buf *bytes.Buffer, firstField bool, key string) bool {
-	if !firstField {
-		buf.WriteByte(',')
-	} else {
-		firstField = false
-	}
-	appendJSONString(buf, key)
-	buf.WriteByte(':')
-	return firstField
-}
-
-func appendValue(l *Logger, buf *bytes.Buffer, v any) {
-	switch vv := v.(type) {
-	case nil:
-		buf.WriteString("null")
-	case bool:
-		if vv {
-			buf.WriteString("true")
-		} else {
-			buf.WriteString("false")
-		}
-	case int:
-		appendIntBuffer(buf, int64(vv))
-	case int64:
-		appendIntBuffer(buf, vv)
-	case float64:
-		appendFastFloat64(buf, vv)
-	case float32:
-		appendFastFloat64(buf, float64(vv))
-	case string:
-		appendJSONString(buf, vv)
-	default:
-		appendJSONString(buf, valToString(vv))
-	}
-}
-
-// appendIntBuffer appends decimal integers
-func appendIntBuffer(dst *bytes.Buffer, i int64) {
-	var b [20]byte
-	pos := len(b)
-	neg := i < 0
-	u := uint64(i)
-	if neg {
-		u = -u
-	}
-	if u == 0 {
-		pos--
-		b[pos] = '0'
-	}
-	for u > 0 {
-		pos--
-		b[pos] = byte('0' + u%10)
-		u /= 10
-	}
-	if neg {
-		pos--
-		b[pos] = '-'
-	}
-	dst.Write(b[pos:])
-}
-
-// setIntBytes writes a zero-padded integer of given width, returning how many bytes were written.
-// eg setIntBytes(..., 5, 2) writes "05".
-func setIntBytes(dst []byte, val int64, width int) int {
-	neg := val < 0
-	u := uint64(val)
-	if neg {
-		u = -u
-	}
-	// Build the digits in temp buffer
-	var tmp [20]byte
-	i := len(tmp)
-	for u > 0 {
-		i--
-		tmp[i] = byte('0' + (u % 10))
-		u /= 10
-	}
-	// If nothing was written, write "0"
-	if i == len(tmp) {
-		i--
-		tmp[i] = '0'
-	}
-	// Zero-padding to meet width
-	numLen := len(tmp) - i
-	for pad := width - numLen; pad > 0; pad-- {
-		i--
-		tmp[i] = '0'
-	}
-	// If negative, append '-'
-	if neg {
-		i--
-		tmp[i] = '-'
-	}
-	n := copy(dst, tmp[i:])
-	return n
 }

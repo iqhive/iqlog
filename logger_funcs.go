@@ -1,5 +1,10 @@
 package iqlog
 
+// The ...ln wrappers join their arguments before handing the result to Msg.
+// getWith returns nil when the level gate dropped the record, and checking
+// that first keeps the disabled path free of the sprintln allocation. Fatal
+// and Panic always get an event back, so they still format and terminate.
+
 // ------------------------------------------------------------
 // Trace
 // ------------------------------------------------------------
@@ -10,7 +15,9 @@ func (l *Logger) Tracef(format string, args ...interface{}) {
 	l.getWith(LevelTrace).Msgf(format, args...)
 }
 func (l *Logger) Traceln(args ...interface{}) {
-	l.getWith(LevelTrace).Msg(sprintln(args...))
+	if e := l.getWith(LevelTrace); e != nil {
+		e.Msg(sprintln(args...))
+	}
 }
 
 // ------------------------------------------------------------
@@ -23,7 +30,9 @@ func (l *Logger) Debugf(format string, args ...interface{}) {
 	l.getWith(LevelDebug).Msgf(format, args...)
 }
 func (l *Logger) Debugln(args ...interface{}) {
-	l.getWith(LevelDebug).Msg(sprintln(args...))
+	if e := l.getWith(LevelDebug); e != nil {
+		e.Msg(sprintln(args...))
+	}
 }
 
 // ------------------------------------------------------------
@@ -36,7 +45,9 @@ func (l *Logger) Infof(format string, args ...interface{}) {
 	l.getWith(LevelInfo).Msgf(format, args...)
 }
 func (l *Logger) Infoln(args ...interface{}) {
-	l.getWith(LevelInfo).Msg(sprintln(args...))
+	if e := l.getWith(LevelInfo); e != nil {
+		e.Msg(sprintln(args...))
+	}
 }
 
 // ------------------------------------------------------------
@@ -49,7 +60,9 @@ func (l *Logger) Warnf(format string, args ...interface{}) {
 	l.getWith(LevelWarn).Msgf(format, args...)
 }
 func (l *Logger) Warnln(args ...interface{}) {
-	l.getWith(LevelWarn).Msg(sprintln(args...))
+	if e := l.getWith(LevelWarn); e != nil {
+		e.Msg(sprintln(args...))
+	}
 }
 
 // ------------------------------------------------------------
@@ -62,7 +75,9 @@ func (l *Logger) Errorf(format string, args ...interface{}) {
 	l.getWith(LevelError).Msgf(format, args...)
 }
 func (l *Logger) Errorln(args ...interface{}) {
-	l.getWith(LevelError).Msg(sprintln(args...))
+	if e := l.getWith(LevelError); e != nil {
+		e.Msg(sprintln(args...))
+	}
 }
 
 // ------------------------------------------------------------
@@ -75,7 +90,9 @@ func (l *Logger) Fatalf(format string, args ...interface{}) {
 	l.getWith(LevelFatal).Msgf(format, args...)
 }
 func (l *Logger) Fatalln(args ...interface{}) {
-	l.getWith(LevelFatal).Msg(sprintln(args...))
+	if e := l.getWith(LevelFatal); e != nil {
+		e.Msg(sprintln(args...))
+	}
 }
 
 // ------------------------------------------------------------
@@ -88,5 +105,7 @@ func (l *Logger) Panicf(format string, args ...interface{}) {
 	l.getWith(LevelPanic).Msgf(format, args...)
 }
 func (l *Logger) Panicln(args ...interface{}) {
-	l.getWith(LevelPanic).Msg(sprintln(args...))
+	if e := l.getWith(LevelPanic); e != nil {
+		e.Msg(sprintln(args...))
+	}
 }

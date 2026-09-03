@@ -1,15 +1,31 @@
 package iqlog
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"strconv"
 	"time"
+	"unicode/utf8"
 )
 
+// jsonKeyNeedsEscaping reports whether name contains a byte that would break
+// out of the JSON string it is about to be written into. The scan is a single
+// allocation-free pass and is far cheaper than escaping, so the fast append
+// path is kept for the identifier-style keys that dominate real workloads
+// while a hostile key can no longer forge fields.
+func jsonKeyNeedsEscaping(name string) bool {
+	for i := 0; i < len(name); i++ {
+		if jsonEscapeTable[name[i]] {
+			return true
+		}
+	}
+	return false
+}
+
 func (bsl *Event) appendJSONKey(name string) {
-	if bsl.config.escapeFieldNames {
+	if bsl.config.escapeFieldNames || jsonKeyNeedsEscaping(name) {
 		bsl.appendEscapedJSONKey(name)
 	} else {
 		bsl.output = append(bsl.output, ',', '"')
@@ -24,6 +40,16 @@ func (bsl *Event) appendEscapedJSONKey(name string) {
 	bsl.output = append(bsl.output, '"', ':')
 }
 
+// eventFieldName keeps user fields clear of the record envelope.
+//
+// The mapping is deliberately not injective: Str("time", a) becomes
+// field_time, and so does an explicit Str("field_time", b), so a record
+// carrying both emits the key twice and a parser keeps only one value.
+// Closing that would mean also prefixing names that already start with
+// field_, which measured about 3% of a three-field JSON record and would
+// rename every field_* key. Duplicate keys are reachable anyway -- nothing
+// stops Str("x", 1).Str("x", 2) -- so the escape is left as the cheap,
+// documented approximation it is.
 func eventFieldName(name string) string {
 	switch name {
 	case "time", "level", "message", "func", "file":
@@ -202,7 +228,11 @@ func (bsl *Event) Any(name string, v any) *Event {
 	if bsl.jsonMode {
 		bsl.appendJSONKey(name)
 		encoded, err := json.Marshal(v)
-		if err == nil {
+		// A custom MarshalJSON can return ill-formed UTF-8; encoding/json
+		// does not check it, and passing it through would make the whole
+		// record ill-formed. Fall back to the escaped text form, which
+		// substitutes U+FFFD.
+		if err == nil && utf8.Valid(encoded) {
 			bsl.output = append(bsl.output, encoded...)
 		} else {
 			bsl.output = append(bsl.output, '"')
@@ -301,9 +331,28 @@ func (e *Event) RawJSON(name string, value []byte) *Event {
 		return e
 	}
 	name = eventFieldName(name)
-	if !json.Valid(value) {
+	switch {
+	case !json.Valid(value):
 		e.buildErr = fmt.Errorf("iqlog: invalid raw JSON for field %q", name)
 		value = []byte("null")
+	case !utf8.Valid(value):
+		// json.Valid does not check UTF-8 inside strings, but JSON text has to
+		// be UTF-8 (RFC 8259 section 8.1). Passing the bytes through would
+		// make the whole record ill-formed.
+		e.buildErr = fmt.Errorf("iqlog: raw JSON for field %q is not valid UTF-8", name)
+		value = []byte("null")
+	case bytes.IndexByte(value, '\n') >= 0 || bytes.IndexByte(value, '\r') >= 0:
+		// Valid JSON may carry insignificant newlines between tokens, which
+		// would split the record for a newline-delimited reader. Compacting
+		// is lossless: a raw newline inside a JSON string is not valid JSON,
+		// so json.Valid already rejected that case.
+		var compact bytes.Buffer
+		if err := json.Compact(&compact, value); err == nil {
+			value = compact.Bytes()
+		} else {
+			e.buildErr = fmt.Errorf("iqlog: raw JSON for field %q could not be compacted: %w", name, err)
+			value = []byte("null")
+		}
 	}
 	if e.jsonMode {
 		e.appendJSONKey(name)

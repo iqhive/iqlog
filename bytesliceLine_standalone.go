@@ -5,10 +5,14 @@ const invalidTimestampSecond int64 = -1 << 63
 // Event is a single-use structured log event. It is not safe for concurrent
 // use. Msg, Msgs, or Msgf consumes the event.
 type Event struct {
-	logger          *Logger
-	config          *loggerConfig
-	jsonMode        bool
-	output          []byte
+	logger   *Logger
+	config   *loggerConfig
+	jsonMode bool
+	output   []byte
+	// prefixLen marks the end of the package-generated console envelope
+	// (timestamp, level, caller). Everything after it is caller-supplied and
+	// gets control bytes escaped before the record is written.
+	prefixLen       int
 	includeTime     bool
 	color           bool
 	captureCaller   int
@@ -32,6 +36,7 @@ func acquireEvent(l *Logger, cfg *loggerConfig) *Event {
 	e.config = cfg
 	e.jsonMode = false
 	e.output = e.output[:0]
+	e.prefixLen = 0
 	e.includeTime = false
 	e.color = false
 	e.captureCaller = 0
@@ -56,6 +61,7 @@ func (e *Event) release(releaseBuffer bool) {
 	e.config = nil
 	e.jsonMode = false
 	e.output = buf
+	e.prefixLen = 0
 	e.includeTime = false
 	e.color = false
 	e.captureCaller = 0

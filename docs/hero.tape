@@ -1,4 +1,4 @@
-# iqlog — README hero: one log call, one colored console record
+# iqlog: README hero: one log call, one colored console record
 # Render: vhs docs/hero.tape
 #
 # The output line is produced by the real library at record time:
@@ -22,7 +22,7 @@ Type 'cd docs/hero-demo && go build -o /tmp/iqlog-hero-demo . && cd ../..' Enter
 Sleep 2000ms
 Show
 
-# the log call you write (display only — cancel it, don't run it)
+# the log call you write (display only, cancel it, don't run it)
 Type '# log.InfoEvent().Str("service", "checkout").Int("port", 8080).Bool("tls", true).Msg("listening")' Enter
 Sleep 400ms
 

@@ -65,8 +65,10 @@ type Config struct {
 	Writer io.Writer
 	// ConcurrentWriter skips serialization when Writer supports concurrent writes.
 	ConcurrentWriter bool
-	// EscapeFieldNames enables JSON escaping for dynamic field names. It is
-	// optional because trusted identifier-style keys are substantially faster.
+	// EscapeFieldNames forces JSON escaping for every dynamic field name.
+	// It is not needed for correctness: keys are always scanned and escaped
+	// when they contain a byte that would break the JSON string. Set it only
+	// to skip that scan's branch for keys already known to need escaping.
 	EscapeFieldNames bool
 	// IncludeTime controls console timestamps. JSON timestamps are
 	// controlled by JSONTimeMode.
@@ -108,6 +110,7 @@ type loggerConfig struct {
 	jsonTimeMode     JSONTimeMode
 	callerDepth      int
 	color            bool
+	disableColor     bool
 	applicationName  string
 	syslogHost       string
 	nativeLog        bool
@@ -192,15 +195,17 @@ func nilWriter(w io.Writer) bool {
 	return v.Kind() == reflect.Pointer && v.IsNil()
 }
 
+// updateConfig applies update to a fresh copy of the configuration snapshot
+// and publishes it. The level fast path is republished from the same snapshot
+// under cfgMu so a concurrent updateConfig or setConfig cannot leave
+// Logger.level and loggerConfig.level disagreeing.
 func (l *Logger) updateConfig(update func(*loggerConfig)) {
-	for {
-		old := l.config.Load()
-		next := *old
-		update(&next)
-		if l.config.CompareAndSwap(old, &next) {
-			return
-		}
-	}
+	l.cfgMu.Lock()
+	next := *l.config.Load()
+	update(&next)
+	l.config.Store(&next)
+	l.level.Store(int32(next.level))
+	l.cfgMu.Unlock()
 }
 
 func (l *Logger) setConfig(input Config) error {
@@ -234,9 +239,9 @@ func (l *Logger) setConfig(input Config) error {
 	active := configured
 	switch cfg.WriterMode {
 	case WriterAsync:
-		active = newAsyncWriter(configured, cfg.BufferSize, cfg.OverflowPolicy, l.queueError)
+		active = newAsyncWriter(configured, cfg.BufferSize, cfg.OverflowPolicy, l.queueError, &l.writer.writeMu)
 	case WriterRing:
-		active = newAsyncWriter(configured, cfg.BufferSize, cfg.OverflowPolicy, l.queueError)
+		active = newAsyncWriter(configured, cfg.BufferSize, cfg.OverflowPolicy, l.queueError, &l.writer.writeMu)
 	}
 	l.writer.mu.Lock()
 	if l.writer.closed.Load() {
@@ -247,8 +252,10 @@ func (l *Logger) setConfig(input Config) error {
 	old := l.writer.active.Load()
 	concurrent := cfg.ConcurrentWriter || configured == io.Discard || cfg.WriterMode != WriterSync
 	l.writer.active.Store(&outputState{out: active, configured: configured, concurrent: concurrent, native: native})
+	l.cfgMu.Lock()
 	l.config.Store(cfg.snapshot())
 	l.level.Store(int32(cfg.Level))
+	l.cfgMu.Unlock()
 	l.writer.mu.Unlock()
 	return retireWriter(old.out, configured)
 }
@@ -269,7 +276,7 @@ func (l *Logger) Config() Config {
 		ConcurrentWriter: cfg.concurrentWriter,
 		EscapeFieldNames: cfg.escapeFieldNames,
 		IncludeTime:      cfg.includeTime, TimestampLayout: cfg.timestampLayout, JSONTimeMode: cfg.jsonTimeMode,
-		CallerDepth: cfg.callerDepth, Color: cfg.color, DisableColor: !cfg.color,
+		CallerDepth: cfg.callerDepth, Color: cfg.color, DisableColor: cfg.disableColor,
 		ApplicationName: cfg.applicationName, SyslogHost: cfg.syslogHost, NativeLog: cfg.nativeLog,
 		ContextExtractor: cfg.contextExtractor, ExitFunc: cfg.exitFunc, Now: cfg.now,
 		WriterMode: cfg.writerMode, BufferSize: cfg.bufferSize, OverflowPolicy: cfg.overflowPolicy,
@@ -303,6 +310,7 @@ func (cfg Config) snapshot() *loggerConfig {
 		jsonTimeMode:     cfg.JSONTimeMode,
 		callerDepth:      cfg.CallerDepth,
 		color:            cfg.Color,
+		disableColor:     cfg.DisableColor,
 		applicationName:  cfg.ApplicationName,
 		syslogHost:       cfg.SyslogHost,
 		nativeLog:        cfg.NativeLog,
@@ -323,7 +331,10 @@ func appendTimestamp(dst []byte, now time.Time, cfg *loggerConfig, jsonMode bool
 			return appendDefaultJSONTimestamp(dst, now.UTC())
 		}
 		dst = append(dst, `{"time":"`...)
+		start := len(dst)
 		dst = now.AppendFormat(dst, cfg.timestampLayout)
+		// the layout is caller-supplied and lands inside a JSON string
+		dst = escapeJSONTail(dst, start)
 		return append(dst, `",`...)
 	}
 	if cfg.timestampLayout == defaultConsoleTimestampLayout {
@@ -332,7 +343,11 @@ func appendTimestamp(dst []byte, now time.Time, cfg *loggerConfig, jsonMode bool
 		return dst
 	}
 	dst = append(dst, '[')
+	start := len(dst)
 	dst = now.AppendFormat(dst, cfg.timestampLayout)
+	// the layout is caller-supplied and lands in the console envelope, which
+	// the whole-line scan does not cover
+	dst = escapeConsoleTail(dst, start)
 	return append(dst, ']', ' ')
 }
 

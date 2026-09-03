@@ -1,4 +1,4 @@
-# iqlog — "Buffer Under Pressure" (README VCR: ASYNC_QUEUE)
+# iqlog: "Buffer Under Pressure" (README VCR: ASYNC_QUEUE)
 # Render: PATH=/tmp/opencode/bin:$PATH vhs docs/async_queue.tape
 Output docs/async_queue.gif
 Set FontSize 14

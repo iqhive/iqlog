@@ -27,10 +27,12 @@ func (l *Logger) Level() Level {
 }
 
 // SetLevel sets the logger's minimum level. Safe to call while other
-// goroutines are logging.
+// goroutines are logging. A level above LevelFatal suppresses every record
+// including Fatal and Panic, which still terminate.
 func (l *Logger) setLevel(level Level) {
+	// updateConfig republishes the level fast path from the same snapshot, so
+	// the two gates in newEventContextAt cannot be left disagreeing
 	l.updateConfig(func(cfg *loggerConfig) { cfg.level = level })
-	l.level.Store(int32(level))
 }
 
 // Enabled reports whether level would be emitted.
@@ -79,15 +81,18 @@ func ParseLevel(value string) (Level, error) {
 		return LevelPanic, nil
 	case "fatal":
 		return LevelFatal, nil
+	case "unknown":
+		return LevelUnknown, nil
 	default:
 		return LevelUnknown, fmt.Errorf("iqlog: invalid level %q", value)
 	}
 }
 
+// MarshalText encodes the level as its name. The zero value encodes as
+// "unknown" rather than failing: it is the natural state of a Level field in
+// a configuration struct that has not been set, and returning an error there
+// makes the whole surrounding struct unmarshalable.
 func (l Level) MarshalText() ([]byte, error) {
-	if l == LevelUnknown {
-		return nil, fmt.Errorf("iqlog: invalid level")
-	}
 	return []byte(l.String()), nil
 }
 

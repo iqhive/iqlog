@@ -14,7 +14,12 @@ func prepareSyslog(host, appName string) (io.Writer, error) {
 	if host != "" && !strings.Contains(host, ":") {
 		host += ":514"
 	}
-	return syslog.Dial("udp", host, syslog.LOG_DAEMON|syslog.LOG_INFO, appName)
+	w, err := syslog.Dial("udp", host, syslog.LOG_DAEMON|syslog.LOG_INFO, sanitizeSyslogTag(appName))
+	if err != nil {
+		return nil, err
+	}
+	// iqlog dialled this connection, so iqlog closes it when it is retired
+	return newOwnedWriter(w), nil
 }
 
 // replaceWriter swaps the logger output under the logger mutex and closes
@@ -30,9 +35,9 @@ func (l *Logger) replaceWriter(w io.Writer) error {
 		return ErrClosed
 	}
 	old := l.writer.active.Load()
-	l.writer.active.Store(&outputState{out: w, configured: w})
+	l.writer.active.Store(l.newOutputState(w))
 	l.writer.mu.Unlock()
-	if old.out == w {
+	if sameWriter(old.out, w) {
 		return nil
 	}
 	l.clearNativeLog()
@@ -51,7 +56,7 @@ func (l *Logger) setAsyncWriter(w io.Writer, capacity int, policy OverflowPolicy
 			l.writer.dropped.Add(1)
 		}
 		l.recordWriteErr(err)
-	}))
+	}, &l.writer.writeMu))
 }
 func (l *Logger) setAsyncWriterLegacy(w io.Writer) error {
 	return l.setAsyncWriter(w, 1000, OverflowBlock)
@@ -105,10 +110,11 @@ func (l *Logger) setSyslogHost(newhost string) error {
 		l.updateConfig(func(cfg *loggerConfig) { cfg.syslogHost = newhost })
 		return l.replaceWriter(os.Stderr)
 	}
-	newSyslog, syslogErr := syslog.Dial("udp", newhost, syslog.LOG_DAEMON|syslog.LOG_INFO, appName)
+	newSyslog, syslogErr := syslog.Dial("udp", newhost, syslog.LOG_DAEMON|syslog.LOG_INFO, sanitizeSyslogTag(appName))
 	if syslogErr == nil && newSyslog != nil {
 		l.updateConfig(func(cfg *loggerConfig) { cfg.syslogHost = newhost })
-		return l.replaceWriter(newSyslog)
+		// iqlog dialled this connection, so iqlog closes it when it is retired
+		return l.replaceWriter(newOwnedWriter(newSyslog))
 	} else {
 		// keep the current writer rather than terminating the host process;
 		// a logging library must not exit the application
