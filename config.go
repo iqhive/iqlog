@@ -80,14 +80,14 @@ type Config struct {
 	// value (JSONTimeDisabled) omits the timestamp; set JSONTimeUTC or
 	// JSONTimeCustom to opt in.
 	JSONTimeMode JSONTimeMode
-	CallerDepth     int
+	CallerDepth  int
 	// Color forces ANSI colors for console output. Terminal writers are
 	// detected automatically unless DisableColor is set.
 	Color bool
 	// DisableColor disables ANSI colors, including automatic terminal colors.
-	DisableColor     bool
-	ApplicationName  string
-	SyslogHost       string
+	DisableColor    bool
+	ApplicationName string
+	SyslogHost      string
 	// NativeLog routes output to the platform-native system log: os_log on
 	// macOS (requires cgo) and the Event Log on Windows. ApplicationName
 	// becomes the os_log subsystem / event source name. When set it takes

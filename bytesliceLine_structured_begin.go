@@ -6,15 +6,33 @@ import (
 	"time"
 )
 
+// eventOrigin carries what an adapter already knows about a record: its call
+// site and its timestamp. The default path passes nil and captures both
+// itself.
+type eventOrigin struct {
+	// function and file are explicit caller text, as accepted by EventAt.
+	// When function is empty and pc is zero no caller is emitted, whatever
+	// CallerDepth says.
+	function, file string
+	// pc is a return address from runtime.Callers. It is resolved only when
+	// the logger's CallerDepth is set, so an adapter that always has a PC
+	// does not pay for symbolization unless callers are wanted.
+	pc uintptr
+	// when replaces the logger clock while explicitTime is set. A zero when
+	// with explicitTime set omits the timestamp.
+	when         time.Time
+	explicitTime bool
+}
+
 func (l *Logger) newEvent(level Level, callerSkip int) *Event {
 	return l.newEventContext(l.ctx, level, callerSkip)
 }
 
 func (l *Logger) newEventContext(ctx context.Context, level Level, callerSkip int) *Event {
-	return l.newEventContextAt(ctx, level, callerSkip+1, "", "", false)
+	return l.newEventContextAt(ctx, level, callerSkip+1, nil)
 }
 
-func (l *Logger) newEventContextAt(ctx context.Context, level Level, callerSkip int, function, file string, explicitCaller bool) *Event {
+func (l *Logger) newEventContextAt(ctx context.Context, level Level, callerSkip int, origin *eventOrigin) *Event {
 	// Fatal and Panic always produce an event: even when their record is
 	// suppressed they still have to terminate.
 	terminal := level == LevelFatal || level == LevelPanic
@@ -46,22 +64,40 @@ func (l *Logger) newEventContextAt(ctx context.Context, level Level, callerSkip 
 	e.captureCaller = cfg.callerDepth
 	e.exitAfterWrite = level == LevelFatal
 	e.panicAfterWrite = level == LevelPanic
-	if explicitCaller {
-		e.timeSecond = invalidTimestampSecond
+	// Writing into callerData invalidates the timestamp cache that shares
+	// its buffer, so timeSecond is reset on exactly the paths that write.
+	if origin != nil {
 		e.captureCaller = 0
-		if function != "" {
+		if origin.function != "" {
+			e.timeSecond = invalidTimestampSecond
 			e.captureCaller = 1
-			e.callerData.callerFuncLen = uint(copy(e.callerData.callerFunc[:], function))
-			e.callerData.callerFileLen = uint(copy(e.callerData.callerFile[:], file))
+			e.callerData.callerFuncLen = uint(copy(e.callerData.callerFunc[:], origin.function))
+			e.callerData.callerFileLen = uint(copy(e.callerData.callerFile[:], origin.file))
+		} else if origin.pc != 0 && cfg.callerDepth > 0 {
+			e.timeSecond = invalidTimestampSecond
+			e.captureCaller = 1
+			captureCallerPC(origin.pc, &e.callerData)
 		}
 	} else if cfg.callerDepth > 0 {
 		e.timeSecond = invalidTimestampSecond
 		captureCaller(cfg.callerDepth+callerSkip+1, &e.callerData)
 	}
+	var now time.Time
+	if e.includeTime {
+		if origin != nil && origin.explicitTime {
+			if origin.when.IsZero() {
+				e.includeTime = false
+			} else {
+				now = origin.when
+			}
+		} else {
+			now = cfg.now()
+		}
+	}
 	if e.jsonMode {
-		e.writeInitialJSON(level)
+		e.writeInitialJSON(level, now)
 	} else {
-		e.writeInitialConsole(level)
+		e.writeInitialConsole(level, now)
 	}
 	for _, field := range l.fields {
 		addField(e, field.key, field.value)
@@ -86,7 +122,7 @@ func (l *Logger) Event(level Level) *Event { return l.newEvent(normalizeLevel(le
 // EventAt creates a structured event with an explicit caller. Empty function
 // and file values suppress caller output regardless of CallerDepth.
 func (l *Logger) EventAt(level Level, function, file string) *Event {
-	return l.newEventContextAt(l.ctx, normalizeLevel(level), 1, function, file, true)
+	return l.newEventContextAt(l.ctx, normalizeLevel(level), 1, &eventOrigin{function: function, file: file})
 }
 
 func (l *Logger) TraceEvent() *Event {
@@ -127,12 +163,12 @@ func ErrorEvent() *Event { return Default().ErrorEvent() }
 func PanicEvent() *Event { return Default().PanicEvent() }
 func FatalEvent() *Event { return Default().FatalEvent() }
 
-func (e *Event) writeInitialJSON(level Level) {
+func (e *Event) writeInitialJSON(level Level, now time.Time) {
 	if e.includeTime {
 		if e.config.jsonTimeMode == JSONTimeUTC {
-			e.writeDefaultJSONTimestamp(e.config.now())
+			e.writeDefaultJSONTimestamp(now)
 		} else {
-			e.output = appendTimestamp(e.output, e.config.now(), e.config, true)
+			e.output = appendTimestamp(e.output, now, e.config, true)
 		}
 	} else {
 		e.output = append(e.output, '{')
@@ -203,9 +239,9 @@ func (e *Event) writeDefaultJSONTimestamp(now time.Time) {
 	)
 }
 
-func (e *Event) writeInitialConsole(level Level) {
+func (e *Event) writeInitialConsole(level Level, now time.Time) {
 	if e.includeTime {
-		e.output = appendTimestamp(e.output, e.config.now(), e.config, false)
+		e.output = appendTimestamp(e.output, now, e.config, false)
 	}
 	if e.color {
 		e.output = append(e.output, ansiColourPrefix(level)...)

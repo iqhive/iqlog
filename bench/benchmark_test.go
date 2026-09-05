@@ -254,3 +254,159 @@ func BenchmarkIQLogLegacyLogWithFields(b *testing.B) {
 		logger.LogWithFields(context.Background(), iqlog.LevelInfo, fields, msg)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// log/slog handlers.
+//
+// Every handler below is driven through a *slog.Logger with the same typed
+// attributes, so the numbers include slog's own record construction and PC
+// capture, which no handler can avoid. Payloads are kept equivalent: no
+// timestamp unless the name says so, no source unless the name says so. The
+// standard library JSON handler always emits a timestamp, so its Simple
+// number is comparable with the WithTimestamp variants of the others.
+// ---------------------------------------------------------------------------
+
+func iqlogSlog(cfg iqlog.Config) *slog.Logger {
+	cfg.Writer = io.Discard
+	return slog.New(iqlog.MustNew(cfg).SlogHandler())
+}
+
+func phusluSlog(l phuslog.Logger) *slog.Logger {
+	l.Writer = phuslog.IOWriter{Writer: io.Discard}
+	return l.Slog()
+}
+
+func zerologSlog(l zerolog.Logger) *slog.Logger {
+	return slog.New(zerolog.NewSlogHandler(l))
+}
+
+func runSlogDisabled(b *testing.B, logger *slog.Logger) {
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		logger.LogAttrs(context.Background(), slog.LevelDebug, msg, slog.String("rate", "15"), slog.Int("low", 16), slog.Float64("high", 123.2))
+	}
+}
+
+func runSlogSimple(b *testing.B, logger *slog.Logger) {
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		logger.LogAttrs(context.Background(), slog.LevelInfo, msg, slog.String("rate", "15"), slog.Int("low", 16), slog.Float64("high", 123.2))
+	}
+}
+
+func runSlogGrouped(b *testing.B, logger *slog.Logger) {
+	logger = logger.WithGroup("http").With("method", "GET", "path", "/orders")
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		logger.LogAttrs(context.Background(), slog.LevelInfo, msg, slog.Int("status", 200), slog.String("client", "10.0.0.1"))
+	}
+}
+
+func runSlogParallel(b *testing.B, logger *slog.Logger) {
+	b.ReportAllocs()
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			logger.LogAttrs(context.Background(), slog.LevelInfo, msg, slog.String("rate", "15"), slog.Int("low", 16), slog.Float64("high", 123.2))
+		}
+	})
+}
+
+func BenchmarkSlogHandlerDisabled(b *testing.B) {
+	runSlogDisabled(b, slog.New(slog.NewJSONHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelInfo})))
+}
+
+func BenchmarkIQLogSlogHandlerDisabled(b *testing.B) {
+	runSlogDisabled(b, iqlogSlog(iqlog.Config{Format: iqlog.FormatJSON, Level: iqlog.LevelInfo}))
+}
+
+func BenchmarkZerologSlogHandlerDisabled(b *testing.B) {
+	runSlogDisabled(b, zerologSlog(zerolog.New(io.Discard).Level(zerolog.InfoLevel)))
+}
+
+func BenchmarkPhusluSlogHandlerDisabled(b *testing.B) {
+	runSlogDisabled(b, phusluSlog(phuslog.Logger{Level: phuslog.InfoLevel, TimeField: ""}))
+}
+
+func BenchmarkSlogHandlerSimple(b *testing.B) {
+	// slog.JSONHandler always writes a timestamp; compare with the
+	// WithTimestamp variants of the other handlers.
+	runSlogSimple(b, slog.New(slog.NewJSONHandler(io.Discard, nil)))
+}
+
+func BenchmarkIQLogSlogHandlerSimple(b *testing.B) {
+	runSlogSimple(b, iqlogSlog(iqlog.Config{Format: iqlog.FormatJSON}))
+}
+
+func BenchmarkZerologSlogHandlerSimple(b *testing.B) {
+	runSlogSimple(b, zerologSlog(zerolog.New(io.Discard)))
+}
+
+func BenchmarkPhusluSlogHandlerSimple(b *testing.B) {
+	runSlogSimple(b, phusluSlog(phuslog.Logger{Level: phuslog.InfoLevel, TimeField: ""}))
+}
+
+func BenchmarkIQLogSlogHandlerSimpleWithTimestamp(b *testing.B) {
+	runSlogSimple(b, iqlogSlog(iqlog.Config{Format: iqlog.FormatJSON, JSONTimeMode: iqlog.JSONTimeUTC}))
+}
+
+func BenchmarkZerologSlogHandlerSimpleWithTimestamp(b *testing.B) {
+	// zerolog's handler writes the record time itself when the logger has
+	// no timestamp hook, so a plain logger already carries the timestamp.
+	runSlogSimple(b, zerologSlog(zerolog.New(io.Discard)))
+}
+
+func BenchmarkPhusluSlogHandlerSimpleWithTimestamp(b *testing.B) {
+	runSlogSimple(b, phusluSlog(phuslog.Logger{Level: phuslog.InfoLevel, TimeField: "time", TimeLocation: time.UTC, TimeFormat: time.RFC3339Nano}))
+}
+
+func BenchmarkSlogHandlerWithSource(b *testing.B) {
+	runSlogSimple(b, slog.New(slog.NewJSONHandler(io.Discard, &slog.HandlerOptions{AddSource: true})))
+}
+
+func BenchmarkIQLogSlogHandlerWithSource(b *testing.B) {
+	runSlogSimple(b, iqlogSlog(iqlog.Config{Format: iqlog.FormatJSON, CallerDepth: 1}))
+}
+
+func BenchmarkPhusluSlogHandlerWithSource(b *testing.B) {
+	runSlogSimple(b, phusluSlog(phuslog.Logger{Level: phuslog.InfoLevel, TimeField: "", Caller: 1}))
+}
+
+func BenchmarkSlogHandlerGrouped(b *testing.B) {
+	runSlogGrouped(b, slog.New(slog.NewJSONHandler(io.Discard, nil)))
+}
+
+func BenchmarkIQLogSlogHandlerGrouped(b *testing.B) {
+	runSlogGrouped(b, iqlogSlog(iqlog.Config{Format: iqlog.FormatJSON}))
+}
+
+func BenchmarkZerologSlogHandlerGrouped(b *testing.B) {
+	runSlogGrouped(b, zerologSlog(zerolog.New(io.Discard)))
+}
+
+func BenchmarkPhusluSlogHandlerGrouped(b *testing.B) {
+	runSlogGrouped(b, phusluSlog(phuslog.Logger{Level: phuslog.InfoLevel, TimeField: ""}))
+}
+
+func BenchmarkSlogHandlerConsole(b *testing.B) {
+	runSlogSimple(b, slog.New(slog.NewTextHandler(io.Discard, nil)))
+}
+
+func BenchmarkIQLogSlogHandlerConsole(b *testing.B) {
+	runSlogSimple(b, iqlogSlog(iqlog.Config{Format: iqlog.FormatConsole, DisableColor: true}))
+}
+
+func BenchmarkSlogHandlerParallel(b *testing.B) {
+	runSlogParallel(b, slog.New(slog.NewJSONHandler(io.Discard, nil)))
+}
+
+func BenchmarkIQLogSlogHandlerParallel(b *testing.B) {
+	runSlogParallel(b, iqlogSlog(iqlog.Config{Format: iqlog.FormatJSON}))
+}
+
+func BenchmarkZerologSlogHandlerParallel(b *testing.B) {
+	runSlogParallel(b, zerologSlog(zerolog.New(io.Discard)))
+}
+
+func BenchmarkPhusluSlogHandlerParallel(b *testing.B) {
+	runSlogParallel(b, phusluSlog(phuslog.Logger{Level: phuslog.InfoLevel, TimeField: ""}))
+}

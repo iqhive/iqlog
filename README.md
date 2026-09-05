@@ -54,6 +54,42 @@ Accessibility and export:
   into a JSON log record."
 -->
 
+## Contents
+
+Getting started
+
+- [Why iqlog?](#why-iqlog)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Configuration Reference](#configuration-reference)
+
+Writing records
+
+- [JSON Logging](#json-logging)
+- [Logging API](#logging-api)
+- [Structured Events](#structured-events)
+- [Persistent Fields](#persistent-fields)
+- [Context Fields](#context-fields)
+- [Caller Information](#caller-information)
+- [Color And Timestamps](#color-and-timestamps)
+- [Package-Level Logger](#package-level-logger)
+
+Connecting other code and destinations
+
+- [Integrations](#integrations): [log/slog](#logslog),
+  [Native System Logs](#native-system-logs), [Syslog](#syslog)
+- [Writer Modes](#writer-modes)
+- [Flush, Errors, And Shutdown](#flush-errors-and-shutdown)
+
+Guarantees and operations
+
+- [Record Safety](#record-safety)
+- [Writer Serialization](#writer-serialization)
+- [Writer Ownership](#writer-ownership)
+- [Performance Guidance](#performance-guidance)
+- [Migration And Compatibility](#migration-and-compatibility)
+- [Development](#development)
+
 ## Why iqlog?
 
 - **Typed structured events:** append strings, numbers, booleans, errors, times,
@@ -68,6 +104,8 @@ Accessibility and export:
   choose whether a full queue blocks, drops, or falls back to a direct write.
 - **Production lifecycle:** flush accepted records, observe dropped records and
   writer errors, and close background workers cleanly.
+- **Standard-library interop:** a `log/slog` handler routes libraries, and the
+  standard `log` package, through the same logger, format, and level gate.
 - **Incremental adoption:** package-level helpers and compatibility adapters are
   available while applications move toward explicit logger dependencies.
 
@@ -131,6 +169,39 @@ if err != nil {
 	return err
 }
 ```
+
+## Configuration Reference
+
+| Field | Purpose | Zero-value behavior |
+| --- | --- | --- |
+| `Format` | Console or JSON encoding | `FormatConsole` |
+| `Level` | Minimum emitted level | `LevelInfo` |
+| `Writer` | Destination implementing `io.Writer` | `os.Stderr` |
+| `ConcurrentWriter` | Skip synchronous writer serialization | `false` |
+| `EscapeFieldNames` | Always escape dynamic JSON keys, skipping the safety scan | `false` |
+| `IncludeTime` | Include console timestamp | `false` |
+| `TimestampLayout` | Console/custom JSON time layout | Microsecond console layout |
+| `JSONTimeMode` | Disabled, UTC, or custom JSON timestamp | `JSONTimeDisabled` |
+| `CallerDepth` | Capture caller frames; also resolves the call site of `log/slog` records | Disabled |
+| `Color` | Force ANSI console color | Terminal auto-detection |
+| `DisableColor` | Disable forced and automatic color | `false` |
+| `ApplicationName` | Application metadata, including syslog and native log setup | Empty |
+| `SyslogHost` | Select syslog output | Empty |
+| `NativeLog` | Route output to the platform system log (os_log / Event Log) | `false` |
+| `ContextExtractor` | Convert context values to fields | Disabled |
+| `WriterMode` | Sync, async, or ring compatibility mode | `WriterSync` |
+| `BufferSize` | Number of queued records | `1000` |
+| `OverflowPolicy` | Full-queue behavior | `OverflowBlock` |
+| `ExitFunc` | Fatal termination hook | `os.Exit` |
+| `Now` | Timestamp source | `time.Now` |
+
+Prefer constructing a complete `Config` over applying setters one by one. A
+complete value makes dependencies explicit and installs a coherent immutable
+configuration snapshot. `Config()` returns a copy of the current configuration;
+`SetConfig` replaces it and transitions the writer lifecycle safely.
+
+Each field is explained in the section that covers its feature; the
+[table of contents](#contents) lists them in the order they usually matter.
 
 ## JSON Logging
 
@@ -487,6 +558,11 @@ log.EventAt(iqlog.LevelWarn, "worker.run", "worker.go:84").
 
 Pass empty caller strings to `EventAt` to suppress caller output for that event.
 
+The same setting governs records that arrive through the [`log/slog`
+handler](#logslog): the record's program counter is resolved into `func` and
+`file` only when `CallerDepth` is set, so slog output never pays for caller
+lookup unless native events do too.
+
 ## Color And Timestamps
 
 Console colors are detected automatically for terminal writers. Control the
@@ -547,6 +623,148 @@ iqlog.SetDefault(log)
 background writer and is no longer needed, retain it and close it explicitly.
 For libraries, prefer accepting a concrete logger or a small consumer-defined
 interface instead of mutating the process-wide default.
+
+## Integrations
+
+The logger is the single point of configuration. Everything below routes other
+code, or other destinations, through it without a second set of options.
+
+### log/slog
+
+Libraries, and the standard `log` package once `slog.SetDefault` has run, speak
+`log/slog`. `SlogHandler` turns any logger into a `slog.Handler`, so all of
+that output lands in the same format, writer, level gate, and lifecycle as
+your own records:
+
+```go
+logger := iqlog.MustNew(iqlog.Config{Format: iqlog.FormatJSON, Writer: os.Stdout})
+slog.SetDefault(slog.New(logger.SlogHandler()))
+
+slog.Info("listening", "port", 8080)
+log.Printf("legacy %s", "output") // the standard log package follows slog.SetDefault
+```
+
+```json
+{"level":"INFO","port":8080,"message":"listening"}
+{"level":"INFO","message":"legacy output"}
+```
+
+`iqlog.SlogHandler()` returns a handler that follows `iqlog.SetDefault`, the
+way every other package-level function does. `logger.SlogHandler()` binds one
+logger for good. `slog.SetDefault` and `iqlog.SetDefault` are independent
+globals, so installing one does not install the other.
+
+There are no handler options. Everything comes from the logger's `Config`:
+
+| slog | iqlog |
+| --- | --- |
+| `HandlerOptions.Level`, `slog.LevelVar` | `Config.Level`, changed with `SetConfig`. A `LevelVar` is not consulted. |
+| `HandlerOptions.AddSource` | `Config.CallerDepth`. The record's PC is resolved only when it is set. |
+| `HandlerOptions.ReplaceAttr` | Not supported. |
+| `msg` | `message` |
+| `source` group | `func` and `file` |
+| `time` | The record's own time, emitted only when the logger emits timestamps (`IncludeTime` for console, `JSONTimeMode` for JSON). `Config.Now` is not consulted. |
+| Groups | Dotted keys such as `http.method` |
+| `slog.With`, `WithAttrs` | Encoded once, copied into each record |
+| `LogValuer` | Resolved, including values that resolve to a group |
+
+Levels map by range, so custom levels land where you would expect:
+
+| slog level | iqlog level |
+| --- | --- |
+| below `LevelDebug` | `LevelTrace` |
+| `LevelDebug` up to `LevelInfo` | `LevelDebug` |
+| `LevelInfo` up to `LevelWarn` | `LevelInfo` |
+| `LevelWarn` up to `LevelError` | `LevelWarn` |
+| `LevelError` and above | `LevelError` |
+
+No slog level terminates the process. Use `Fatal` or `Panic` directly when
+that is what you mean.
+
+Groups flatten to dotted keys in both formats, and attributes attached with
+`With` or `WithGroup` come first:
+
+```go
+http := slog.New(logger.SlogHandler()).WithGroup("http").With("method", "GET")
+http.Info("handled", "status", 200, slog.Group("peer", "ip", "10.0.0.1"))
+```
+
+```text
+INFO http.method=GET http.status=200 http.peer.ip=10.0.0.1 handled
+{"level":"INFO","http.method":"GET","http.status":200,"http.peer.ip":"10.0.0.1","message":"handled"}
+```
+
+Behaviour worth knowing:
+
+- Top-level attributes named `time`, `level`, `message`, `func`, or `file` are
+  prefixed with `field_`, as for any event. Inside a group the dotted key
+  cannot collide, so no prefix is added.
+- Persistent fields from `WithFields`, context fields from the
+  `ContextExtractor` (using the context passed to `InfoContext` and friends),
+  colour, and async writers all apply.
+- After `Close`, `Enabled` reports false and records are dropped silently.
+- `Handle` returns the event's build error when an attribute carried invalid
+  raw JSON. `slog.Logger` discards it; call `Handle` directly to see it.
+- Attributes with an empty key and an empty value are dropped, as
+  `slog.JSONHandler` does. An empty key with a value is emitted.
+
+The handler adds no allocations of its own in any configuration, including
+caller capture from the record's program counter. A record made of typed
+attributes through the handler costs a few times a native typed event, and
+most of that is slog's own record construction and program-counter capture,
+which every handler pays. The `SlogHandler` benchmarks in [`bench/`](bench/)
+compare it with the standard library, zerolog, and phuslu handlers on
+equivalent payloads. Keep application hot paths on `InfoEvent()` and reserve
+the handler for code you do not control.
+
+### Native System Logs
+
+Set `NativeLog` to route records to the platform-native system log instead of
+an `io.Writer`: Apple's unified logging (`os_log`) on macOS and the Windows
+Event Log (Application log) on Windows. Records keep their severity, so they
+filter correctly in Console.app / `log stream` and Event Viewer.
+
+```go
+log := iqlog.MustNew(iqlog.Config{
+	ApplicationName: "myapp", // os_log subsystem / event source name
+	NativeLog:       true,
+})
+defer log.Close()
+```
+
+`NativeLog` takes precedence over `Writer` and `SyslogHost`, works with every
+`WriterMode`, and is fully opt-in: when it is off, the default path does no
+native-log work. On other platforms, and on macOS builds with
+`CGO_ENABLED=0`, `New` returns an error.
+
+Platform notes:
+
+- **macOS:** messages are logged with the `%{public}s` privacy marker so they
+  are not redacted as `<private>`. Browse them with
+  `log stream --predicate 'subsystem == "myapp"'`.
+- **Windows:** register the source once with administrator privileges so
+  records render without a "description cannot be found" notice:
+
+  ```go
+  err := iqlog.InstallEventLogSource("myapp") // remove with RemoveEventLogSource
+  ```
+
+### Syslog
+
+Set `SyslogHost` to send records over UDP syslog; a bare host gets port 514.
+`ApplicationName` becomes the syslog tag, with control characters replaced.
+
+```go
+log := iqlog.MustNew(iqlog.Config{
+	ApplicationName: "myapp",
+	SyslogHost:      "logs.internal",
+})
+```
+
+The connection is dialled by the logger, so it is closed when the writer is
+replaced or the logger is closed. `NativeLog` takes precedence over
+`SyslogHost` when both are set. On Windows, `SyslogHost` falls back to
+standard error.
 
 ## Writer Modes
 
@@ -634,38 +852,6 @@ Accuracy constraints:
   drop, and synchronous fallback overflow policies."
 -->
 
-## Native System Logs
-
-Set `NativeLog` to route records to the platform-native system log instead of
-an `io.Writer`: Apple's unified logging (`os_log`) on macOS and the Windows
-Event Log (Application log) on Windows. Records keep their severity, so they
-filter correctly in Console.app / `log stream` and Event Viewer.
-
-```go
-log := iqlog.MustNew(iqlog.Config{
-	ApplicationName: "myapp", // os_log subsystem / event source name
-	NativeLog:       true,
-})
-defer log.Close()
-```
-
-`NativeLog` takes precedence over `Writer` and `SyslogHost`, works with every
-`WriterMode`, and is fully opt-in: when it is off, the default path does no
-native-log work. On other platforms, and on macOS builds with
-`CGO_ENABLED=0`, `New` returns an error.
-
-Platform notes:
-
-- **macOS:** messages are logged with the `%{public}s` privacy marker so they
-  are not redacted as `<private>`. Browse them with
-  `log stream --predicate 'subsystem == "myapp"'`.
-- **Windows:** register the source once with administrator privileges so
-  records render without a "description cannot be found" notice:
-
-  ```go
-  err := iqlog.InstallEventLogSource("myapp") // remove with RemoveEventLogSource
-  ```
-
 ## Flush, Errors, And Shutdown
 
 `Flush` waits until all accepted queued records have been processed. It returns
@@ -699,36 +885,6 @@ defer log.Close()  // The logger owns its worker.
 
 Close the logger before its underlying destination. When shutdown error handling
 matters, call both explicitly instead of relying only on deferred calls.
-
-## Configuration Reference
-
-| Field | Purpose | Zero-value behavior |
-| --- | --- | --- |
-| `Format` | Console or JSON encoding | `FormatConsole` |
-| `Level` | Minimum emitted level | `LevelInfo` |
-| `Writer` | Destination implementing `io.Writer` | `os.Stderr` |
-| `ConcurrentWriter` | Skip synchronous writer serialization | `false` |
-| `EscapeFieldNames` | Always escape dynamic JSON keys, skipping the safety scan | `false` |
-| `IncludeTime` | Include console timestamp | `false` |
-| `TimestampLayout` | Console/custom JSON time layout | Microsecond console layout |
-| `JSONTimeMode` | Disabled, UTC, or custom JSON timestamp | `JSONTimeDisabled` |
-| `CallerDepth` | Capture caller frames | Disabled |
-| `Color` | Force ANSI console color | Terminal auto-detection |
-| `DisableColor` | Disable forced and automatic color | `false` |
-| `ApplicationName` | Application metadata, including syslog and native log setup | Empty |
-| `SyslogHost` | Select syslog output | Empty |
-| `NativeLog` | Route output to the platform system log (os_log / Event Log) | `false` |
-| `ContextExtractor` | Convert context values to fields | Disabled |
-| `WriterMode` | Sync, async, or ring compatibility mode | `WriterSync` |
-| `BufferSize` | Number of queued records | `1000` |
-| `OverflowPolicy` | Full-queue behavior | `OverflowBlock` |
-| `ExitFunc` | Fatal termination hook | `os.Exit` |
-| `Now` | Timestamp source | `time.Now` |
-
-Prefer constructing a complete `Config` over applying setters one by one. A
-complete value makes dependencies explicit and installs a coherent immutable
-configuration snapshot. `Config()` returns a copy of the current configuration;
-`SetConfig` replaces it and transitions the writer lifecycle safely.
 
 ## Record Safety
 
@@ -808,12 +964,15 @@ For predictable hot-path performance:
 3. Guard expensive field construction with `Enabled`.
 4. Use async output only when moving destination latency off the caller is worth
    the queue and lifecycle complexity.
-5. Benchmark with the same payload, features, writer semantics, and CPU count as
+5. Route only code you do not control through the [`log/slog`
+   handler](#logslog). Application hot paths belong on typed events.
+6. Benchmark with the same payload, features, writer semantics, and CPU count as
    the alternatives being compared.
 
 The repository includes allocation regression coverage in
-`TestHotPathsDoNotAllocate` and comparative benchmarks against `log/slog`,
-`zerolog`, and `phuslu/log` in [`bench/`](bench/). Benchmark numbers depend on
+`TestHotPathsDoNotAllocate` and `TestSlogHandlerHandleDoesNotAllocate`, and
+comparative benchmarks against `log/slog`, `zerolog`, and `phuslu/log` in
+[`bench/`](bench/), for both native events and the `slog.Handler` path. Benchmark numbers depend on
 hardware, Go version, payload, and writer configuration, so run them in your own
 target environment rather than treating checked-in output as a universal claim.
 
@@ -842,7 +1001,8 @@ historical helpers remain as adapters:
 
 The historical context-first `Log(ctx, level, ...)` signature cannot coexist
 with `Log(level, ...)` because Go has no function overloading. See
-[`MIGRATION.md`](MIGRATION.md) for the complete mapping.
+[`MIGRATION.md`](MIGRATION.md) for the complete mapping, including how
+`log/slog` calls translate to typed events.
 
 `SetNewLine` is retained as a compatibility no-op. Every record is complete, and
 JSON output is always newline-delimited.

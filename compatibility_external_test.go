@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"log/slog"
 	"testing"
 
 	"github.com/iqhive/iqlog"
@@ -23,7 +24,7 @@ var (
 	_ func(bool)                                                                        = iqlog.SetDebugMode
 	_ func(int)                                                                         = iqlog.SetCallerDepth
 	_ func(bool)                                                                        = iqlog.SetUseColour
-	_ func(iqlog.JSONTimeMode)                                                           = iqlog.SetJSONTimeMode
+	_ func(iqlog.JSONTimeMode)                                                          = iqlog.SetJSONTimeMode
 	_ func(bool)                                                                        = iqlog.SetNewLine
 	_ func(string)                                                                      = iqlog.SetApplicationName
 	_ func(string)                                                                      = iqlog.SetSyslogHost
@@ -54,6 +55,8 @@ var (
 	_ func(*iqlog.Logger, string)                                                       = (*iqlog.Logger).SetSyslogHost
 	_ func(*iqlog.Logger, context.Context, iqlog.Level, map[string]any, string, ...any) = (*iqlog.Logger).LogWithFields
 	_ func(*iqlog.Logger, context.Context, iqlog.Level, map[string]any, string, ...any) = (*iqlog.Logger).LogFWithFields
+	_ func(*iqlog.Logger) slog.Handler                                                  = (*iqlog.Logger).SlogHandler
+	_ func() slog.Handler                                                               = iqlog.SlogHandler
 )
 
 func TestLegacyCompatibilityAdapters(t *testing.T) {

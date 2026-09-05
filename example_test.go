@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"log/slog"
+	"os"
+	"time"
 
 	"github.com/iqhive/iqlog"
 )
@@ -33,4 +36,26 @@ func ExampleLogger_LogContext() {
 	logger.LogContext(context.WithValue(context.Background(), key{}, 42), iqlog.LevelInfo, "handled")
 	fmt.Print(out.String())
 	// Output: INFO request=42 handled
+}
+
+func ExampleLogger_SlogHandler() {
+	var out bytes.Buffer
+	log := iqlog.MustNew(iqlog.Config{Format: iqlog.FormatJSON, Writer: &out})
+	logger := slog.New(log.SlogHandler()).WithGroup("http").With("method", "GET")
+	logger.Info("handled", "status", 200)
+
+	r := slog.NewRecord(time.Time{}, slog.LevelWarn, "hand built", 0)
+	r.Add("user", "alice")
+	_ = log.SlogHandler().Handle(context.Background(), r)
+	fmt.Print(out.String())
+	// Output:
+	// {"level":"INFO","http.method":"GET","http.status":200,"message":"handled"}
+	// {"level":"WARN","user":"alice","message":"hand built"}
+}
+
+func ExampleSlogHandler() {
+	iqlog.SetDefault(iqlog.MustNew(iqlog.Config{Format: iqlog.FormatJSON, Writer: os.Stdout}))
+	logger := slog.New(iqlog.SlogHandler()) // follows iqlog.SetDefault
+	logger.Info("ready", "port", 8080)
+	// Output: {"level":"INFO","port":8080,"message":"ready"}
 }

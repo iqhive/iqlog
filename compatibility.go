@@ -122,7 +122,7 @@ func (l *Logger) SetJSONTimeMode(mode JSONTimeMode) {
 		cfg.includeTime = mode != JSONTimeDisabled
 	})
 }
-func SetJSONTimeMode(mode JSONTimeMode) { Default().SetJSONTimeMode(mode) }
+func SetJSONTimeMode(mode JSONTimeMode)          { Default().SetJSONTimeMode(mode) }
 func (l *Logger) SetNewLine(bool)                {}
 func SetNewLine(enabled bool)                    { Default().SetNewLine(enabled) }
 func (l *Logger) SetApplicationName(name string) { l.setApplicationName(name) }

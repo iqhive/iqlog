@@ -227,22 +227,35 @@ func (bsl *Event) Any(name string, v any) *Event {
 	name = eventFieldName(name)
 	if bsl.jsonMode {
 		bsl.appendJSONKey(name)
-		encoded, err := json.Marshal(v)
-		// A custom MarshalJSON can return ill-formed UTF-8; encoding/json
-		// does not check it, and passing it through would make the whole
-		// record ill-formed. Fall back to the escaped text form, which
-		// substitutes U+FFFD.
-		if err == nil && utf8.Valid(encoded) {
-			bsl.output = append(bsl.output, encoded...)
-		} else {
-			bsl.output = append(bsl.output, '"')
-			bsl.output = appendJSONEscaped(bsl.output, fmt.Sprintf("%v", v))
-			bsl.output = append(bsl.output, '"')
-		}
 	} else {
-		bsl.output = append(bsl.output, []byte(name+"="+fmt.Sprintf("%v", v)+" ")...)
+		bsl.output = append(bsl.output, name...)
+		bsl.output = append(bsl.output, '=')
 	}
+	bsl.appendGenericValue(v)
 	return bsl
+}
+
+// appendGenericValue encodes a value none of the concrete fast paths
+// recognised: encoding/json in JSON mode, fmt in console mode. The key has
+// already been written.
+func (bsl *Event) appendGenericValue(v any) {
+	if !bsl.jsonMode {
+		bsl.output = fmt.Appendf(bsl.output, "%v", v)
+		bsl.output = append(bsl.output, ' ')
+		return
+	}
+	encoded, err := json.Marshal(v)
+	// A custom MarshalJSON can return ill-formed UTF-8; encoding/json
+	// does not check it, and passing it through would make the whole
+	// record ill-formed. Fall back to the escaped text form, which
+	// substitutes U+FFFD.
+	if err == nil && utf8.Valid(encoded) {
+		bsl.output = append(bsl.output, encoded...)
+		return
+	}
+	bsl.output = append(bsl.output, '"')
+	bsl.output = appendJSONEscaped(bsl.output, fmt.Sprintf("%v", v))
+	bsl.output = append(bsl.output, '"')
 }
 
 func (e *Event) Uint(name string, value uint) *Event {
@@ -331,29 +344,7 @@ func (e *Event) RawJSON(name string, value []byte) *Event {
 		return e
 	}
 	name = eventFieldName(name)
-	switch {
-	case !json.Valid(value):
-		e.buildErr = fmt.Errorf("iqlog: invalid raw JSON for field %q", name)
-		value = []byte("null")
-	case !utf8.Valid(value):
-		// json.Valid does not check UTF-8 inside strings, but JSON text has to
-		// be UTF-8 (RFC 8259 section 8.1). Passing the bytes through would
-		// make the whole record ill-formed.
-		e.buildErr = fmt.Errorf("iqlog: raw JSON for field %q is not valid UTF-8", name)
-		value = []byte("null")
-	case bytes.IndexByte(value, '\n') >= 0 || bytes.IndexByte(value, '\r') >= 0:
-		// Valid JSON may carry insignificant newlines between tokens, which
-		// would split the record for a newline-delimited reader. Compacting
-		// is lossless: a raw newline inside a JSON string is not valid JSON,
-		// so json.Valid already rejected that case.
-		var compact bytes.Buffer
-		if err := json.Compact(&compact, value); err == nil {
-			value = compact.Bytes()
-		} else {
-			e.buildErr = fmt.Errorf("iqlog: raw JSON for field %q could not be compacted: %w", name, err)
-			value = []byte("null")
-		}
-	}
+	value = e.checkRawJSON(name, value)
 	if e.jsonMode {
 		e.appendJSONKey(name)
 		e.output = append(e.output, value...)
@@ -364,6 +355,35 @@ func (e *Event) RawJSON(name string, value []byte) *Event {
 		e.output = append(e.output, ' ')
 	}
 	return e
+}
+
+// checkRawJSON validates a raw JSON value and returns what should be
+// written: the value itself, a compacted copy when it carried newlines, or
+// null when it is unusable. Problems are recorded for BuildError under name.
+func (e *Event) checkRawJSON(name string, value []byte) []byte {
+	switch {
+	case !json.Valid(value):
+		e.buildErr = fmt.Errorf("iqlog: invalid raw JSON for field %q", name)
+		return []byte("null")
+	case !utf8.Valid(value):
+		// json.Valid does not check UTF-8 inside strings, but JSON text has to
+		// be UTF-8 (RFC 8259 section 8.1). Passing the bytes through would
+		// make the whole record ill-formed.
+		e.buildErr = fmt.Errorf("iqlog: raw JSON for field %q is not valid UTF-8", name)
+		return []byte("null")
+	case bytes.IndexByte(value, '\n') >= 0 || bytes.IndexByte(value, '\r') >= 0:
+		// Valid JSON may carry insignificant newlines between tokens, which
+		// would split the record for a newline-delimited reader. Compacting
+		// is lossless: a raw newline inside a JSON string is not valid JSON,
+		// so json.Valid already rejected that case.
+		var compact bytes.Buffer
+		if err := json.Compact(&compact, value); err != nil {
+			e.buildErr = fmt.Errorf("iqlog: raw JSON for field %q could not be compacted: %w", name, err)
+			return []byte("null")
+		}
+		return compact.Bytes()
+	}
+	return value
 }
 
 // BuildError reports a field-construction error such as invalid raw JSON.
