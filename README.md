@@ -535,8 +535,12 @@ Accuracy constraints:
 
 ## Caller Information
 
-Set `CallerDepth` to include function and file information. Caller lookup is
-disabled by default because it has a cost.
+Set `CallerDepth` to include function and file information. `CallerDepth = N`
+reports the N-th frame at or above the library boundary; `N=1` is the direct
+caller of the logging entry point. If fewer than N frames exist, no caller is
+emitted. The bounded scan examines at most 32 frames, so a caller deeper than
+that window is also reported as absent. Caller lookup is disabled by default
+because it has a cost.
 
 ```go
 log := iqlog.MustNew(iqlog.Config{
@@ -556,12 +560,20 @@ log.EventAt(iqlog.LevelWarn, "worker.run", "worker.go:84").
 	Msg("retrying job")
 ```
 
-Pass empty caller strings to `EventAt` to suppress caller output for that event.
+`EventAt` requires a non-empty function to emit caller output. A file without
+a function is ignored, and passing an empty function and file suppresses caller
+output for that event.
+
+iqlog never reports frames from its own package family, including the legacy
+`bitbucket.org/iqhive/iqlog/v3` wrapper. Applications that still import that
+shim therefore attribute records to application code rather than the adapter.
 
 The same setting governs records that arrive through the [`log/slog`
-handler](#logslog): the record's program counter is resolved into `func` and
-`file` only when `CallerDepth` is set, so slog output never pays for caller
-lookup unless native events do too.
+handler](#logslog). A record's own program counter is used when present;
+records without one, including records from the `log` bridge and hand-built
+records, fall back to a live-stack scan. Caller work is performed only when
+`CallerDepth` is set. On the nonzero-PC slog path, the record's call site is
+reported directly, so `CallerDepth` values above 1 do not select a later frame.
 
 ## Color And Timestamps
 
@@ -659,7 +671,7 @@ There are no handler options. Everything comes from the logger's `Config`:
 | slog | iqlog |
 | --- | --- |
 | `HandlerOptions.Level`, `slog.LevelVar` | `Config.Level`, changed with `SetConfig`. A `LevelVar` is not consulted. |
-| `HandlerOptions.AddSource` | `Config.CallerDepth`. The record's PC is resolved only when it is set. |
+| `HandlerOptions.AddSource` | `Config.CallerDepth`. A record's PC is used when present; zero-PC records fall back to a live-stack scan. |
 | `HandlerOptions.ReplaceAttr` | Not supported. |
 | `msg` | `message` |
 | `source` group | `func` and `file` |
@@ -708,8 +720,9 @@ Behaviour worth knowing:
 - Attributes with an empty key and an empty value are dropped, as
   `slog.JSONHandler` does. An empty key with a value is emitted.
 
-The handler adds no allocations of its own in any configuration, including
-caller capture from the record's program counter. A record made of typed
+The handler adds no allocations of its own for typed records that carry a
+program counter, including caller capture from that counter. Zero-PC fallback
+uses a live-stack scan only when caller capture is enabled. A record made of typed
 attributes through the handler costs a few times a native typed event, and
 most of that is slog's own record construction and program-counter capture,
 which every handler pays. The `SlogHandler` benchmarks in [`bench/`](bench/)

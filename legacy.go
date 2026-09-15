@@ -98,18 +98,17 @@ func WithError(err error) *Logger {
 }
 
 func (l *Logger) logContext(ctx context.Context, level Level, fields map[string]any, msg string, args ...any) {
-	line := l.newEventContext(ctx, normalizeLevel(level), 2)
+	line := l.newEventContext(ctx, normalizeLevel(level))
 	for k, v := range fields {
 		addField(line, k, v)
 	}
 	line.Msgs(msg, args...)
 }
 
-// logContextf keeps the same call depth as logContext so caller attribution
-// is unchanged, and hands the format to Msgf rather than formatting up front:
-// a record the level gate drops must not pay for fmt.Sprintf.
+// logContextf hands the format to Msgf rather than formatting up front: a
+// record the level gate drops must not pay for fmt.Sprintf.
 func (l *Logger) logContextf(ctx context.Context, level Level, format string, args ...any) {
-	l.newEventContext(ctx, normalizeLevel(level), 2).Msgf(format, args...)
+	l.newEventContext(ctx, normalizeLevel(level)).Msgf(format, args...)
 }
 
 // skipRecord reports whether an event at level would neither be written nor

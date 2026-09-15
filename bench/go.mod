@@ -6,6 +6,10 @@ replace github.com/iqhive/iqlog => ../
 
 require github.com/iqhive/iqlog v0.0.0
 
+require bitbucket.org/iqhive/iqlog/v3 v3.0.0
+
+replace bitbucket.org/iqhive/iqlog/v3 => ./legacyshim
+
 require (
 	github.com/phuslu/log v1.0.128
 	github.com/rs/zerolog v1.35.0

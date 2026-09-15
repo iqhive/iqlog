@@ -21,11 +21,30 @@ that cannot be retained under the same names, because Go has no function
 overloading. All non-conflicting aliases route to the same current
 implementation.
 
+## Caller attribution
+
+`CallerDepth = N` reports the N-th frame at or above the library boundary;
+`N=1` is the direct caller of the logging entry point. If fewer frames exist,
+no caller is emitted. iqlog never reports its own package-family frames,
+including the legacy `bitbucket.org/iqhive/iqlog/v3` wrapper, so applications
+using that shim are attributed to application code.
+
+`EventAt` emits caller output only when its function argument is non-empty. A
+file without a function is ignored; empty function and file arguments suppress
+caller output.
+
 ## From log/slog
 
 Code that already uses `log/slog` keeps working unchanged through
-`slog.SetDefault(slog.New(log.SlogHandler()))`. When rewriting hot paths onto
-typed events, the calls map like this:
+`slog.SetDefault(slog.New(log.SlogHandler()))`. When caller capture is enabled,
+a record's own program counter is used when present. Records without one,
+including records from the `log` bridge and hand-built records, fall back to a
+live-stack scan. This changes the previous behavior: zero-PC slog records are
+no longer caller-less. The nonzero-PC path reports the record's call site
+directly and does not use `CallerDepth` values above 1 to select a later frame.
+If a hand-built zero-PC record is forwarded through a wrapper handler or
+middleware, the scan attributes it to that wrapper's frame.
+When rewriting hot paths onto typed events, the calls map like this:
 
 | log/slog | iqlog |
 | --- | --- |

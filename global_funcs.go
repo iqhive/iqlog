@@ -1,7 +1,7 @@
 package iqlog
 
 func (l *Logger) getWith(level Level) *Event {
-	return l.newEvent(level, 2)
+	return l.newEvent(level)
 }
 
 // ------------------------------------------------------------

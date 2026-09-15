@@ -10,9 +10,9 @@ import (
 // site and its timestamp. The default path passes nil and captures both
 // itself.
 type eventOrigin struct {
-	// function and file are explicit caller text, as accepted by EventAt.
-	// When function is empty and pc is zero no caller is emitted, whatever
-	// CallerDepth says.
+	// function and file are explicit caller text, as accepted by EventAt. A
+	// non-empty function is required; a file alone is ignored. When function
+	// is empty and pc is zero no caller is emitted, whatever CallerDepth says.
 	function, file string
 	// pc is a return address from runtime.Callers. It is resolved only when
 	// the logger's CallerDepth is set, so an adapter that always has a PC
@@ -22,17 +22,27 @@ type eventOrigin struct {
 	// with explicitTime set omits the timestamp.
 	when         time.Time
 	explicitTime bool
+	// fallback asks for a stack scan when the adapter has no PC to offer
+	// (pc == 0) and function is empty. Without it a missing PC means the
+	// adapter deliberately wants no caller, as for a hand-built slog.Record.
+	fallback bool
 }
 
-func (l *Logger) newEvent(level Level, callerSkip int) *Event {
-	return l.newEventContext(l.ctx, level, callerSkip)
+// newEvent begins an event for level using the logger's own context.
+func (l *Logger) newEvent(level Level) *Event {
+	return l.newEventContext(l.ctx, level)
 }
 
-func (l *Logger) newEventContext(ctx context.Context, level Level, callerSkip int) *Event {
-	return l.newEventContextAt(ctx, level, callerSkip+1, nil)
+// newEventContext begins an event for level, capturing the caller by scanning
+// the stack outward past the library boundary when CallerDepth is set.
+func (l *Logger) newEventContext(ctx context.Context, level Level) *Event {
+	return l.newEventContextAt(ctx, level, nil)
 }
 
-func (l *Logger) newEventContextAt(ctx context.Context, level Level, callerSkip int, origin *eventOrigin) *Event {
+// newEventContextAt begins an event whose caller and timestamp may already be
+// known to an adapter. A nil origin captures both from the current stack and
+// clock.
+func (l *Logger) newEventContextAt(ctx context.Context, level Level, origin *eventOrigin) *Event {
 	// Fatal and Panic always produce an event: even when their record is
 	// suppressed they still have to terminate.
 	terminal := level == LevelFatal || level == LevelPanic
@@ -76,11 +86,15 @@ func (l *Logger) newEventContextAt(ctx context.Context, level Level, callerSkip 
 		} else if origin.pc != 0 && cfg.callerDepth > 0 {
 			e.timeSecond = invalidTimestampSecond
 			e.captureCaller = 1
-			captureCallerPC(origin.pc, &e.callerData)
+			captureCallerPC(origin.pc, cfg.callerDepth, &e.callerData)
+		} else if origin.fallback && cfg.callerDepth > 0 {
+			e.timeSecond = invalidTimestampSecond
+			e.captureCaller = 1
+			captureCallerScan(cfg.callerDepth, &e.callerData)
 		}
 	} else if cfg.callerDepth > 0 {
 		e.timeSecond = invalidTimestampSecond
-		captureCaller(cfg.callerDepth+callerSkip+1, &e.callerData)
+		captureCallerScan(cfg.callerDepth, &e.callerData)
 	}
 	var now time.Time
 	if e.includeTime {
@@ -117,43 +131,44 @@ func (l *Logger) newEventContextAt(ctx context.Context, level Level, callerSkip 
 }
 
 // Event creates a structured event at level.
-func (l *Logger) Event(level Level) *Event { return l.newEvent(normalizeLevel(level), 1) }
+func (l *Logger) Event(level Level) *Event { return l.newEvent(normalizeLevel(level)) }
 
-// EventAt creates a structured event with an explicit caller. Empty function
-// and file values suppress caller output regardless of CallerDepth.
+// EventAt creates a structured event with an explicit caller. A non-empty
+// function is required; a file alone is ignored. An empty function suppresses
+// caller output regardless of CallerDepth.
 func (l *Logger) EventAt(level Level, function, file string) *Event {
-	return l.newEventContextAt(l.ctx, normalizeLevel(level), 1, &eventOrigin{function: function, file: file})
+	return l.newEventContextAt(l.ctx, normalizeLevel(level), &eventOrigin{function: function, file: file})
 }
 
 func (l *Logger) TraceEvent() *Event {
 	if Level(l.level.Load()) > LevelTrace {
 		return nil
 	}
-	return l.newEvent(LevelTrace, 1)
+	return l.newEvent(LevelTrace)
 }
 func (l *Logger) DebugEvent() *Event {
 	if Level(l.level.Load()) > LevelDebug {
 		return nil
 	}
-	return l.newEvent(LevelDebug, 1)
+	return l.newEvent(LevelDebug)
 }
 func (l *Logger) InfoEvent() *Event {
-	return l.newEvent(LevelInfo, 1)
+	return l.newEvent(LevelInfo)
 }
 func (l *Logger) WarnEvent() *Event {
 	if Level(l.level.Load()) > LevelWarn {
 		return nil
 	}
-	return l.newEvent(LevelWarn, 1)
+	return l.newEvent(LevelWarn)
 }
 func (l *Logger) ErrorEvent() *Event {
 	if Level(l.level.Load()) > LevelError {
 		return nil
 	}
-	return l.newEvent(LevelError, 1)
+	return l.newEvent(LevelError)
 }
-func (l *Logger) PanicEvent() *Event { return l.newEvent(LevelPanic, 1) }
-func (l *Logger) FatalEvent() *Event { return l.newEvent(LevelFatal, 1) }
+func (l *Logger) PanicEvent() *Event { return l.newEvent(LevelPanic) }
+func (l *Logger) FatalEvent() *Event { return l.newEvent(LevelFatal) }
 
 func TraceEvent() *Event { return Default().TraceEvent() }
 func DebugEvent() *Event { return Default().DebugEvent() }

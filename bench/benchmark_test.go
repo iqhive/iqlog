@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	legacy "bitbucket.org/iqhive/iqlog/v3"
 	"github.com/iqhive/iqlog"
 	phuslog "github.com/phuslu/log"
 	"github.com/rs/zerolog"
@@ -221,6 +222,58 @@ func BenchmarkIQLogPackageInfo(b *testing.B) {
 	iqlog.SetDefault(iqlog.MustNew(iqlog.Config{Writer: io.Discard}))
 	for i := 0; i < b.N; i++ {
 		iqlog.Info(msg)
+	}
+}
+
+//go:noinline
+func benchmarkCallerDirect(l *iqlog.Logger) { l.Info(msg) }
+
+func BenchmarkCallerDirectDepth0(b *testing.B) {
+	logger := iqlog.MustNew(iqlog.Config{Writer: io.Discard, CallerDepth: 0})
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		benchmarkCallerDirect(logger)
+	}
+}
+
+func BenchmarkCallerDirectDepth1(b *testing.B) {
+	logger := iqlog.MustNew(iqlog.Config{Writer: io.Discard, CallerDepth: 1})
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		benchmarkCallerDirect(logger)
+	}
+}
+
+//go:noinline
+func benchmarkCallerLegacy() { legacy.Warn(msg) }
+
+func BenchmarkCallerLegacyShimDepth0(b *testing.B) {
+	logger := iqlog.MustNew(iqlog.Config{Writer: io.Discard, CallerDepth: 0})
+	previous := legacy.GlobalLogger
+	legacy.GlobalLogger = &legacy.Logger{Logger: logger}
+	b.Cleanup(func() { legacy.GlobalLogger = previous })
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		benchmarkCallerLegacy()
+	}
+}
+
+func BenchmarkCallerLegacyShimDepth1(b *testing.B) {
+	logger := iqlog.MustNew(iqlog.Config{Writer: io.Discard, CallerDepth: 1})
+	previous := legacy.GlobalLogger
+	legacy.GlobalLogger = &legacy.Logger{Logger: logger}
+	b.Cleanup(func() { legacy.GlobalLogger = previous })
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		benchmarkCallerLegacy()
+	}
+}
+
+func BenchmarkCallerSlogPCDepth1(b *testing.B) {
+	logger := slog.New(iqlog.MustNew(iqlog.Config{Writer: io.Discard, CallerDepth: 1}).SlogHandler())
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		logger.Info(msg)
 	}
 }
 

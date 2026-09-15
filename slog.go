@@ -31,9 +31,15 @@ var _ slog.Handler = (*slogHandler)(nil)
 //   - The record's own timestamp is used, and only when the logger emits
 //     timestamps (IncludeTime for console, JSONTimeMode for JSON). A record
 //     with a zero time has no timestamp.
-//   - The record's program counter is resolved into "func" and "file" only
-//     when Config.CallerDepth is set, exactly as for native events. A record
-//     without a program counter has no caller.
+//   - Caller capture happens only when Config.CallerDepth is set, and that is
+//     the only case that pays for it. When the record carries a program
+//     counter, that call site (the direct caller of the slog call) is reported;
+//     a nonzero program counter is reported as its own call site and does not
+//     honour CallerDepth values above 1. When PC is zero, the handler scans the
+//     live stack, skipping the Go runtime and the log and log/slog front ends,
+//     so the caller is reported when it falls within the bounded scan window.
+//     Caller output never includes frames
+//     from iqlog or its legacy package family.
 //   - LogValuer values are resolved, in WithAttrs as well as in records.
 //     Attributes with an empty key and an empty value are dropped.
 //
@@ -54,7 +60,15 @@ func (l *Logger) SlogHandler() slog.Handler {
 // SlogHandler returns a slog.Handler bound to the package-level logger. It
 // consults Default on every call, so a later SetDefault is honoured, unlike
 // Default().SlogHandler(), which binds the logger installed at that moment.
-// See Logger.SlogHandler for the mapping rules.
+//
+// Caller capture happens only when Config.CallerDepth is set, and that is the
+// only case that pays for it. A record with a program counter reports that call
+// site, the direct caller of the slog call; the nonzero-PC path does not honour
+// CallerDepth values above 1. A record with PC zero falls back to scanning the
+// live stack while skipping the Go runtime and the log and log/slog front ends;
+// the bounded scan may report no caller beyond its frame window.
+// Caller output never includes iqlog or legacy iqlog-family frames. See
+// Logger.SlogHandler for the other mapping rules.
 func SlogHandler() slog.Handler { return &slogHandler{} }
 
 type slogHandler struct {
@@ -151,8 +165,8 @@ func (h *slogHandler) Handle(ctx context.Context, r slog.Record) error {
 	if !l.Enabled(level) {
 		return nil
 	}
-	origin := eventOrigin{pc: r.PC, when: r.Time, explicitTime: true}
-	e := l.newEventContextAt(ctx, level, 1, &origin)
+	origin := eventOrigin{pc: r.PC, when: r.Time, explicitTime: true, fallback: true}
+	e := l.newEventContextAt(ctx, level, &origin)
 	if e == nil {
 		return nil
 	}

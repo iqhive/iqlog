@@ -386,15 +386,18 @@ func TestSlogHandlerSourceFollowsCallerDepth(t *testing.T) {
 
 	buf.Reset()
 	r := slog.NewRecord(time.Time{}, slog.LevelInfo, "none", 0)
+	_, _, line, _ = runtime.Caller(0)
 	if err := on.SlogHandler().Handle(context.Background(), r); err != nil {
 		t.Fatal(err)
 	}
 	rec = lastJSONMap(t, buf)
-	if _, ok := rec["func"]; ok {
-		t.Fatalf("zero PC still has func: %#v", rec)
+	fn, _ = rec["func"].(string)
+	file, _ = rec["file"].(string)
+	if !strings.HasSuffix(fn, ".TestSlogHandlerSourceFollowsCallerDepth") {
+		t.Fatalf("zero PC func %q", fn)
 	}
-	if _, ok := rec["file"]; ok {
-		t.Fatalf("zero PC still has file: %#v", rec)
+	if want := "slog_test.go:" + strconv.Itoa(line+1); file != want {
+		t.Fatalf("zero PC file %q want %q", file, want)
 	}
 
 	buf.Reset()
@@ -402,6 +405,24 @@ func TestSlogHandlerSourceFollowsCallerDepth(t *testing.T) {
 	slog.New(console.SlogHandler()).Info("sourced")
 	if got := buf.String(); !strings.HasPrefix(got, "INFO [") || !strings.Contains(got, ".TestSlogHandlerSourceFollowsCallerDepth slog_test.go:") {
 		t.Fatalf("console caller: %q", got)
+	}
+}
+
+//go:noinline
+func slogCallerNeverIqlogFrame(l *slog.Logger) { l.Info("sourced") }
+
+func TestSlogHandlerCallerNeverIqlogFrame(t *testing.T) {
+	buf := &syncBuffer{}
+	l := MustNew(Config{Format: FormatJSON, Writer: buf, CallerDepth: 1})
+	slogCallerNeverIqlogFrame(slog.New(l.SlogHandler()))
+	rec := lastJSONMap(t, buf)
+	fn, _ := rec["func"].(string)
+	file, _ := rec["file"].(string)
+	if !strings.HasSuffix(fn, ".slogCallerNeverIqlogFrame") {
+		t.Fatalf("func %q", fn)
+	}
+	if strings.Contains(file, "callers.go:") || strings.Contains(file, "slog.go:") || strings.Contains(file, "iqlog.go:") {
+		t.Fatalf("iqlog frame %q", file)
 	}
 }
 
@@ -680,6 +701,32 @@ func TestPackageSlogHandlerFollowsSetDefault(t *testing.T) {
 	bound.Info("bound")
 	if !strings.Contains(second.String(), `"message":"bound"`) || third.String() != "" {
 		t.Fatalf("bound handler moved: second=%q third=%q", second.String(), third.String())
+	}
+}
+
+//go:noinline
+func slogLogBridgeCaller(lg *log.Logger) { lg.Print("m") }
+
+func TestSlogHandlerLogBridgeCaller(t *testing.T) {
+	buf := &syncBuffer{}
+	l := MustNew(Config{Format: FormatJSON, Writer: buf, CallerDepth: 1})
+	h := l.SlogHandler()
+	// Go 1.27's NewLogLogger requests PC capture from its handlerWriter. The
+	// attribution must remain the helper whether the bridge supplies that PC
+	// or a future implementation leaves it zero and triggers the fallback.
+	lg := slog.NewLogLogger(h, slog.LevelInfo)
+	slogLogBridgeCaller(lg)
+	rec := lastJSONMap(t, buf)
+	fn, _ := rec["func"].(string)
+	file, _ := rec["file"].(string)
+	if !strings.HasSuffix(fn, ".slogLogBridgeCaller") {
+		t.Fatalf("func %q", fn)
+	}
+	if !strings.HasPrefix(file, "slog_test.go:") {
+		t.Fatalf("file %q", file)
+	}
+	if strings.HasPrefix(fn, "log.") || strings.HasPrefix(fn, "log/slog.") || strings.Contains(fn, "/iqlog.(*") {
+		t.Fatalf("front-end or iqlog-internal function %q", fn)
 	}
 }
 
