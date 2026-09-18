@@ -21,6 +21,9 @@ const (
 	LevelPrint = LevelInfo
 )
 
+// terminal reports whether a level terminates the process (panics or exits).
+func (l Level) terminal() bool { return l >= LevelPanic }
+
 // Level returns the logger's current minimum level.
 func (l *Logger) Level() Level {
 	return Level(l.level.Load())

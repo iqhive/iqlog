@@ -336,10 +336,16 @@ is for avoiding argument computation.
 
 ### Panic And Fatal
 
-`Panic`, `Panicf`, and `PanicEvent` write and then panic. `Fatal`, `Fatalf`, and
-`FatalEvent` flush accepted records and invoke `Config.ExitFunc(1)`, which is
-`os.Exit` by default. Panic and fatal retain their termination behavior even when
-their record is filtered by the configured level.
+`Panic`, `Panicf`, and `PanicEvent` write, flush accepted records, and then
+panic. `Fatal`, `Fatalf`, and `FatalEvent` flush accepted records and invoke
+`Config.ExitFunc(1)`, which is `os.Exit` by default. A fatal event consumed with
+`Discard` also flushes accepted records before exiting; the discarded record
+itself is still not written. Panic and fatal retain their termination behavior
+even when their record is filtered by the configured level.
+
+Flushing before a panic or exit can block while the asynchronous queue drains.
+Under `OverflowBlock` against a stalled destination, that wait is not bounded by
+a timeout.
 
 Inject an exit function in tests rather than terminating the test process:
 
@@ -806,6 +812,12 @@ defer log.Close()
 | `OverflowBlock` | Wait for queue capacity | No intentional loss; caller latency can increase |
 | `OverflowDrop` | Reject the new record | Bounded caller latency; records can be lost |
 | `OverflowSync` | Drain accepted records, then write directly | Avoids loss while temporarily moving I/O to the caller |
+
+`OverflowDrop` never drops a `Fatal` or `Panic` record. Such a terminal record
+drains already-accepted records and then writes directly, preserving order, and
+is not counted by `Dropped()`. Ordinary records follow the table. That fallback
+write waits on the destination like a synchronous write, so against a stalled
+destination the wait is not bounded by a timeout.
 
 With `OverflowDrop`, inspect the cumulative rejected-record count:
 

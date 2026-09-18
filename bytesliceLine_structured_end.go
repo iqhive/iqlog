@@ -25,7 +25,9 @@ func (bsl *Event) terminateDisabled(message string) bool {
 		return false
 	}
 	if bsl.panicAfterWrite {
+		logger := bsl.logger
 		bsl.release(true)
+		_ = logger.Flush()
 		panic(message)
 	}
 	if bsl.exitAfterWrite {
@@ -60,6 +62,7 @@ func (bsl *Event) finish() {
 	bsl.release(!owned)
 
 	if !exit {
+		_ = logger.Flush()
 		panic(panicMsg)
 	}
 	_ = logger.Flush()
@@ -93,12 +96,16 @@ func (bsl *Event) Discard() {
 		return
 	}
 	if bsl.panicAfterWrite {
+		logger := bsl.logger
 		bsl.release(true)
+		_ = logger.Flush()
 		panic("iqlog: panic event discarded without a message")
 	}
 	if bsl.exitAfterWrite {
+		logger := bsl.logger
 		exitFunc := bsl.config.exitFunc
 		bsl.release(true)
+		_ = logger.Flush()
 		exitFunc(1)
 		return
 	}

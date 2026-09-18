@@ -113,6 +113,17 @@ func (aw *asyncWriter) WriteOwned(buf []byte, level Level) {
 		select {
 		case aw.ch <- item:
 		default:
+			// Terminal records are never dropped: preserve order by draining
+			// the already-accepted records, then write directly (the same
+			// fallback OverflowSync uses).
+			if level.terminal() {
+				done := make(chan struct{})
+				aw.ch <- asyncItem{done: done}
+				<-done
+				aw.write(buf, level)
+				releaseEventBuffer(buf)
+				return
+			}
 			releaseEventBuffer(buf)
 			if aw.onErr != nil {
 				aw.onErr(ErrWriteDropped)
