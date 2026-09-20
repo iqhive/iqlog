@@ -139,15 +139,16 @@ func nativeSeverityFor(level Level) nativeSeverity {
 	}
 }
 
-// sanitizeSyslogTag replaces control bytes in a syslog tag. The tag is
-// written into the record header ahead of the message, so a newline in it
-// splits one datagram into what a line-oriented collector reads as two
-// records. ApplicationName often comes from a config file or the environment,
-// so it is not trusted to be a bare identifier.
+// sanitizeSyslogTag replaces control bytes and RFC 3164-unsafe bytes in a
+// syslog tag. The tag is written into the record header ahead of the message,
+// so a newline in it splits one datagram into what a line-oriented collector
+// reads as two records, and spaces, brackets, colons, and angle brackets can
+// distort or spoof the header. ApplicationName often comes from a config file
+// or the environment, so it is not trusted to be a bare identifier.
 func sanitizeSyslogTag(tag string) string {
 	needs := false
 	for i := 0; i < len(tag); i++ {
-		if c := tag[i]; c < 0x20 || c == 0x7f {
+		if isSyslogTagUnsafe(tag[i]) {
 			needs = true
 			break
 		}
@@ -157,11 +158,26 @@ func sanitizeSyslogTag(tag string) string {
 	}
 	out := []byte(tag)
 	for i, c := range out {
-		if c < 0x20 || c == 0x7f {
+		if isSyslogTagUnsafe(c) {
 			out[i] = '_'
 		}
 	}
 	return string(out)
+}
+
+// isSyslogTagUnsafe reports whether a byte must not appear in a syslog tag:
+// C0 controls, DEL, and the RFC 3164 header delimiters space, '[', ']', ':',
+// '<', and '>'. Only these ASCII bytes are replaced; high-bit UTF-8 bytes pass
+// through unchanged.
+func isSyslogTagUnsafe(c byte) bool {
+	if c < 0x20 || c == 0x7f {
+		return true
+	}
+	switch c {
+	case ' ', '[', ']', ':', '<', '>':
+		return true
+	}
+	return false
 }
 
 // trimRecordNewline drops the single trailing newline the record encoders
