@@ -164,6 +164,104 @@ func TestC1ControlsReachTerminal(t *testing.T) {
 	}
 }
 
+// R-02: a lone C1 byte (0x80-0x9F outside well-formed UTF-8) must not reach
+// the terminal, while ordinary multi-byte text passes through and the valid
+// 2-byte UTF-8 C1 pair is neutralised as a named escape.
+func TestConsoleSanitizesLoneC1(t *testing.T) {
+	for _, c := range []byte{0x80, 0x9b, 0x9d, 0x9f} {
+		line := append([]byte("k=a"), c)
+		line = append(line, "b\n"...)
+		got := string(sanitizeConsoleLine(line, 0))
+		if bytes.Contains([]byte(got), []byte{c}) {
+			t.Errorf("lone C1 %#x reached output: %q", c, got)
+		}
+		want := `\x` + string(hex[c>>4]) + string(hex[c&0x0f])
+		if !strings.Contains(got, want) {
+			t.Errorf("lone C1 %#x: want escape %q in %q", c, want, got)
+		}
+	}
+	// valid UTF-8 C1 pair is neutralised as a named escape, not raw bytes
+	pair := []byte{0xc2, 0x9b}
+	pline := append(append([]byte("k="), pair...), '\n')
+	if got := string(sanitizeConsoleLine(pline, 0)); strings.Contains(got, string(pair)) || !strings.Contains(got, `\u009b`) {
+		t.Errorf("valid C1 pair not neutralised: %q", got)
+	}
+	// tab stays unescaped
+	tab := []byte("k=a\tb\n")
+	if got := sanitizeConsoleLine(tab, 0); !bytes.Equal(got, tab) {
+		t.Errorf("tab mangled: got %q", got)
+	}
+}
+
+// R-02 regression: a 0x80-0x9F byte must be escaped unless it is a
+// continuation byte of a genuinely well-formed UTF-8 rune. Truncated,
+// overlong, surrogate, or out-of-range lead bytes must NOT shield it.
+func TestConsoleEscapeC1Sequences(t *testing.T) {
+	mustEscape := []struct {
+		name  string
+		input []byte
+		idx   int // index of the C1 byte under test
+	}{
+		{"lone 9B", []byte{0x9b}, 0},
+		{"lone 9D", []byte{0x9d}, 0},
+		{"lone 80", []byte{0x80}, 0},
+		{"lone 9F", []byte{0x9f}, 0},
+		{"truncated E0 9B", []byte{0xe0, 0x9b}, 1},
+		{"overlong E0 80 9B", []byte{0xe0, 0x80, 0x9b}, 2},
+		{"surrogate ED 9B", []byte{0xed, 0x9b}, 1},
+		{"overlong F0 80 9B", []byte{0xf0, 0x80, 0x9b}, 2},
+		{"truncated F0 90 80 at end", []byte{0xf0, 0x90, 0x80}, 2},
+		{"lone C1 after text", []byte{'a', 0x9b}, 1},
+	}
+	for _, tc := range mustEscape {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := consoleEscapeLen(tc.input, tc.idx); got == 0 {
+				t.Errorf("consoleEscapeLen(% X, %d) = 0, want > 0", tc.input, tc.idx)
+			}
+			line := append(append([]byte("k="), tc.input...), '\n')
+			got := string(sanitizeConsoleLine(line, 0))
+			if strings.Contains(got, string([]byte{tc.input[tc.idx]})) {
+				t.Errorf("C1 byte %#x reached output: %q", tc.input[tc.idx], got)
+			}
+			if idx := indexConsoleEscape(tc.input); idx < 0 {
+				t.Errorf("indexConsoleEscape(% X) = -1, want %d", tc.input, tc.idx)
+			}
+		})
+	}
+
+	mustPreserve := []struct {
+		name  string
+		input []byte
+	}{
+		{"valid C2 9B pair shape", []byte{0xc2, 0x9b}},
+		{"valid 3-byte E0 A0 9B", []byte{0xe0, 0xa0, 0x9b}},
+		{"valid 4-byte F0 90 80 9F", []byte{0xf0, 0x90, 0x80, 0x9f}},
+		{"ascii", []byte("hello world")},
+		{"tab", []byte("a\tb")},
+	}
+	for _, tc := range mustPreserve {
+		t.Run(tc.name, func(t *testing.T) {
+			if !utf8.Valid(tc.input) {
+				t.Fatalf("premise: % X should be valid UTF-8", tc.input)
+			}
+			// every 0x80-0x9F byte in a valid rune must not hit the lone-C1 rule
+			for i, c := range tc.input {
+				if c >= 0x80 && c <= 0x9f && !inWellFormedUTF8(tc.input, i) {
+					t.Errorf("valid continuation % X at %d flagged for escape", tc.input, i)
+				}
+			}
+			// C2-pair input is neutralised as a unit; genuine text passes through
+			if len(tc.input) == 2 && tc.input[0] == 0xc2 {
+				return
+			}
+			line := append(append([]byte(nil), tc.input...), '\n')
+			if got := sanitizeConsoleLine(line, 0); !bytes.Equal(got, line) {
+				t.Errorf("text mangled: got %q want %q", got, line)
+			}
+		})
+	}
+}
+
 // normal multi-byte text must not be mangled by whatever fix is applied
 func TestC1FixDoesNotMangleText(t *testing.T) {
 	for _, s := range []string{

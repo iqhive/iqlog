@@ -199,6 +199,12 @@ Prefer constructing a complete `Config` over applying setters one by one. A
 complete value makes dependencies explicit and installs a coherent immutable
 configuration snapshot. `Config()` returns a copy of the current configuration;
 `SetConfig` replaces it and transitions the writer lifecycle safely.
+`GetWriter` returns the active writer (the async wrapper in async modes) while
+`Config().Writer` returns the configured inner writer, so do not feed
+`GetWriter()` back into `SetConfig` or `SetWriter`: that would nest an async
+writer inside another. Reconfiguration publishes the new writer before the new
+format snapshot, so a lock-free reader can briefly observe the new writer with
+the old format; that window is acknowledged and benign.
 
 Each field is explained in the section that covers its feature; the
 [table of contents](#contents) lists them in the order they usually matter.
@@ -332,7 +338,9 @@ if log.Enabled(iqlog.LevelDebug) {
 
 Level-specific event constructors return `nil` when disabled. Event methods are
 nil-safe, so an ordinary typed chain can be written directly; the explicit guard
-is for avoiding argument computation.
+is for avoiding argument computation. `Enabled` consults only the fast level
+gate, not the config snapshot; any divergence from the event gate during
+reconfiguration is transient.
 
 ### Panic And Fatal
 
@@ -416,7 +424,9 @@ the record envelope: a user field can never overwrite it.
 
 The prefixing is not injective. A record that carries both `time` and an
 explicit `field_time` emits the key `field_time` twice, and a JSON parser keeps
-only one of the two values. Closing that would mean prefixing every name that
+only one of the two values. For example, `Str("level", ...)` and
+`Str("field_level", ...)` both emit `field_level`. Closing that would mean
+prefixing every name that
 already begins with `field_`, which costs about 3% of a three-field record and
 renames keys that are not reserved at all. Duplicate keys are reachable without
 the escape anyway -- nothing stops `Str("x", 1).Str("x", 2)` -- so if you log
@@ -759,7 +769,8 @@ native-log work. On other platforms, and on macOS builds with
 Platform notes:
 
 - **macOS:** messages are logged with the `%{public}s` privacy marker so they
-  are not redacted as `<private>`. Browse them with
+  are not redacted as `<private>`. Treat them as readable by any local
+  `log stream` / Console user: do not log secrets here. Browse them with
   `log stream --predicate 'subsystem == "myapp"'`.
 - **Windows:** register the source once with administrator privileges so
   records render without a "description cannot be found" notice:
@@ -771,7 +782,11 @@ Platform notes:
 ### Syslog
 
 Set `SyslogHost` to send records over UDP syslog; a bare host gets port 514.
-`ApplicationName` becomes the syslog tag, with control characters replaced.
+`ApplicationName` becomes the syslog tag, with control characters and the
+RFC 3164-unsafe bytes (space, `[`, `]`, `:`, `<`, `>`) replaced by `_`.
+
+UDP syslog is unauthenticated plaintext: records cross the network in clear
+text and are spoofable. There is no TLS option.
 
 ```go
 log := iqlog.MustNew(iqlog.Config{
@@ -890,7 +905,9 @@ if err := log.Flush(); err != nil {
 
 `LastWriteError` is a sticky diagnostic containing the most recent output error.
 Unlike `Flush`, reading it does not clear it. Asynchronous background errors are
-reported through both mechanisms.
+reported through both mechanisms. Under `OverflowDrop`, a rejected record
+surfaces as `ErrWriteDropped` through `Flush` and `LastWriteError`, in addition
+to the `Dropped()` counter.
 
 `Close` drains background workers and is idempotent. It does not close the
 caller-owned underlying writer. After close, `Enabled` returns false and
@@ -930,7 +947,8 @@ envelope by default. No configuration is required.
   exempt, which is what keeps its own ANSI color sequences intact.
 - **System logs.** NUL bytes are escaped before a record reaches `os_log` or the
   Windows Event Log, where they would otherwise truncate or reject it. Control
-  characters in `ApplicationName` are replaced before it is used as the syslog
+  characters and the RFC 3164-unsafe bytes (space, `[`, `]`, `:`, `<`, `>`) in
+  `ApplicationName` are replaced with `_` before it is used as the syslog
   tag, which is written into the record header ahead of the message.
 - **One record, one line.** `RawJSON` compacts its argument, because valid JSON
   may carry newlines between tokens that would split the record for a
@@ -969,7 +987,8 @@ write releases the shared lock on its way out, so the panic reaches the call
 site that chose to log and later records still go through. A background write
 has no call site to propagate to, so the async writer reports the panic as a
 write error through `LastWriteError` and keeps running rather than taking the
-host process down.
+host process down. Only the async loop recovers the panic; synchronous writes,
+including the terminal-record fallback, propagate it to the caller.
 
 ## Writer Ownership
 

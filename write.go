@@ -197,7 +197,9 @@ func (l *Logger) Close() error {
 // newOutputState builds the output state a writer-replacement method installs.
 // It carries the configured ConcurrentWriter setting forward so SetWriter does
 // not silently re-serialize a writer the caller declared concurrent, and it
-// treats our own async wrapper and io.Discard as concurrent.
+// treats our own async wrapper and io.Discard as concurrent. It intentionally
+// omits native: replacing the writer stops native logging, and replaceWriter
+// clears the NativeLog flag so the config and active routing never disagree.
 func (l *Logger) newOutputState(w io.Writer) *outputState {
 	_, async := w.(*asyncWriter)
 	return &outputState{

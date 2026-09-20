@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"math"
 	"strconv"
+	"unicode/utf8"
 )
 
 // fallbackFloatString formats floats the fast paths cannot handle. Non-finite
@@ -76,9 +77,39 @@ const (
 // the other half of the same threat -- U+009B is CSI, which a terminal
 // honouring C1 treats exactly like "ESC [" -- and in valid UTF-8 it can only
 // be written as 0xC2 followed by 0x80-0x9F, so the pair is matched directly.
-// A bare 0x80-0x9F byte is not valid UTF-8 and a UTF-8 terminal will not
-// decode it as C1, so it is left alone; escaping it byte-wise would corrupt
-// the continuation bytes of ordinary multi-byte text.
+// inWellFormedUTF8 reports whether b[i] (a byte in 0x80-0x9F) is a
+// continuation byte of a well-formed UTF-8 sequence. The candidate lead
+// byte at most 3 positions back is decoded with utf8.DecodeRune, which
+// enforces length, truncation, overlong, surrogate, and range rules; the
+// rune's byte span must then cover i. Truncated/overlong/out-of-range
+// sequences return false so the C1 byte falls through to escaping.
+func inWellFormedUTF8(b []byte, i int) bool {
+	for start := i - 3; start <= i; start++ {
+		if start < 0 {
+			continue
+		}
+		if b[start] < 0x80 {
+			continue // ASCII cannot start a multi-byte rune
+		}
+		if b[start] <= 0xbf {
+			continue // continuation byte, not a lead
+		}
+		r, size := utf8.DecodeRune(b[start:])
+		if r == utf8.RuneError && size <= 1 {
+			continue // invalid, truncated, overlong, surrogate, or out of range
+		}
+		if size <= 0 || start+size-1 < i || i-start+1 > size {
+			continue // rune does not cover i
+		}
+		return true
+	}
+	return false
+}
+
+// A bare 0x80-0x9F byte is not valid UTF-8, but a terminal honouring C1
+// decodes it as C1 anyway, so it is escaped like any other control byte --
+// unless inWellFormedUTF8 shows it is a continuation byte of real text, in
+// which case escaping it would corrupt ordinary multi-byte output.
 func consoleEscapeLen(b []byte, i int) int {
 	c := b[i]
 	if (c < 0x20 && c != '\t') || c == 0x7f {
@@ -86,6 +117,9 @@ func consoleEscapeLen(b []byte, i int) int {
 	}
 	if c == 0xc2 && i+1 < len(b) && b[i+1] >= 0x80 && b[i+1] <= 0x9f {
 		return 2
+	}
+	if c >= 0x80 && c <= 0x9f && !inWellFormedUTF8(b, i) {
+		return 1
 	}
 	return 0
 }
@@ -96,7 +130,8 @@ func consoleEscapeLen(b []byte, i int) int {
 // Records are usually clean, so the common case is a full scan that finds
 // nothing; doing that a byte at a time is the dominant cost on long lines.
 // Eight bytes are tested at once instead, with the classic word tests for "a
-// lane below 0x20" and "a lane equal to" 0x7f and 0xC2. All three can
+// lane below 0x20" and "a lane equal to" 0x7f, 0xC2, or in 0x80-0x9F (the
+// latter via "high bit set and top three bits clear"). All four can
 // over-report -- a borrow between lanes, a tab, or a 0xC2 that does not begin
 // a C1 sequence -- so a word that tests positive is rechecked a byte at a
 // time. None of them can under-report, which is what makes the fast path safe
@@ -107,9 +142,13 @@ func indexConsoleEscape(b []byte) int {
 		w := binary.LittleEndian.Uint64(b[i:])
 		del := w ^ (swarLo * 0x7f)
 		lead := w ^ (swarLo * 0xc2)
+		// 0x80-0x9F: high bit set, top three bits clear.
+		hi := w & swarHi
+		c1 := hi &^ ((w & (swarLo * 0x60)) | (hi >> 1) | (hi >> 2))
 		if (w-swarLo*0x20)&^w&swarHi == 0 &&
 			(del-swarLo)&^del&swarHi == 0 &&
-			(lead-swarLo)&^lead&swarHi == 0 {
+			(lead-swarLo)&^lead&swarHi == 0 &&
+			c1 == 0 {
 			continue
 		}
 		for j := i; j < i+8; j++ {

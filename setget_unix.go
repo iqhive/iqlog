@@ -37,10 +37,13 @@ func (l *Logger) replaceWriter(w io.Writer) error {
 	old := l.writer.active.Load()
 	l.writer.active.Store(l.newOutputState(w))
 	l.writer.mu.Unlock()
+	// Every writer replacement stops native logging: the new state carries
+	// no native writer, so the flag must be cleared even when the writer
+	// itself is unchanged.
+	l.clearNativeLog()
 	if sameWriter(old.out, w) {
 		return nil
 	}
-	l.clearNativeLog()
 	return retireWriter(old.out, w)
 }
 

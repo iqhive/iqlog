@@ -373,3 +373,33 @@ func TestNativeLogPlainWriteUsesUnknownLevel(t *testing.T) {
 		t.Fatalf("records = %+v", records)
 	}
 }
+
+func TestSanitizeSyslogTag(t *testing.T) {
+	cases := map[string]string{
+		"":              "",
+		"myapp":         "myapp",
+		"myapp-v1.2/7":  "myapp-v1.2/7",
+		"my app":        "my_app",
+		"a[b]:c>d":      "a_b__c_d",
+		"a<b":            "a_b",
+		"<134>tag":       "_134_tag",
+		"a<b>c[d]e:f g>h": "a_b_c_d_e_f_g_h",
+		"a  b::[[::]]":  "a__b________",
+		"a\nb\tc\x7fd": "a_b_c_d",
+		"a\x00b\x1fc":   "a_b_c",
+		"café-日本語":        "café-日本語",
+	}
+	for in, want := range cases {
+		if got := sanitizeSyslogTag(in); got != want {
+			t.Errorf("sanitizeSyslogTag(%q) = %q, want %q", in, got, want)
+		}
+	}
+	// A clean tag must come back unchanged without allocating.
+	clean := "myapp-v1.2/7"
+	if got := sanitizeSyslogTag(clean); got != clean {
+		t.Errorf("sanitizeSyslogTag(%q) = %q, want identical string", clean, got)
+	}
+	if allocs := testing.AllocsPerRun(100, func() { _ = sanitizeSyslogTag(clean) }); allocs != 0 {
+		t.Errorf("sanitizeSyslogTag(%q) allocated %v times, want 0", clean, allocs)
+	}
+}
