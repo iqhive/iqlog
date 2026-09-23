@@ -148,7 +148,11 @@ func addField(line *Event, key string, value any) {
 	case bool:
 		line.Bool(key, value)
 	case error:
-		line.Str(key, value.Error())
+		if isNilPointer(value) {
+			line.Any(key, value)
+		} else {
+			line.Str(key, value.Error())
+		}
 	case time.Time:
 		line.Time(key, value)
 	case time.Duration:

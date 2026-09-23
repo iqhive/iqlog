@@ -29,10 +29,30 @@ func (l *Logger) Level() Level {
 	return Level(l.level.Load())
 }
 
+// clampLevel maps a configured minimum level onto what the gates represent,
+// the same way for Config.Level and for SetLevel: the zero value means unset
+// and selects Info, anything below Trace enables everything Trace does, and
+// anything above Fatal suppresses every record. Logger.level is a 32-bit
+// atomic, so an unbounded value would otherwise be truncated in the fast
+// gate while the snapshot kept it, and the two gates would disagree.
+func clampLevel(level Level) Level {
+	switch {
+	case level == LevelUnknown:
+		return LevelInfo
+	case level < LevelUnknown:
+		return LevelTrace
+	case level > LevelFatal+1:
+		return LevelFatal + 1
+	}
+	return level
+}
+
 // SetLevel sets the logger's minimum level. Safe to call while other
 // goroutines are logging. A level above LevelFatal suppresses every record
-// including Fatal and Panic, which still terminate.
+// including Fatal and Panic, which still terminate. LevelUnknown selects
+// the default, LevelInfo, as it does in Config.
 func (l *Logger) setLevel(level Level) {
+	level = clampLevel(level)
 	// updateConfig republishes the level fast path from the same snapshot, so
 	// the two gates in newEventContextAt cannot be left disagreeing
 	l.updateConfig(func(cfg *loggerConfig) { cfg.level = level })

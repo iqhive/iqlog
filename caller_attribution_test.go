@@ -32,7 +32,7 @@ func closureLine(t *testing.T, fn func(*Logger)) (name string, line int) {
 		t.Fatal("closure has no function")
 	}
 	_, line = f.FileLine(f.Entry())
-	return f.Name(), line
+	return trimMainModule(f.Name()), line
 }
 
 func TestCallerAttributionEntryPoints(t *testing.T) {

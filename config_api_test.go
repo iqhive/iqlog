@@ -30,7 +30,8 @@ func TestConfigValidationAndRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := l.Config()
-	if got.Format != want.Format || got.Level != want.Level || got.Writer != w || !got.IncludeTime || got.JSONTimeMode != JSONTimeCustom || got.TimestampLayout != "milliseconds" || got.CallerDepth != 2 || !got.Color {
+	// the convenience name resolves to its layout in every mode
+	if got.Format != want.Format || got.Level != want.Level || got.Writer != w || !got.IncludeTime || got.JSONTimeMode != JSONTimeCustom || got.TimestampLayout != "2006-01-02T15:04:05.000Z07:00" || got.CallerDepth != 2 || !got.Color {
 		t.Fatalf("round trip: %#v", got)
 	}
 }

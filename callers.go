@@ -9,9 +9,17 @@ import (
 )
 
 // mainModulePrefix is the main module path with a trailing slash. Function
-// names inside the main module are reported without it. It is built once so
-// the caller paths do not rebuild the string for every record.
-var mainModulePrefix string
+// names inside the main module are reported without it, so a symbol in a
+// subpackage reads "sub/pkg.Func". Symbols in the module's root package have
+// the module path followed by a dot instead; mainModuleRootPrefix matches
+// those, and mainModuleRootTrim is how much to drop so they read "pkg.Func"
+// with the package's own name kept. All three are built once so the caller
+// paths do not rebuild strings for every record.
+var (
+	mainModulePrefix     string
+	mainModuleRootPrefix string
+	mainModuleRootTrim   int
+)
 
 // familyPrefixes lists the import paths of this library and of its legacy
 // home. A frame whose function lives in one of these packages, or in any
@@ -25,7 +33,25 @@ var familyPrefixes = [...]string{
 func init() {
 	if info, ok := debug.ReadBuildInfo(); ok && info.Main.Path != "" {
 		mainModulePrefix = info.Main.Path + "/"
+		// a single-element module path ("app") is already just the package
+		// name, so only multi-element paths need the root trimmed
+		if i := strings.LastIndexByte(info.Main.Path, '/'); i >= 0 {
+			mainModuleRootPrefix = info.Main.Path + "."
+			mainModuleRootTrim = i + 1
+		}
 	}
+}
+
+// trimMainModule strips the main module path from a fully qualified function
+// name, leaving the package-relative form the caller fields report.
+func trimMainModule(name string) string {
+	if mainModulePrefix != "" && strings.HasPrefix(name, mainModulePrefix) {
+		return name[len(mainModulePrefix):]
+	}
+	if mainModuleRootPrefix != "" && strings.HasPrefix(name, mainModuleRootPrefix) {
+		return name[mainModuleRootTrim:]
+	}
+	return name
 }
 
 const callerDataMaxLen = 100
@@ -152,19 +178,23 @@ func captureCallerPC(pc uintptr, callerDepth int, data *callerData) {
 }
 
 // set stores the trimmed function name and "base:line" without allocating.
-// Both are truncated to callerDataMaxLen.
+// Both are truncated to callerDataMaxLen. The line number is what makes the
+// file reference useful, so an overlong basename is cut to make room for the
+// complete ":line" suffix rather than the suffix being cut to a wrong number.
 func (data *callerData) set(name, file string, line int) {
-	name = strings.TrimPrefix(name, mainModulePrefix)
+	name = trimMainModule(name)
 	data.callerFuncLen = uint(copy(data.callerFunc[:], name))
 	if index := strings.LastIndexByte(file, '/'); index >= 0 {
 		file = file[index+1:]
 	}
-	n := copy(data.callerFile[:], file)
-	if n < callerDataMaxLen {
-		data.callerFile[n] = ':'
-		n++
-		var digits [20]byte
-		n += copy(data.callerFile[n:], strconv.AppendInt(digits[:0], int64(line), 10))
+	var digits [20]byte
+	suffix := strconv.AppendInt(digits[:0], int64(line), 10)
+	if limit := callerDataMaxLen - 1 - len(suffix); len(file) > limit {
+		file = file[:limit]
 	}
+	n := copy(data.callerFile[:], file)
+	data.callerFile[n] = ':'
+	n++
+	n += copy(data.callerFile[n:], suffix)
 	data.callerFileLen = uint(n)
 }

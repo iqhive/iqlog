@@ -4,17 +4,74 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"unsafe"
 )
 
+// sprintMessage joins a message and its Msgs arguments the way the console
+// record carries them, for use as a panic value.
 func sprintMessage(msg string, args ...interface{}) string {
 	if len(args) == 0 {
 		return msg
 	}
-	output := msg
+	ba := acquireBytesAppender()
+	ba.Bytes = append(ba.Bytes, msg...)
 	for _, arg := range args {
-		output += " " + fmt.Sprint(arg)
+		ba.Bytes = append(ba.Bytes, ' ')
+		ba.Bytes = appendMsgArg(ba.Bytes, arg, false)
 	}
-	return output
+	s := string(ba.Bytes)
+	releaseBytesAppender(ba)
+	return s
+}
+
+// appendMsgArg appends one Msgs argument in the form the message carries it.
+// Strings are appended verbatim; when the record is JSON the caller has
+// already opened the message string, so they are escaped instead. Numbers use
+// the shortest round-trip form in both formats, the same form the typed field
+// methods use, and are appended in place so scalar arguments do not allocate.
+func appendMsgArg(dst []byte, arg any, jsonMode bool) []byte {
+	switch v := arg.(type) {
+	case string:
+		if jsonMode {
+			return appendJSONEscaped(dst, v)
+		}
+		return append(dst, v...)
+	case int:
+		return strconv.AppendInt(dst, int64(v), 10)
+	case int8:
+		return strconv.AppendInt(dst, int64(v), 10)
+	case int16:
+		return strconv.AppendInt(dst, int64(v), 10)
+	case int32:
+		return strconv.AppendInt(dst, int64(v), 10)
+	case int64:
+		return strconv.AppendInt(dst, v, 10)
+	case uint:
+		return strconv.AppendUint(dst, uint64(v), 10)
+	case uint8:
+		return strconv.AppendUint(dst, uint64(v), 10)
+	case uint16:
+		return strconv.AppendUint(dst, uint64(v), 10)
+	case uint32:
+		return strconv.AppendUint(dst, uint64(v), 10)
+	case uint64:
+		return strconv.AppendUint(dst, v, 10)
+	case float32:
+		return strconv.AppendFloat(dst, float64(v), 'f', -1, 32)
+	case float64:
+		return strconv.AppendFloat(dst, v, 'f', -1, 64)
+	case bool:
+		return strconv.AppendBool(dst, v)
+	}
+	if !jsonMode {
+		return fmt.Appendf(dst, "%v", arg)
+	}
+	// formatted into scratch first because the text lands inside a JSON string
+	ba := acquireBytesAppender()
+	ba.Bytes = fmt.Appendf(ba.Bytes, "%v", arg)
+	dst = appendJSONEscaped(dst, unsafeString(ba.Bytes))
+	releaseBytesAppender(ba)
+	return dst
 }
 
 func (bsl *Event) terminateDisabled(message string) bool {
@@ -44,14 +101,24 @@ func (bsl *Event) terminateDisabled(message string) bool {
 // by a Fatal/Panic builder.
 func (bsl *Event) finish() {
 	line := bsl.output
+	copied := false
 	if !bsl.jsonMode {
 		line = sanitizeConsoleLine(line, bsl.prefixLen)
+		copied = unsafe.SliceData(line) != unsafe.SliceData(bsl.output)
 	}
 
 	owned := bsl.logger.writeRecord(line, bsl.level)
+	// An async writer takes ownership of line and recycles it once written.
+	// When line was the sanitized copy, the event's own buffer was not handed
+	// over and stays pooled with the event; when the copy was written
+	// synchronously it goes straight back to the pool it came from.
+	if copied && !owned {
+		releaseEventBuffer(line)
+	}
+	keepBuffer := !owned || copied
 
 	if !bsl.panicAfterWrite && !bsl.exitAfterWrite {
-		bsl.release(!owned)
+		bsl.release(keepBuffer)
 		return
 	}
 
@@ -59,7 +126,7 @@ func (bsl *Event) finish() {
 	logger := bsl.logger
 	exitFunc := bsl.config.exitFunc
 	panicMsg := bsl.panicMessage
-	bsl.release(!owned)
+	bsl.release(keepBuffer)
 
 	if !exit {
 		_ = logger.Flush()
@@ -166,40 +233,12 @@ func (bsl *Event) Msgf(format string, args ...interface{}) {
 }
 
 func (bsl *Event) writeFinalConsole(msg string, args ...interface{}) {
-
-	//put the message
 	bsl.output = append(bsl.output, msg...)
-
-	// followed by args
-	for _, thisarg := range args {
+	for _, arg := range args {
 		bsl.output = append(bsl.output, ' ')
-
-		switch thisarg := thisarg.(type) {
-		case string:
-			bsl.output = append(bsl.output, thisarg...)
-		case int:
-			bsl.output = append(bsl.output, strconv.Itoa(thisarg)...)
-		case int32:
-			bsl.output = append(bsl.output, strconv.Itoa(int(thisarg))...)
-		case uint32:
-			bsl.output = append(bsl.output, strconv.FormatUint(uint64(thisarg), 10)...)
-		case int64:
-			bsl.output = append(bsl.output, strconv.FormatInt(thisarg, 10)...)
-		case uint64:
-			bsl.output = append(bsl.output, strconv.FormatUint(thisarg, 10)...)
-		case float32:
-			bsl.output = append(bsl.output, strconv.FormatFloat(float64(thisarg), 'f', -1, 32)...)
-		case float64:
-			bsl.output = append(bsl.output, strconv.FormatFloat(thisarg, 'f', -1, 64)...)
-		case bool:
-			bsl.output = append(bsl.output, strconv.FormatBool(thisarg)...)
-		default:
-			bsl.output = append(bsl.output, fmt.Sprintf("%v", thisarg)...)
-		}
+		bsl.output = appendMsgArg(bsl.output, arg, false)
 	}
-	// if bsl.logger.newLine.Load() {
 	bsl.output = append(bsl.output, '\n')
-	// }
 
 	bsl.finish()
 }
@@ -217,44 +256,13 @@ func (bsl *Event) writeFinalConsoleF(format string, args ...interface{}) {
 }
 
 func (bsl *Event) writeFinalJSON(msg string, args ...interface{}) {
-	// write JSON closer
-	bsl.output = append(bsl.output, []byte(",\"message\":\"")...)
-
+	bsl.output = append(bsl.output, `,"message":"`...)
 	bsl.output = appendJSONEscaped(bsl.output, msg)
-
-	// followed by args
-	for _, thisarg := range args {
+	for _, arg := range args {
 		bsl.output = append(bsl.output, ' ')
-
-		switch thisarg := thisarg.(type) {
-		case string:
-			bsl.output = appendJSONEscaped(bsl.output, thisarg)
-		case int:
-			bsl.output = append(bsl.output, strconv.Itoa(thisarg)...)
-		case int32:
-			bsl.output = append(bsl.output, strconv.Itoa(int(thisarg))...)
-		case uint32:
-			bsl.output = append(bsl.output, strconv.FormatUint(uint64(thisarg), 10)...)
-		case int64:
-			bsl.output = append(bsl.output, strconv.FormatInt(thisarg, 10)...)
-		case uint64:
-			bsl.output = append(bsl.output, strconv.FormatUint(thisarg, 10)...)
-		case float32:
-			bsl.output = appendJSONStringFloat(bsl.output, float64(thisarg), 32)
-		case float64:
-			bsl.output = appendJSONStringFloat(bsl.output, thisarg, 64)
-		case bool:
-			bsl.output = append(bsl.output, strconv.FormatBool(thisarg)...)
-		default:
-			bsl.output = appendJSONEscaped(bsl.output, fmt.Sprintf("%v", thisarg))
-		}
+		bsl.output = appendMsgArg(bsl.output, arg, true)
 	}
-
-	// if bsl.newLine {
-	bsl.output = append(bsl.output, []byte("\"}\n")...)
-	// } else {
-	// 	bsl.output = append(bsl.output, []byte("\"}")...)
-	// }
+	bsl.output = append(bsl.output, "\"}\n"...)
 
 	bsl.finish()
 }

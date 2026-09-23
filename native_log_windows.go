@@ -49,9 +49,12 @@ func (w *eventLogWriter) writeLevel(level Level, p []byte) (int, error) {
 	msg := nativeMessage(p)
 	if len(msg) > maxEventLogMessageBytes {
 		msg = msg[:maxEventLogMessageBytes]
-		// Do not split a multi-byte UTF-8 rune at the cut point.
+		// Do not split a multi-byte UTF-8 rune at the cut point. A rune has
+		// at most utf8.UTFMax-1 continuation bytes, so the walk back is
+		// bounded: a longer run of continuation bytes is not a rune at all
+		// and must not cost the whole record.
 		last := len(msg) - 1
-		for last > 0 && !utf8.RuneStart(msg[last]) {
+		for i := 0; i < utf8.UTFMax-1 && last > 0 && !utf8.RuneStart(msg[last]); i++ {
 			last--
 		}
 		if !utf8.Valid(msg[last:]) {

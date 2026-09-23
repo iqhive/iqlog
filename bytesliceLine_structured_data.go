@@ -214,6 +214,10 @@ func (bsl *Event) Any(name string, v any) *Event {
 	case float64:
 		return bsl.Float64(name, value)
 	case error:
+		if isNilPointer(value) {
+			// a nil pointer's Error would dereference it; encode the nil
+			break
+		}
 		return bsl.Str(name, value.Error())
 	case time.Time:
 		return bsl.Time(name, value)
@@ -238,24 +242,49 @@ func (bsl *Event) Any(name string, v any) *Event {
 // appendGenericValue encodes a value none of the concrete fast paths
 // recognised: encoding/json in JSON mode, fmt in console mode. The key has
 // already been written.
+//
+// encoding/json runs first in both modes. Besides producing the JSON
+// encoding it refuses a self-referential slice or map with an error, whereas
+// fmt's %v would recurse through one until the goroutine stack overflows and
+// the runtime aborts the process. A value it rejects is therefore reported as
+// an error text, the way slog.JSONHandler reports it, and never handed to
+// fmt. This is the reflective slow path; the typed field methods never reach
+// it.
 func (bsl *Event) appendGenericValue(v any) {
+	encoded, err := json.Marshal(v)
+	if err != nil {
+		bsl.appendUnencodable(err)
+		return
+	}
 	if !bsl.jsonMode {
 		bsl.output = fmt.Appendf(bsl.output, "%v", v)
 		bsl.output = append(bsl.output, ' ')
 		return
 	}
-	encoded, err := json.Marshal(v)
 	// A custom MarshalJSON can return ill-formed UTF-8; encoding/json
 	// does not check it, and passing it through would make the whole
 	// record ill-formed. Fall back to the escaped text form, which
 	// substitutes U+FFFD.
-	if err == nil && utf8.Valid(encoded) {
+	if utf8.Valid(encoded) {
 		bsl.output = append(bsl.output, encoded...)
 		return
 	}
 	bsl.output = append(bsl.output, '"')
 	bsl.output = appendJSONEscaped(bsl.output, fmt.Sprintf("%v", v))
 	bsl.output = append(bsl.output, '"')
+}
+
+// appendUnencodable writes the value slot for a value encoding/json refused.
+func (bsl *Event) appendUnencodable(err error) {
+	if bsl.jsonMode {
+		bsl.output = append(bsl.output, '"', '!', 'E', 'R', 'R', 'O', 'R', ':')
+		bsl.output = appendJSONEscaped(bsl.output, err.Error())
+		bsl.output = append(bsl.output, '"')
+		return
+	}
+	bsl.output = append(bsl.output, "!ERROR:"...)
+	bsl.output = append(bsl.output, err.Error()...)
+	bsl.output = append(bsl.output, ' ')
 }
 
 func (e *Event) Uint(name string, value uint) *Event {
@@ -280,15 +309,19 @@ func (e *Event) Uint64(name string, value uint64) *Event {
 	return e
 }
 
+// Err adds err under "error". A nil error, including a typed nil pointer
+// whose Error method would dereference it, adds nothing.
 func (e *Event) Err(err error) *Event {
-	if e == nil || err == nil {
+	if e == nil || err == nil || isNilPointer(err) {
 		return e
 	}
 	return e.Str("error", err.Error())
 }
 
+// Stringer adds value.String() under name. A nil value, including a typed
+// nil pointer whose String method would dereference it, adds nothing.
 func (e *Event) Stringer(name string, value fmt.Stringer) *Event {
-	if e == nil || value == nil {
+	if e == nil || value == nil || isNilPointer(value) {
 		return e
 	}
 	return e.Str(name, value.String())

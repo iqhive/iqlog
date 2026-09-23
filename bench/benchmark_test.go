@@ -128,10 +128,10 @@ func BenchmarkSlogAny(b *testing.B) {
 
 func BenchmarkIQLogAny(b *testing.B) {
 	logger := iqlog.MustNew(iqlog.Config{Format: iqlog.FormatJSON, Writer: io.Discard, JSONTimeMode: iqlog.JSONTimeDisabled})
+	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
-		// logger.Any("rate", "15").Any("low", 16).Any("object", &obj).Info(msg)
-		logger.InfoEvent().Any("rate", "15").Any("low", 16).Any("object", &obj).Msg(msg)
-		// logger.Info(msg)
+		// the same payload as the zerolog and phuslu Any benchmarks below
+		logger.InfoEvent().Str("rate", "15").Int("low", 16).Float32("high", 123.2).Any("object", &obj).Msg(msg)
 	}
 }
 
@@ -182,7 +182,8 @@ func BenchmarkPhusluSimpleWithTimestamp(b *testing.B) {
 // }
 
 func BenchmarkIQLogParallel(b *testing.B) {
-	logger := iqlog.MustNew(iqlog.Config{Format: iqlog.FormatJSON, Writer: io.Discard, JSONTimeMode: iqlog.JSONTimeUTC})
+	// no timestamp, like the zerolog and phuslu Parallel loggers below
+	logger := iqlog.MustNew(iqlog.Config{Format: iqlog.FormatJSON, Writer: io.Discard, JSONTimeMode: iqlog.JSONTimeDisabled})
 	b.ReportAllocs()
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {

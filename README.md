@@ -412,8 +412,11 @@ if err := event.BuildError(); err != nil {
 event.Msg("payload accepted")
 ```
 
-`Discard` consumes an unfinished non-terminal event without writing it. Once an
-event is finished or discarded, further calls are ignored. Events must not be
+`Discard` consumes an unfinished non-terminal event without writing it.
+Finishing or discarding an event recycles it, so do not use the handle
+afterwards: a call made through a consumed handle is ignored only until the
+storage is reused by a new event, after which it acts on that event instead.
+Keep one handle per record and consume it exactly once. Events must not be
 shared between goroutines.
 
 ### Field Names

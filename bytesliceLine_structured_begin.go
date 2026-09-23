@@ -215,9 +215,14 @@ func (e *Event) writeDefaultJSONTimestamp(now time.Time) {
 	second := now.Unix()
 	p := &e.callerData.callerFunc
 	if e.timeSecond != second {
-		e.timeSecond = second
 		utc := now.UTC()
 		year, month, day := utc.Date()
+		if uint(year) > 9999 {
+			// does not fit the cached four digits; leave the cache as it was
+			e.output = appendDefaultJSONTimestamp(e.output, utc)
+			return
+		}
+		e.timeSecond = second
 		hour, minute, sec := utc.Clock()
 		p[0] = byte('0' + year/1000%10)
 		p[1] = byte('0' + year/100%10)

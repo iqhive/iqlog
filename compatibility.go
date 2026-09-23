@@ -116,6 +116,11 @@ func SetUseColour(enabled bool)             { Default().SetUseColour(enabled) }
 func (l *Logger) SetUseColor(enabled bool)  { l.setUseColor(enabled) }
 func SetUseColor(enabled bool)              { Default().SetUseColor(enabled) }
 func (l *Logger) SetJSONTimeMode(mode JSONTimeMode) {
+	if mode > JSONTimeCustom {
+		// keep the snapshot one SetConfig(Config()) accepts; an unknown mode
+		// has always been formatted as the custom layout
+		mode = JSONTimeCustom
+	}
 	l.updateConfig(func(cfg *loggerConfig) {
 		cfg.format = FormatJSON
 		cfg.jsonTimeMode = mode
@@ -134,9 +139,17 @@ func SetSyslogHost(host string)                  { Default().SetSyslogHost(host)
 // Deprecated: use Default().Flush().
 func Flush() error { return Default().Flush() }
 
+// LogWithFields and LogFWithFields gate on the level before building the
+// logger copy WithFields needs, so a record the level drops allocates nothing.
 func (l *Logger) LogWithFields(ctx context.Context, level Level, fields map[string]any, msg string, args ...any) {
+	if l.skipRecord(normalizeLevel(level)) {
+		return
+	}
 	l.WithFields(fields).LogContext(ctx, level, msg, args...)
 }
 func (l *Logger) LogFWithFields(ctx context.Context, level Level, fields map[string]any, format string, args ...any) {
+	if l.skipRecord(normalizeLevel(level)) {
+		return
+	}
 	l.WithFields(fields).LogContextf(ctx, level, format, args...)
 }

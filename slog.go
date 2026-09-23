@@ -295,7 +295,11 @@ func appendSlogAny(e *Event, key string, v any) {
 		e.output = append(e.output, "null"...)
 		e.endSlogValue()
 	case error:
-		e.appendSlogString(value.Error())
+		if isNilPointer(value) {
+			e.appendGenericValue(v)
+		} else {
+			e.appendSlogString(value.Error())
+		}
 	case json.RawMessage:
 		value = e.checkRawJSON(key, value)
 		e.output = append(e.output, value...)

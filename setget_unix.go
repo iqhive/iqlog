@@ -3,18 +3,13 @@
 package iqlog
 
 import (
-	"errors"
 	"io"
 	"log/syslog"
 	"os"
-	"strings"
 )
 
 func prepareSyslog(host, appName string) (io.Writer, error) {
-	if host != "" && !strings.Contains(host, ":") {
-		host += ":514"
-	}
-	w, err := syslog.Dial("udp", host, syslog.LOG_DAEMON|syslog.LOG_INFO, sanitizeSyslogTag(appName))
+	w, err := syslog.Dial("udp", syslogAddr(host), syslog.LOG_DAEMON|syslog.LOG_INFO, sanitizeSyslogTag(appName))
 	if err != nil {
 		return nil, err
 	}
@@ -24,8 +19,11 @@ func prepareSyslog(host, appName string) (io.Writer, error) {
 
 // replaceWriter swaps the logger output under the logger mutex and closes
 // the previous writer when it is one of our wrapper types, so its goroutine
-// exits and queued lines are drained instead of leaking.
-func (l *Logger) replaceWriter(w io.Writer) error {
+// exits and queued lines are drained instead of leaking. mode is the writer
+// mode the installed writer represents, recorded so a Config() round-trip
+// reproduces it. Callers that built w (a queue or a dialled connection) retire
+// it themselves when this returns an error.
+func (l *Logger) replaceWriter(w io.Writer, mode WriterMode) error {
 	if nilWriter(w) {
 		return errNilWriter
 	}
@@ -36,37 +34,46 @@ func (l *Logger) replaceWriter(w io.Writer) error {
 	}
 	old := l.writer.active.Load()
 	l.writer.active.Store(l.newOutputState(w))
-	l.writer.mu.Unlock()
-	// Every writer replacement stops native logging: the new state carries
-	// no native writer, so the flag must be cleared even when the writer
-	// itself is unchanged.
-	l.clearNativeLog()
-	if sameWriter(old.out, w) {
-		return nil
+	// Every writer replacement stops native logging and syslog: the new state
+	// carries an explicit destination, so the flags must be cleared even when
+	// the writer itself is unchanged. Done under writer.mu so the snapshot
+	// cannot be observed disagreeing with the routing.
+	l.installedDestination(w, mode)
+	var err error
+	if !sameWriter(old.out, w) {
+		// drained under writer.mu so a concurrent Flush waits for it
+		err = retireWriter(old.out, w)
 	}
-	return retireWriter(old.out, w)
+	l.writer.mu.Unlock()
+	return err
 }
 
-func (l *Logger) setWriter(w io.Writer) error       { return l.replaceWriter(w) }
-func (l *Logger) setWriterLegacy(w io.Writer) error { return l.setWriter(w) }
+func (l *Logger) setWriter(w io.Writer) error { return l.replaceWriter(w, WriterSync) }
 
-func (l *Logger) setAsyncWriter(w io.Writer, capacity int, policy OverflowPolicy) error {
+// installAsyncWriter queues w behind a fresh async writer. The queue is
+// retired again when it cannot be installed, so a closed logger does not
+// leak its goroutine.
+func (l *Logger) installAsyncWriter(w io.Writer, capacity int, policy OverflowPolicy, mode WriterMode) error {
 	if nilWriter(w) {
 		return errNilWriter
 	}
-	return l.replaceWriter(newAsyncWriter(w, capacity, policy, func(err error) {
-		if errors.Is(err, ErrWriteDropped) {
-			l.writer.dropped.Add(1)
-		}
-		l.recordWriteErr(err)
-	}, &l.writer.writeMu))
+	aw := newAsyncWriter(w, capacity, policy, l.queueError, &l.writer.writeMu)
+	if err := l.replaceWriter(aw, mode); err != nil {
+		_ = retireWriter(aw, unwrapAsync(w))
+		return err
+	}
+	return nil
+}
+
+func (l *Logger) setAsyncWriter(w io.Writer, capacity int, policy OverflowPolicy) error {
+	return l.installAsyncWriter(w, capacity, policy, WriterAsync)
 }
 func (l *Logger) setAsyncWriterLegacy(w io.Writer) error {
 	return l.setAsyncWriter(w, 1000, OverflowBlock)
 }
 
 func (l *Logger) setRingBufferWriter(w io.Writer, capacity int, policy OverflowPolicy) error {
-	return l.setAsyncWriter(w, capacity, policy)
+	return l.installAsyncWriter(w, capacity, policy, WriterRing)
 }
 func (l *Logger) setRingBufferWriterLegacy(w io.Writer) error {
 	return l.setRingBufferWriter(w, 10000, OverflowSync)
@@ -84,9 +91,15 @@ func (l *Logger) setCallerDepth(d int) {
 	}
 	l.updateConfig(func(cfg *loggerConfig) { cfg.callerDepth = d })
 }
-func (l *Logger) setUseColor(d bool) { l.updateConfig(func(cfg *loggerConfig) { cfg.color = d }) }
-func (l *Logger) setTimestampLayout(layout string) {
-	l.updateConfig(func(cfg *loggerConfig) { cfg.timestampLayout = normalizeTimestampLayout(layout) })
+
+// setUseColor forces colour on or off. DisableColor still wins, as it does
+// for Config.Color, so the snapshot never carries the contradictory pair the
+// encoder would honour but a Config() round-trip would not.
+func (l *Logger) setUseColor(d bool) {
+	l.updateConfig(func(cfg *loggerConfig) {
+		cfg.colorForced = d
+		cfg.color = d && !cfg.disableColor
+	})
 }
 func (l *Logger) setFormat(format Format) {
 	l.updateConfig(func(cfg *loggerConfig) { cfg.format = format })
@@ -96,10 +109,7 @@ func (l *Logger) setSyslogHostLegacy(newhost string) {
 	_ = l.setSyslogHost(newhost)
 }
 func (l *Logger) setSyslogHost(newhost string) error {
-	if newhost != "" && !strings.Contains(newhost, ":") {
-		// make sure we have a (UDP) port in the host definition
-		newhost = newhost + ":514"
-	}
+	newhost = syslogAddr(newhost)
 	cfg := l.config.Load()
 	unchanged := cfg.syslogHost == newhost
 	appName := cfg.applicationName
@@ -110,18 +120,24 @@ func (l *Logger) setSyslogHost(newhost string) error {
 	}
 	if newhost == "" {
 		l.Info("Log output changed to StdErr")
-		l.updateConfig(func(cfg *loggerConfig) { cfg.syslogHost = newhost })
-		return l.replaceWriter(os.Stderr)
+		return l.replaceWriter(os.Stderr, WriterSync)
 	}
 	newSyslog, syslogErr := syslog.Dial("udp", newhost, syslog.LOG_DAEMON|syslog.LOG_INFO, sanitizeSyslogTag(appName))
-	if syslogErr == nil && newSyslog != nil {
-		l.updateConfig(func(cfg *loggerConfig) { cfg.syslogHost = newhost })
-		// iqlog dialled this connection, so iqlog closes it when it is retired
-		return l.replaceWriter(newOwnedWriter(newSyslog))
-	} else {
+	if syslogErr != nil || newSyslog == nil {
 		// keep the current writer rather than terminating the host process;
 		// a logging library must not exit the application
 		l.Errorf("ERROR: Unable to init syslog to (%s): %v", newhost, syslogErr)
 		return syslogErr
 	}
+	// iqlog dialled this connection, so iqlog closes it when it is retired,
+	// including right here when the logger turns out to be closed already.
+	owned := newOwnedWriter(newSyslog)
+	if err := l.replaceWriter(owned, WriterSync); err != nil {
+		_ = retireWriter(owned, nil)
+		return err
+	}
+	// recorded after the install, which clears it, so a Config() round-trip
+	// reproduces the syslog destination
+	l.updateConfig(func(cfg *loggerConfig) { cfg.syslogHost = newhost })
+	return nil
 }

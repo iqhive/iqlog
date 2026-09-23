@@ -30,11 +30,29 @@ type asyncWriter struct {
 }
 
 func newAsyncWriter(out io.Writer, bufferCount int, policy OverflowPolicy, onErr func(error), writeMu *sync.Mutex) *asyncWriter {
+	// Never queue in front of another queue. A wrapper handed back in through
+	// GetWriter is about to be retired by the caller, and a closed wrapper
+	// writes synchronously under the shared write mutex that this writer's
+	// loop already holds, which deadlocks the loop. Writing to the real
+	// destination also lets retireWriter recognise it as still in use.
+	out = unwrapAsync(out)
 	native, _ := out.(nativeLogWriter)
 	aw := &asyncWriter{ch: make(chan asyncItem, bufferCount), out: out, native: native, onErr: onErr, policy: policy, writeMu: writeMu}
 	aw.wg.Add(1)
 	go aw.loop()
 	return aw
+}
+
+// unwrapAsync returns the destination underneath any of this package's own
+// queue wrappers.
+func unwrapAsync(w io.Writer) io.Writer {
+	for {
+		aw, ok := w.(*asyncWriter)
+		if !ok {
+			return w
+		}
+		w = aw.out
+	}
 }
 
 func (aw *asyncWriter) loop() {
@@ -170,25 +188,40 @@ func (aw *asyncWriter) Close() error {
 	return nil
 }
 
+// Flush waits for every record the writer had accepted when Flush was called.
+// The state is read under writer.mu: a reconfiguration drains the writer it
+// retires while holding that lock, so records queued on the previous writer
+// have been written by the time the new one is observed here.
 func (l *Logger) Flush() error {
-	if l.writer.closed.Load() {
+	l.writer.mu.Lock()
+	closed := l.writer.closed.Load()
+	state := l.writer.active.Load()
+	l.writer.mu.Unlock()
+	if closed {
 		return ErrClosed
 	}
-	if aw, ok := l.writer.active.Load().out.(*asyncWriter); ok {
+	if aw, ok := state.out.(*asyncWriter); ok {
 		aw.Flush()
 	}
 	return l.takeWriteError()
 }
 
+// Close drains and stops the writer. The drain happens under writer.mu so a
+// concurrent Flush cannot return before the accepted records are written.
 func (l *Logger) Close() error {
 	l.writer.mu.Lock()
 	if l.writer.closed.Swap(true) {
 		l.writer.mu.Unlock()
 		return nil
 	}
-	old := l.writer.active.Swap(&outputState{out: io.Discard, configured: io.Discard, concurrent: true})
+	// Writes go to io.Discard from here on, but Config() keeps reporting the
+	// caller-owned destination, which Close does not touch, so a logger can be
+	// rebuilt from a closed one's configuration.
+	configured := l.writer.active.Load().configured
+	old := l.writer.active.Swap(&outputState{out: io.Discard, configured: configured, concurrent: true})
+	err := retireWriter(old.out, nil)
 	l.writer.mu.Unlock()
-	if err := retireWriter(old.out, nil); err != nil {
+	if err != nil {
 		return err
 	}
 	return l.takeWriteError()
@@ -197,14 +230,17 @@ func (l *Logger) Close() error {
 // newOutputState builds the output state a writer-replacement method installs.
 // It carries the configured ConcurrentWriter setting forward so SetWriter does
 // not silently re-serialize a writer the caller declared concurrent, and it
-// treats our own async wrapper and io.Discard as concurrent. It intentionally
-// omits native: replacing the writer stops native logging, and replaceWriter
-// clears the NativeLog flag so the config and active routing never disagree.
+// treats our own async wrapper and io.Discard as concurrent. The configured
+// writer is the destination underneath our own queue wrapper, as it is for a
+// Config-built async logger, so Config().Writer never hands the live wrapper
+// back to a SetConfig that would retire it. It intentionally omits native:
+// replacing the writer stops native logging, and replaceWriter clears the
+// NativeLog flag so the config and active routing never disagree.
 func (l *Logger) newOutputState(w io.Writer) *outputState {
 	_, async := w.(*asyncWriter)
 	return &outputState{
 		out:        w,
-		configured: w,
+		configured: unwrapAsync(w),
 		concurrent: async || w == io.Discard || l.config.Load().concurrentWriter,
 	}
 }

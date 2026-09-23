@@ -119,26 +119,6 @@ func appendJSONFloat(dst []byte, f float64, bitSize int) []byte {
 	return strconv.AppendFloat(dst, f, 'f', -1, bitSize)
 }
 
-// appendJSONStringFloat appends f as text suitable for embedding inside a
-// JSON string (e.g. a vararg inside the "message" field). Unlike
-// appendJSONFloat, non-finite values are emitted as bare escaped text
-// (NaN/Infinity/-Infinity) rather than quoted JSON tokens, so the surrounding
-// string stays parseable.
-func appendJSONStringFloat(dst []byte, f float64, bitSize int) []byte {
-	var s string
-	switch {
-	case math.IsNaN(f):
-		s = "NaN"
-	case math.IsInf(f, 1):
-		s = "Infinity"
-	case math.IsInf(f, -1):
-		s = "-Infinity"
-	default:
-		return append(dst, strconv.FormatFloat(f, 'f', 6, bitSize)...)
-	}
-	return appendJSONEscaped(dst, s)
-}
-
 // unsafeString views b as a string without copying. The result must not
 // outlive b, and b must not be mutated while it is in use.
 func unsafeString(b []byte) string {

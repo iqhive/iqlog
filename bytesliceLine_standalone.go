@@ -2,8 +2,11 @@ package iqlog
 
 const invalidTimestampSecond int64 = -1 << 63
 
-// Event is a single-use structured log event. It is not safe for concurrent
-// use. Msg, Msgs, or Msgf consumes the event.
+// Event is a single-use structured log event obtained from a Logger; the
+// zero value is not usable. It is not safe for concurrent use. Msg, Msgs,
+// Msgf, and Discard consume the event and recycle it, so the handle must not
+// be used afterwards: a later call through it can act on a different event
+// that has since reused the same storage.
 type Event struct {
 	logger   *Logger
 	config   *loggerConfig

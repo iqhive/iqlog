@@ -6,6 +6,7 @@ import (
 	"io"
 	"reflect"
 	"sync"
+	"sync/atomic"
 )
 
 var (
@@ -39,6 +40,10 @@ type ownedWriter struct {
 	io.Writer
 	closer io.Closer
 	once   sync.Once
+	// closed makes release terminal. The syslog writer underneath re-dials
+	// on the first Write after Close, and a connection opened that way has
+	// no owner left to close it, so a late write is refused instead.
+	closed atomic.Bool
 }
 
 func newOwnedWriter(w io.Writer) io.Writer {
@@ -49,9 +54,21 @@ func newOwnedWriter(w io.Writer) io.Writer {
 	return &ownedWriter{Writer: w, closer: closer}
 }
 
+// Write refuses to write once the connection has been released, so a
+// stale writer handle cannot silently reopen a connection nobody closes.
+func (w *ownedWriter) Write(p []byte) (int, error) {
+	if w.closed.Load() {
+		return 0, ErrClosed
+	}
+	return w.Writer.Write(p)
+}
+
 // release satisfies the releasable interface retireWriter looks for.
 func (w *ownedWriter) release() {
-	w.once.Do(func() { _ = w.closer.Close() })
+	w.once.Do(func() {
+		w.closed.Store(true)
+		_ = w.closer.Close()
+	})
 }
 
 // sameWriter reports whether a and b are the same writer.
@@ -97,14 +114,37 @@ func retireWriter(old, keep io.Writer) error {
 	return err
 }
 
-// clearNativeLog drops the NativeLog flag from the configuration snapshot
-// after a writer method installed an explicit destination. Without this a
-// Config() round-trip through SetConfig would silently re-enable the system
-// log the caller had just replaced.
-func (l *Logger) clearNativeLog() {
-	if l.config.Load().nativeLog {
-		l.updateConfig(func(cfg *loggerConfig) { cfg.nativeLog = false })
+// installedDestination records in the configuration snapshot that a writer
+// method installed w as the explicit destination, so a Config() round-trip
+// through SetConfig reproduces it instead of resurrecting whatever it
+// replaced. NativeLog and SyslogHost are cleared because SetConfig gives them
+// precedence over Writer; the writer mode follows the installed wrapper so the
+// round-trip keeps queueing; and colour is re-detected against the new
+// destination, because detection is only meaningful for the writer actually in
+// use. Called under writer.mu so the snapshot and the active routing are never
+// observed disagreeing.
+func (l *Logger) installedDestination(w io.Writer, mode WriterMode) {
+	inner := w
+	aw, async := w.(*asyncWriter)
+	if async {
+		inner = aw.out
 	}
+	l.updateConfig(func(cfg *loggerConfig) {
+		cfg.nativeLog = false
+		cfg.syslogHost = ""
+		if async {
+			if mode == WriterSync {
+				// SetWriter(GetWriter()) installs the live queue as it is
+				mode = WriterAsync
+			}
+			cfg.writerMode = mode
+			cfg.bufferSize = cap(aw.ch)
+			cfg.overflowPolicy = aw.policy
+		} else {
+			cfg.writerMode = WriterSync
+		}
+		cfg.color = cfg.effectiveColor(inner)
+	})
 }
 
 // nativeSeverity abstracts platform-native severity levels so the level

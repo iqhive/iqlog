@@ -131,7 +131,7 @@ func consoleEscapeLen(b []byte, i int) int {
 // nothing; doing that a byte at a time is the dominant cost on long lines.
 // Eight bytes are tested at once instead, with the classic word tests for "a
 // lane below 0x20" and "a lane equal to" 0x7f, 0xC2, or in 0x80-0x9F (the
-// latter via "high bit set and top three bits clear"). All four can
+// latter via "bit 7 set, bits 6 and 5 clear"). The first three can
 // over-report -- a borrow between lanes, a tab, or a 0xC2 that does not begin
 // a C1 sequence -- so a word that tests positive is rechecked a byte at a
 // time. None of them can under-report, which is what makes the fast path safe
@@ -139,16 +139,7 @@ func consoleEscapeLen(b []byte, i int) int {
 func indexConsoleEscape(b []byte) int {
 	i := 0
 	for ; i+8 <= len(b); i += 8 {
-		w := binary.LittleEndian.Uint64(b[i:])
-		del := w ^ (swarLo * 0x7f)
-		lead := w ^ (swarLo * 0xc2)
-		// 0x80-0x9F: high bit set, top three bits clear.
-		hi := w & swarHi
-		c1 := hi &^ ((w & (swarLo * 0x60)) | (hi >> 1) | (hi >> 2))
-		if (w-swarLo*0x20)&^w&swarHi == 0 &&
-			(del-swarLo)&^del&swarHi == 0 &&
-			(lead-swarLo)&^lead&swarHi == 0 &&
-			c1 == 0 {
+		if !consoleWordSuspect(binary.LittleEndian.Uint64(b[i:])) {
 			continue
 		}
 		for j := i; j < i+8; j++ {
@@ -163,6 +154,24 @@ func indexConsoleEscape(b []byte) int {
 		}
 	}
 	return -1
+}
+
+// consoleWordSuspect is the word-at-a-time test behind indexConsoleEscape:
+// it reports whether any lane of w might hold a byte consoleEscapeLen
+// rejects. It may over-report (borrows, tab, a stray 0xC2) but never
+// under-reports, and for a word with a single suspect byte it is exact.
+func consoleWordSuspect(w uint64) bool {
+	del := w ^ (swarLo * 0x7f)
+	lead := w ^ (swarLo * 0xc2)
+	// 0x80-0x9F: bit 7 set, bits 6 and 5 clear. The shifts move each lane's
+	// bits 6 and 5 up into its bit 7 to clear hi there; what they spill into
+	// the next lane lands in bits 0-1, where hi is zero.
+	hi := w & swarHi
+	c1 := hi &^ ((w << 1) | (w << 2))
+	return (w-swarLo*0x20)&^w&swarHi != 0 ||
+		(del-swarLo)&^del&swarHi != 0 ||
+		(lead-swarLo)&^lead&swarHi != 0 ||
+		c1 != 0
 }
 
 // appendConsoleEscaped appends src to dst with everything consoleEscapeLen
@@ -210,7 +219,9 @@ func escapeConsoleTail(dst []byte, from int) []byte {
 // Bytes before prefixLen are the record envelope this package generated, so
 // they are left alone -- they legitimately contain the ANSI colour sequences
 // the console encoder emits. Returns the input unchanged when no escaping is
-// needed.
+// needed; otherwise the escaped copy is built in a buffer from the event
+// buffer pool, and the caller returns it there (or hands it to the async
+// writer, which does) so a stream of such records does not allocate.
 func sanitizeConsoleLine(line []byte, prefixLen int) []byte {
 	end := len(line)
 	if end > 0 && line[end-1] == '\n' {
@@ -224,8 +235,7 @@ func sanitizeConsoleLine(line []byte, prefixLen int) []byte {
 		return line
 	}
 	first += prefixLen
-	out := make([]byte, 0, len(line)+16)
-	out = append(out, line[:first]...)
+	out := append(acquireEventBuffer(), line[:first]...)
 	out = appendConsoleEscaped(out, line[first:end])
 	return append(out, line[end:]...)
 }

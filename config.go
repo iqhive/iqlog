@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"net"
 	"os"
 	"reflect"
 	"strings"
@@ -82,7 +83,9 @@ type Config struct {
 	JSONTimeMode JSONTimeMode
 	CallerDepth  int
 	// Color forces ANSI colors for console output. Terminal writers are
-	// detected automatically unless DisableColor is set.
+	// detected automatically unless DisableColor is set; Config reports the
+	// forced value, not the detected one, so a round-trip does not turn a
+	// detected terminal into a forced colour on a later, redirected writer.
 	Color bool
 	// DisableColor disables ANSI colors, including automatic terminal colors.
 	DisableColor    bool
@@ -103,13 +106,17 @@ type Config struct {
 }
 
 type loggerConfig struct {
-	format           Format
-	level            Level
-	includeTime      bool
-	timestampLayout  string
-	jsonTimeMode     JSONTimeMode
-	callerDepth      int
+	format          Format
+	level           Level
+	includeTime     bool
+	timestampLayout string
+	jsonTimeMode    JSONTimeMode
+	callerDepth     int
+	// color is the effective setting the console encoder reads: forced by
+	// colorForced, or detected on the destination when nothing overrides it.
+	// colorForced is what Config.Color asked for and what Config() reports.
 	color            bool
+	colorForced      bool
 	disableColor     bool
 	applicationName  string
 	syslogHost       string
@@ -128,24 +135,18 @@ func normalizeConfig(cfg Config) Config {
 	if cfg.Format == FormatJSON {
 		cfg.IncludeTime = cfg.JSONTimeMode != JSONTimeDisabled
 	}
-	if cfg.Format == FormatConsole && !cfg.DisableColor && !cfg.NativeLog && terminalWriter(cfg.Writer) {
-		cfg.Color = true
-	}
-	if cfg.DisableColor {
-		cfg.Color = false
-	}
-	if cfg.Level == LevelUnknown {
-		cfg.Level = LevelInfo
-	}
+	cfg.Level = clampLevel(cfg.Level)
 	if cfg.Writer == nil {
 		cfg.Writer = os.Stderr
 	}
-	if cfg.Format == FormatJSON && cfg.JSONTimeMode == JSONTimeCustom {
-		// Custom layouts are passed directly to time.Time.AppendFormat.
-	} else if cfg.TimestampLayout == "" {
-		cfg.TimestampLayout = defaultConsoleTimestampLayout
-	} else {
+	// The convenience names are resolved for every mode; a real Go layout
+	// passes through normalizeTimestampLayout unchanged. Only the default is
+	// mode-specific: a custom JSON timestamp has no default layout (validation
+	// requires one), while the console default is the fixed-width fast path.
+	if cfg.TimestampLayout != "" {
 		cfg.TimestampLayout = normalizeTimestampLayout(cfg.TimestampLayout)
+	} else if !(cfg.Format == FormatJSON && cfg.JSONTimeMode == JSONTimeCustom) {
+		cfg.TimestampLayout = defaultConsoleTimestampLayout
 	}
 	if cfg.BufferSize == 0 {
 		cfg.BufferSize = 1000
@@ -188,11 +189,30 @@ func validateConfig(cfg Config) error {
 }
 
 func nilWriter(w io.Writer) bool {
-	if w == nil {
-		return true
+	return w == nil || isNilPointer(w)
+}
+
+// isNilPointer reports whether v is a non-nil interface holding a nil
+// pointer. Calling a method through such a value dereferences nil inside the
+// method, so the encoders treat it as the nil it is. The reflect calls do not
+// allocate for a pointer value, and every caller checks for an untyped nil
+// first so the common path pays nothing.
+func isNilPointer(v any) bool {
+	rv := reflect.ValueOf(v)
+	return rv.Kind() == reflect.Pointer && rv.IsNil()
+}
+
+// effectiveColor reports whether console records should carry ANSI colour
+// when dest is the destination: DisableColor wins, a forced Color is
+// honoured, and otherwise a terminal destination is detected. Detection is
+// only meaningful for the writer actually in use, so callers pass the syslog
+// connection or native handle rather than Config.Writer when those are
+// selected; neither is a terminal, so the record stays plain.
+func (cfg *loggerConfig) effectiveColor(dest io.Writer) bool {
+	if cfg.disableColor {
+		return false
 	}
-	v := reflect.ValueOf(w)
-	return v.Kind() == reflect.Pointer && v.IsNil()
+	return cfg.colorForced || (cfg.format == FormatConsole && terminalWriter(dest))
 }
 
 // updateConfig applies update to a fresh copy of the configuration snapshot
@@ -216,7 +236,10 @@ func (l *Logger) setConfig(input Config) error {
 		return errNilWriter
 	}
 	cfg := normalizeConfig(input)
-	configured := cfg.Writer
+	// A queue wrapper handed back in through GetWriter is unwrapped: it is
+	// about to be retired below, and the mode requested by cfg decides whether
+	// the destination underneath gets a fresh queue.
+	configured := unwrapAsync(cfg.Writer)
 	if cfg.SyslogHost != "" && !cfg.NativeLog {
 		var err error
 		configured, err = prepareSyslog(cfg.SyslogHost, cfg.ApplicationName)
@@ -243,6 +266,10 @@ func (l *Logger) setConfig(input Config) error {
 	case WriterRing:
 		active = newAsyncWriter(configured, cfg.BufferSize, cfg.OverflowPolicy, l.queueError, &l.writer.writeMu)
 	}
+	snapshot := cfg.snapshot()
+	// Colour is detected on the destination actually written to, so a
+	// process started from a terminal does not colour its syslog datagrams.
+	snapshot.color = snapshot.effectiveColor(configured)
 	l.writer.mu.Lock()
 	if l.writer.closed.Load() {
 		l.writer.mu.Unlock()
@@ -253,11 +280,15 @@ func (l *Logger) setConfig(input Config) error {
 	concurrent := cfg.ConcurrentWriter || configured == io.Discard || cfg.WriterMode != WriterSync
 	l.writer.active.Store(&outputState{out: active, configured: configured, concurrent: concurrent, native: native})
 	l.cfgMu.Lock()
-	l.config.Store(cfg.snapshot())
+	l.config.Store(snapshot)
 	l.level.Store(int32(cfg.Level))
 	l.cfgMu.Unlock()
+	// The previous writer is drained while writer.mu is still held, so a
+	// concurrent Flush observes the new writer only after the records accepted
+	// by the old one have been written.
+	err := retireWriter(old.out, configured)
 	l.writer.mu.Unlock()
-	return retireWriter(old.out, configured)
+	return err
 }
 
 func (l *Logger) queueError(err error) {
@@ -276,7 +307,7 @@ func (l *Logger) Config() Config {
 		ConcurrentWriter: cfg.concurrentWriter,
 		EscapeFieldNames: cfg.escapeFieldNames,
 		IncludeTime:      cfg.includeTime, TimestampLayout: cfg.timestampLayout, JSONTimeMode: cfg.jsonTimeMode,
-		CallerDepth: cfg.callerDepth, Color: cfg.color, DisableColor: cfg.disableColor,
+		CallerDepth: cfg.callerDepth, Color: cfg.colorForced, DisableColor: cfg.disableColor,
 		ApplicationName: cfg.applicationName, SyslogHost: cfg.syslogHost, NativeLog: cfg.nativeLog,
 		ContextExtractor: cfg.contextExtractor, ExitFunc: cfg.exitFunc, Now: cfg.now,
 		WriterMode: cfg.writerMode, BufferSize: cfg.bufferSize, OverflowPolicy: cfg.overflowPolicy,
@@ -285,6 +316,19 @@ func (l *Logger) Config() Config {
 
 // SetConfig atomically replaces formatting configuration and then replaces the writer.
 func (l *Logger) SetConfig(cfg Config) error { return l.setConfig(cfg) }
+
+// syslogAddr gives a bare host the default syslog port. Bare IPv6 literals
+// contain colons themselves, so the check is a real host:port split rather
+// than a search for ':'.
+func syslogAddr(host string) string {
+	if host == "" {
+		return host
+	}
+	if _, _, err := net.SplitHostPort(host); err == nil {
+		return host
+	}
+	return net.JoinHostPort(strings.Trim(host, "[]"), "514")
+}
 
 func normalizeTimestampLayout(layout string) string {
 	switch strings.ToLower(layout) {
@@ -309,7 +353,8 @@ func (cfg Config) snapshot() *loggerConfig {
 		timestampLayout:  cfg.TimestampLayout,
 		jsonTimeMode:     cfg.JSONTimeMode,
 		callerDepth:      cfg.CallerDepth,
-		color:            cfg.Color,
+		color:            cfg.Color && !cfg.DisableColor,
+		colorForced:      cfg.Color,
 		disableColor:     cfg.DisableColor,
 		applicationName:  cfg.ApplicationName,
 		syslogHost:       cfg.SyslogHost,
@@ -338,8 +383,11 @@ func appendTimestamp(dst []byte, now time.Time, cfg *loggerConfig, jsonMode bool
 		return append(dst, `",`...)
 	}
 	if cfg.timestampLayout == defaultConsoleTimestampLayout {
+		start := len(dst)
 		dst = append(dst, make([]byte, 29)...)
-		addTimeConsoleInPlaceCopy(now, dst[len(dst)-29:])
+		if addTimeConsoleInPlaceCopy(now, dst[start:]) == 0 {
+			return appendConsoleTimestampSlow(dst[:start], now)
+		}
 		return dst
 	}
 	dst = append(dst, '[')
@@ -354,7 +402,31 @@ func appendTimestamp(dst []byte, now time.Time, cfg *loggerConfig, jsonMode bool
 func appendDefaultJSONTimestamp(dst []byte, now time.Time) []byte {
 	start := len(dst)
 	dst = append(dst, make([]byte, 37)...)
-	addTimeJSONInPlaceCopy(now, dst[start:])
+	if addTimeJSONInPlaceCopy(now, dst[start:]) == 0 {
+		return appendJSONTimestampSlow(dst[:start], now)
+	}
 	dst = dst[:len(dst)-2]
 	return append(dst, 'Z', '"', ',')
+}
+
+// defaultJSONTimestampLayout is what the fixed-width JSON fast path emits,
+// for the fallback that handles years outside 0-9999.
+const defaultJSONTimestampLayout = "2006-01-02T15:04:05.000000Z07:00"
+
+// appendConsoleTimestampSlow is the default console timestamp for a year the
+// fixed-width encoder cannot represent: the same layout, through the general
+// formatter, which widens or signs the year as needed.
+func appendConsoleTimestampSlow(dst []byte, now time.Time) []byte {
+	dst = append(dst, '[')
+	dst = now.AppendFormat(dst, defaultConsoleTimestampLayout)
+	return append(dst, ']', ' ')
+}
+
+// appendJSONTimestampSlow is the JSONTimeUTC timestamp for a year the
+// fixed-width encoder cannot represent. now is already in UTC, so the zone
+// suffix renders as Z.
+func appendJSONTimestampSlow(dst []byte, now time.Time) []byte {
+	dst = append(dst, `{"time":"`...)
+	dst = now.AppendFormat(dst, defaultJSONTimestampLayout)
+	return append(dst, '"', ',')
 }

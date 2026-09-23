@@ -4,9 +4,15 @@ import (
 	"time"
 )
 
+// addTimeConsoleInPlaceCopy writes the fixed-width console timestamp into
+// output and returns its length, or 0 when the year does not fit four
+// digits, in which case the caller falls back to time.AppendFormat.
 func addTimeConsoleInPlaceCopy(timeNow time.Time, output []byte) int {
 
 	year, month, day := timeNow.Date()
+	if uint(year) > 9999 {
+		return 0
+	}
 	hour, min, sec := timeNow.Clock()
 	usec := timeNow.Nanosecond() / 1000
 
@@ -288,9 +294,15 @@ func addTimeConsoleInPlaceCopy(timeNow time.Time, output []byte) int {
 
 // }
 
+// addTimeJSONInPlaceCopy writes the fixed-width JSON timestamp prefix into
+// output and returns its length, or 0 when the year does not fit four
+// digits, in which case the caller falls back to time.AppendFormat.
 func addTimeJSONInPlaceCopy(timeNow time.Time, output []byte) int {
 
 	year, month, day := timeNow.Date()
+	if uint(year) > 9999 {
+		return 0
+	}
 	hour, min, sec := timeNow.Clock()
 	usec := timeNow.Nanosecond() / 1000
 
