@@ -243,21 +243,42 @@ func (bsl *Event) Any(name string, v any) *Event {
 // recognised: encoding/json in JSON mode, fmt in console mode. The key has
 // already been written.
 //
-// encoding/json runs first in both modes. Besides producing the JSON
-// encoding it refuses a self-referential slice or map with an error, whereas
-// fmt's %v would recurse through one until the goroutine stack overflows and
-// the runtime aborts the process. A value it rejects is therefore reported as
-// an error text, the way slog.JSONHandler reports it, and never handed to
-// fmt. This is the reflective slow path; the typed field methods never reach
-// it.
+// A struct of primitive fields is encoded by its plan (see any_encode.go),
+// which produces json.Marshal's bytes without its reflective walk or result
+// allocation. Such a struct cannot be self-referential, so in console mode
+// it goes straight to fmt once its floats are known to be finite.
+//
+// Otherwise encoding/json runs first in both modes, through a pooled encoder
+// that appends into the record. Besides producing the JSON encoding it
+// refuses a self-referential slice or map with an error, whereas fmt's %v
+// would recurse through one until the goroutine stack overflows and the
+// runtime aborts the process. A value it rejects is therefore reported as an
+// error text, the way slog.JSONHandler reports it, and never handed to fmt.
+// This is the reflective slow path; the typed field methods never reach it.
 func (bsl *Event) appendGenericValue(v any) {
-	encoded, err := json.Marshal(v)
+	if p := structPlanFor(v); p != nil {
+		if bsl.jsonMode {
+			if out, ok := p.appendJSON(bsl.output, v); ok {
+				bsl.output = out
+				return
+			}
+		} else if p.finite(v) {
+			bsl.output = fmt.Appendf(bsl.output, "%v", v)
+			bsl.output = append(bsl.output, ' ')
+			return
+		}
+		// a NaN or Inf: encoding/json refuses it and words the error
+	}
+	start := len(bsl.output)
+	encoded, err := appendMarshalJSON(bsl.output, v)
 	if err != nil {
+		bsl.output = encoded[:start]
 		bsl.appendUnencodable(err)
 		return
 	}
 	if !bsl.jsonMode {
-		bsl.output = fmt.Appendf(bsl.output, "%v", v)
+		// the encoding was only the cycle guard; the console shows fmt's form
+		bsl.output = fmt.Appendf(encoded[:start], "%v", v)
 		bsl.output = append(bsl.output, ' ')
 		return
 	}
@@ -265,11 +286,11 @@ func (bsl *Event) appendGenericValue(v any) {
 	// does not check it, and passing it through would make the whole
 	// record ill-formed. Fall back to the escaped text form, which
 	// substitutes U+FFFD.
-	if utf8.Valid(encoded) {
-		bsl.output = append(bsl.output, encoded...)
+	if utf8.Valid(encoded[start:]) {
+		bsl.output = encoded
 		return
 	}
-	bsl.output = append(bsl.output, '"')
+	bsl.output = append(encoded[:start], '"')
 	bsl.output = appendJSONEscaped(bsl.output, fmt.Sprintf("%v", v))
 	bsl.output = append(bsl.output, '"')
 }

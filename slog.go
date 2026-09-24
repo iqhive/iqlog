@@ -39,7 +39,9 @@ var _ slog.Handler = (*slogHandler)(nil)
 //     live stack, skipping the Go runtime and the log and log/slog front ends,
 //     so the caller is reported when it falls within the bounded scan window.
 //     Caller output never includes frames
-//     from iqlog or its legacy package family.
+//     from iqlog or its legacy package family. A call site's resolved caller
+//     is remembered on the pooled event, so a hot call site pays for the
+//     symbol lookup once rather than on every record.
 //   - LogValuer values are resolved, in WithAttrs as well as in records.
 //     Attributes with an empty key and an empty value are dropped.
 //
@@ -110,8 +112,21 @@ func slogLevelToIQ(l slog.Level) Level {
 	}
 }
 
+// Enabled is called by slog before every record, so it is kept free of calls:
+// with nothing to call, the compiler emits it as a leaf without a stack check
+// or frame. That is why the unbound handler reads the default logger directly
+// rather than through Default(): when nothing has built the default yet,
+// Default() would build it at the default minimum level and open, so the
+// answer is known without building it here. Handle builds it on the first
+// record that is enabled.
 func (h *slogHandler) Enabled(_ context.Context, level slog.Level) bool {
-	return h.logger().Enabled(slogLevelToIQ(level))
+	l := h.log
+	if l == nil {
+		if l = defaultLogger.Load(); l == nil {
+			return defaultLevel <= slogLevelToIQ(level)
+		}
+	}
+	return l.Enabled(slogLevelToIQ(level))
 }
 
 func (h *slogHandler) WithGroup(name string) slog.Handler {
@@ -161,26 +176,47 @@ func preEncodeSlogAttrs(l *Logger, cfg *loggerConfig, jsonMode bool, existing []
 
 func (h *slogHandler) Handle(ctx context.Context, r slog.Record) error {
 	l := h.logger()
-	level := slogLevelToIQ(r.Level)
-	if !l.Enabled(level) {
+	// Enabled is not consulted here: its level test is the gate
+	// newEventContextAt applies anyway, and paying it twice per record was
+	// measurable. Only the closed check it adds is kept.
+	if l.writer.closed.Load() {
 		return nil
 	}
-	origin := eventOrigin{pc: r.PC, when: r.Time, explicitTime: true, fallback: true}
-	e := l.newEventContextAt(ctx, level, &origin)
+	// Assigned field by field: a composite literal whose address is taken
+	// is built in a temporary and copied into place.
+	var origin eventOrigin
+	origin.pc = r.PC
+	origin.when = r.Time
+	origin.explicitTime = true
+	origin.fallback = true
+	e := l.newEventContextAt(ctx, slogLevelToIQ(r.Level), &origin)
 	if e == nil {
 		return nil
 	}
 	if e.jsonMode {
-		e.output = append(e.output, h.preJSON...)
-	} else {
+		if len(h.preJSON) != 0 {
+			e.output = append(e.output, h.preJSON...)
+		}
+	} else if len(h.preConsole) != 0 {
 		e.output = append(e.output, h.preConsole...)
 	}
+	// Captured as values so the inlined closure does not reload them from
+	// the handler on every attribute.
+	prefix, prefixEscape := h.prefix, h.prefixEscape
 	r.Attrs(func(a slog.Attr) bool {
-		writeSlogAttr(e, h.prefix, h.prefixEscape, a)
+		writeSlogAttr(e, prefix, prefixEscape, a)
 		return true
 	})
 	err := e.buildErr
-	e.Msg(r.Message)
+	// The record is finished directly rather than through Msg: no slog
+	// level maps to Fatal or Panic, so the event is never a disabled
+	// terminal one, and it is fresh, so it cannot have been consumed. Those
+	// are the only checks Msg adds.
+	if e.jsonMode {
+		e.writeFinalJSON(r.Message)
+	} else {
+		e.writeFinalConsole(r.Message)
+	}
 	if err == nil {
 		err = h.preErr
 	}
@@ -188,11 +224,20 @@ func (h *slogHandler) Handle(ctx context.Context, r slog.Record) error {
 }
 
 // writeSlogAttr appends one attribute under prefix, flattening groups into
-// dotted keys. Values are resolved first so a LogValuer that yields a group
-// is flattened like any other group.
+// dotted keys. A LogValuer is resolved first so one that yields a group is
+// flattened like any other group.
+//
+// Value.Kind is a type switch and Value.Resolve installs a deferred recover
+// for a panicking LogValue, so the kind is taken once and Resolve runs only
+// for the values that need it; every other kind goes straight to its encoder.
 func writeSlogAttr(e *Event, prefix string, prefixEscape bool, a slog.Attr) {
-	v := a.Value.Resolve()
-	if v.Kind() == slog.KindGroup {
+	v := a.Value
+	kind := v.Kind()
+	if kind == slog.KindLogValuer {
+		v = v.Resolve()
+		kind = v.Kind()
+	}
+	if kind == slog.KindGroup {
 		attrs := v.Group()
 		if len(attrs) == 0 {
 			return
@@ -216,41 +261,59 @@ func writeSlogAttr(e *Event, prefix string, prefixEscape bool, a slog.Attr) {
 	if a.Key == "" && v.Equal(slog.Value{}) {
 		return
 	}
-	e.appendSlogKey(prefix, prefixEscape, a.Key)
-	appendSlogValue(e, a.Key, v)
-}
 
-// appendSlogKey writes a field key made of the group prefix and name. A
-// dotted key can never collide with the record envelope, so the reserved
-// name check runs only when there is no prefix.
-func (e *Event) appendSlogKey(prefix string, prefixEscape bool, name string) {
+	// The key is the group prefix and the attribute name. A dotted key can
+	// never collide with the record envelope, so the reserved name check
+	// runs only when there is no prefix. It is written here rather than by
+	// a helper to keep one call off every attribute; the slice header is
+	// kept in a local across the appends for the same reason, since through
+	// e it would be stored and reloaded around every call in between.
+	name := a.Key
 	if prefix == "" {
 		name = eventFieldName(name)
 	}
+	out := e.output
 	if !e.jsonMode {
-		e.output = append(e.output, prefix...)
-		e.output = append(e.output, name...)
-		e.output = append(e.output, '=')
-		return
-	}
-	e.output = append(e.output, ',', '"')
-	if e.config.escapeFieldNames || prefixEscape || jsonKeyNeedsEscaping(name) {
-		e.output = appendJSONEscaped(e.output, prefix)
-		e.output = appendJSONEscaped(e.output, name)
+		out = append(out, prefix...)
+		out = append(out, name...)
+		e.output = append(out, '=')
 	} else {
-		e.output = append(e.output, prefix...)
-		e.output = append(e.output, name...)
+		out = append(out, ',', '"')
+		if e.config.escapeFieldNames || prefixEscape || jsonKeyNeedsEscaping(name) {
+			out = appendJSONEscaped(out, prefix)
+			out = appendJSONEscaped(out, name)
+		} else {
+			// Most records have no group, and an append of nothing still
+			// costs a memmove call.
+			if prefix != "" {
+				out = append(out, prefix...)
+			}
+			out = append(out, name...)
+		}
+		e.output = append(out, '"', ':')
 	}
-	e.output = append(e.output, '"', ':')
+	appendSlogValue(e, a.Key, kind, v)
 }
 
-// appendSlogValue writes a resolved, non-group value after its key, using the
-// same encodings as the typed event methods. key only names the field in a
-// build error.
-func appendSlogValue(e *Event, key string, v slog.Value) {
-	switch v.Kind() {
+// appendSlogValue writes a resolved, non-group value of the given kind after
+// its key, using the same encodings as the typed event methods. key only
+// names the field in a build error.
+func appendSlogValue(e *Event, key string, kind slog.Kind, v slog.Value) {
+	switch kind {
 	case slog.KindString:
-		e.appendSlogString(v.String())
+		// Written in place rather than through appendSlogString: strings
+		// are the commonest kind, and the helper is just over the inlining
+		// budget.
+		s := v.String()
+		out := e.output
+		if e.jsonMode {
+			out = append(out, '"')
+			out = appendJSONEscaped(out, s)
+			e.output = append(out, '"')
+		} else {
+			out = append(out, s...)
+			e.output = append(out, ' ')
+		}
 	case slog.KindInt64:
 		e.output = strconv.AppendInt(e.output, v.Int64(), 10)
 		e.endSlogValue()
@@ -319,14 +382,15 @@ func appendSlogAny(e *Event, key string, v any) {
 }
 
 func (e *Event) appendSlogString(s string) {
+	out := e.output
 	if e.jsonMode {
-		e.output = append(e.output, '"')
-		e.output = appendJSONEscaped(e.output, s)
-		e.output = append(e.output, '"')
+		out = append(out, '"')
+		out = appendJSONEscaped(out, s)
+		e.output = append(out, '"')
 		return
 	}
-	e.output = append(e.output, s...)
-	e.output = append(e.output, ' ')
+	out = append(out, s...)
+	e.output = append(out, ' ')
 }
 
 // endSlogValue closes a console value; JSON values need nothing.

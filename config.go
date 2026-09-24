@@ -102,7 +102,12 @@ type Config struct {
 	BufferSize       int
 	OverflowPolicy   OverflowPolicy
 	ExitFunc         func(int)
-	Now              func() time.Time
+	// Now is the clock records are stamped from; nil means time.Now. With
+	// time.Now, the two fixed-width timestamps (JSONTimeUTC and the default
+	// console layout) take a single reading of the wall clock per record
+	// rather than time.Now's two. Any other function, including a closure
+	// around time.Now, is called for every record.
+	Now func() time.Time
 }
 
 type loggerConfig struct {
@@ -124,6 +129,15 @@ type loggerConfig struct {
 	contextExtractor func(context.Context) map[string]any
 	exitFunc         func(int)
 	now              func() time.Time
+	// fastClock is set when every record this configuration stamps can take
+	// the single-read wall clock (wallClock, in clock_linux_amd64.go and
+	// clock_other.go): the clock is time.Now itself and the timestamp is one
+	// of the two fixed-width microsecond encoders, JSONTimeUTC or the
+	// default console layout. Any other layout or clock calls now for every
+	// record. It is derived from the other fields by usesFastClock, in
+	// snapshot and again in updateConfig, because the format and time mode
+	// can change after the snapshot is built.
+	fastClock        bool
 	writerMode       WriterMode
 	bufferSize       int
 	overflowPolicy   OverflowPolicy
@@ -218,11 +232,14 @@ func (cfg *loggerConfig) effectiveColor(dest io.Writer) bool {
 // updateConfig applies update to a fresh copy of the configuration snapshot
 // and publishes it. The level fast path is republished from the same snapshot
 // under cfgMu so a concurrent updateConfig or setConfig cannot leave
-// Logger.level and loggerConfig.level disagreeing.
+// Logger.level and loggerConfig.level disagreeing. fastClock is derived from
+// fields update may have changed (SetJSONTimeMode rewrites the format and
+// time mode), so it is recomputed rather than carried over from the copy.
 func (l *Logger) updateConfig(update func(*loggerConfig)) {
 	l.cfgMu.Lock()
 	next := *l.config.Load()
 	update(&next)
+	next.fastClock = next.usesFastClock()
 	l.config.Store(&next)
 	l.level.Store(int32(next.level))
 	l.cfgMu.Unlock()
@@ -346,7 +363,7 @@ func normalizeTimestampLayout(layout string) string {
 }
 
 func (cfg Config) snapshot() *loggerConfig {
-	return &loggerConfig{
+	snapshot := &loggerConfig{
 		format:           cfg.Format,
 		level:            cfg.Level,
 		includeTime:      cfg.IncludeTime,
@@ -368,6 +385,32 @@ func (cfg Config) snapshot() *loggerConfig {
 		concurrentWriter: cfg.ConcurrentWriter,
 		escapeFieldNames: cfg.EscapeFieldNames,
 	}
+	snapshot.fastClock = snapshot.usesFastClock()
+	return snapshot
+}
+
+// usesFastClock reports whether every record stamped under cfg can take the
+// single-read wall clock: the clock is time.Now itself and the timestamp in
+// use is a fixed-width microsecond encoder. A custom layout may ask for more
+// than the microsecond that clock reads, so it always calls now.
+func (cfg *loggerConfig) usesFastClock() bool {
+	if !cfg.includeTime || !isPackageClock(cfg.now) {
+		return false
+	}
+	if cfg.format == FormatJSON {
+		return cfg.jsonTimeMode == JSONTimeUTC
+	}
+	return cfg.timestampLayout == defaultConsoleTimestampLayout
+}
+
+// isPackageClock reports whether now is time.Now itself: what an unset
+// Config.Now normalizes to, and what Config() reports back for it, so the
+// fast clock survives a configuration round trip. Any other function,
+// including a closure around time.Now, is a caller's clock and is called as
+// given; that is also the opt-out for anyone who wants every record to pay
+// for a full time.Now.
+func isPackageClock(now func() time.Time) bool {
+	return now == nil || reflect.ValueOf(now).Pointer() == reflect.ValueOf(time.Now).Pointer()
 }
 
 func appendTimestamp(dst []byte, now time.Time, cfg *loggerConfig, jsonMode bool) []byte {

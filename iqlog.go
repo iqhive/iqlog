@@ -147,7 +147,12 @@ func (l *Logger) writeRecord(line []byte, level Level) bool {
 	if err == nil && n != len(line) {
 		err = io.ErrShortWrite
 	}
-	l.recordWriteErr(err)
+	// recordWriteErr is a no-op for nil but too large to inline, so the
+	// call is skipped for the record that was written cleanly, which is
+	// every record on a healthy writer.
+	if err != nil {
+		l.recordWriteErr(err)
+	}
 	return false
 }
 
@@ -170,7 +175,9 @@ func (l *Logger) writeNativeRecord(native nativeLogWriter, line []byte, level Le
 	if err == nil && n != len(line) {
 		err = io.ErrShortWrite
 	}
-	l.recordWriteErr(err)
+	if err != nil {
+		l.recordWriteErr(err)
+	}
 	return false
 }
 

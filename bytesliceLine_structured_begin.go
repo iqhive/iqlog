@@ -74,44 +74,56 @@ func (l *Logger) newEventContextAt(ctx context.Context, level Level, origin *eve
 	e.captureCaller = cfg.callerDepth
 	e.exitAfterWrite = level == LevelFatal
 	e.panicAfterWrite = level == LevelPanic
-	// Writing into callerData invalidates the timestamp cache that shares
-	// its buffer, so timeSecond is reset on exactly the paths that write.
 	if origin != nil {
 		e.captureCaller = 0
 		if origin.function != "" {
-			e.timeSecond = invalidTimestampSecond
 			e.captureCaller = 1
+			// explicit text overwrites whatever PC resolution was remembered
+			e.callerData.pc = 0
 			e.callerData.callerFuncLen = uint(copy(e.callerData.callerFunc[:], origin.function))
 			e.callerData.callerFileLen = uint(copy(e.callerData.callerFile[:], origin.file))
 		} else if origin.pc != 0 && cfg.callerDepth > 0 {
-			e.timeSecond = invalidTimestampSecond
 			e.captureCaller = 1
 			captureCallerPC(origin.pc, cfg.callerDepth, &e.callerData)
 		} else if origin.fallback && cfg.callerDepth > 0 {
-			e.timeSecond = invalidTimestampSecond
 			e.captureCaller = 1
 			captureCallerScan(cfg.callerDepth, &e.callerData)
 		}
 	} else if cfg.callerDepth > 0 {
-		e.timeSecond = invalidTimestampSecond
 		captureCallerScan(cfg.callerDepth, &e.callerData)
 	}
-	var now time.Time
+	// The timestamp opens the record for every encoder, so it is written
+	// before the level and caller. The clock is read as late as possible,
+	// after the caller scan.
 	if e.includeTime {
 		if origin != nil && origin.explicitTime {
 			if origin.when.IsZero() {
 				e.includeTime = false
 			} else {
-				now = origin.when
+				e.writeTimestamp(origin.when)
+			}
+		} else if cfg.fastClock {
+			// One reading of the wall clock, written here rather than
+			// through a helper so the stamp costs no extra frame. fastClock
+			// guarantees the encoder is one of the two fixed-width
+			// microsecond layouts, which is all the reading resolves.
+			sec, usec := wallClock()
+			if e.jsonMode {
+				e.writeJSONTimestampMicros(sec, usec)
+			} else {
+				// time.Unix builds a Local time without allocating, so the
+				// console encoder keeps the clock's own zone exactly as it
+				// does for time.Now
+				e.output = appendTimestamp(e.output, time.Unix(sec, usec*1000), cfg, false)
 			}
 		} else {
-			now = cfg.now()
+			e.writeTimestamp(cfg.now())
 		}
 	}
 	if e.jsonMode {
-		e.writeInitialJSON(level, now)
+		e.writeInitialJSON(level)
 	} else {
-		e.writeInitialConsole(level, now)
+		e.writeInitialConsole(level)
 	}
 	for _, field := range l.fields {
 		addField(e, field.key, field.value)
@@ -140,32 +152,40 @@ func (l *Logger) EventAt(level Level, function, file string) *Event {
 	return l.newEventContextAt(l.ctx, normalizeLevel(level), &eventOrigin{function: function, file: file})
 }
 
+// The gated constructors below are shaped to stay within the compiler's
+// inlining budget (TestGateConstructorsInline guards this): the level is
+// compared as the raw int32 the atomic holds, and the enabled path calls
+// newEventContextAt directly rather than through the newEvent wrappers, whose
+// inlined bodies would push the cost over the limit. With the constructor
+// inlined, a disabled call is a load and a compare in the caller's own frame
+// with no call at all, and an enabled call reaches newEventContextAt one
+// frame sooner. The result is identical to Level(l.level.Load()) > level.
 func (l *Logger) TraceEvent() *Event {
-	if Level(l.level.Load()) > LevelTrace {
+	if l.level.Load() > int32(LevelTrace) {
 		return nil
 	}
-	return l.newEvent(LevelTrace)
+	return l.newEventContextAt(l.ctx, LevelTrace, nil)
 }
 func (l *Logger) DebugEvent() *Event {
-	if Level(l.level.Load()) > LevelDebug {
+	if l.level.Load() > int32(LevelDebug) {
 		return nil
 	}
-	return l.newEvent(LevelDebug)
+	return l.newEventContextAt(l.ctx, LevelDebug, nil)
 }
 func (l *Logger) InfoEvent() *Event {
 	return l.newEvent(LevelInfo)
 }
 func (l *Logger) WarnEvent() *Event {
-	if Level(l.level.Load()) > LevelWarn {
+	if l.level.Load() > int32(LevelWarn) {
 		return nil
 	}
-	return l.newEvent(LevelWarn)
+	return l.newEventContextAt(l.ctx, LevelWarn, nil)
 }
 func (l *Logger) ErrorEvent() *Event {
-	if Level(l.level.Load()) > LevelError {
+	if l.level.Load() > int32(LevelError) {
 		return nil
 	}
-	return l.newEvent(LevelError)
+	return l.newEventContextAt(l.ctx, LevelError, nil)
 }
 func (l *Logger) PanicEvent() *Event { return l.newEvent(LevelPanic) }
 func (l *Logger) FatalEvent() *Event { return l.newEvent(LevelFatal) }
@@ -178,14 +198,21 @@ func ErrorEvent() *Event { return Default().ErrorEvent() }
 func PanicEvent() *Event { return Default().PanicEvent() }
 func FatalEvent() *Event { return Default().FatalEvent() }
 
-func (e *Event) writeInitialJSON(level Level, now time.Time) {
-	if e.includeTime {
-		if e.config.jsonTimeMode == JSONTimeUTC {
-			e.writeDefaultJSONTimestamp(now)
-		} else {
-			e.output = appendTimestamp(e.output, now, e.config, true)
-		}
-	} else {
+// writeTimestamp stamps the record with a time from a caller's clock or an
+// adapter's record. The JSON UTC encoder keys its cache on the Unix second,
+// which is the same instant whatever zone now carries. The default clock
+// does not come through here: newEventContextAt reads it in place.
+func (e *Event) writeTimestamp(now time.Time) {
+	if e.jsonMode && e.config.jsonTimeMode == JSONTimeUTC {
+		e.writeDefaultJSONTimestamp(now.Unix(), int64(now.Nanosecond()))
+		return
+	}
+	e.output = appendTimestamp(e.output, now, e.config, e.jsonMode)
+}
+
+func (e *Event) writeInitialJSON(level Level) {
+	if !e.includeTime {
+		// with a timestamp the record was opened by the timestamp itself
 		e.output = append(e.output, '{')
 	}
 	switch level {
@@ -204,71 +231,22 @@ func (e *Event) writeInitialJSON(level Level, now time.Time) {
 	case LevelFatal:
 		e.output = append(e.output, `"level":"FATAL"`...)
 	}
-	e.addCallers()
-}
-
-func (e *Event) writeDefaultJSONTimestamp(now time.Time) {
+	// Guarded here as well as inside: addCallers is too large to inline, and
+	// the call is dead weight for every record without caller capture.
 	if e.captureCaller != 0 {
-		e.output = appendDefaultJSONTimestamp(e.output, now.UTC())
-		return
+		e.addCallers()
 	}
-	second := now.Unix()
-	p := &e.callerData.callerFunc
-	if e.timeSecond != second {
-		utc := now.UTC()
-		year, month, day := utc.Date()
-		if uint(year) > 9999 {
-			// does not fit the cached four digits; leave the cache as it was
-			e.output = appendDefaultJSONTimestamp(e.output, utc)
-			return
-		}
-		e.timeSecond = second
-		hour, minute, sec := utc.Clock()
-		p[0] = byte('0' + year/1000%10)
-		p[1] = byte('0' + year/100%10)
-		p[2] = byte('0' + year/10%10)
-		p[3] = byte('0' + year%10)
-		p[4] = '-'
-		p[5] = byte('0' + int(month)/10)
-		p[6] = byte('0' + int(month)%10)
-		p[7] = '-'
-		p[8] = byte('0' + day/10)
-		p[9] = byte('0' + day%10)
-		p[10] = 'T'
-		p[11] = byte('0' + hour/10)
-		p[12] = byte('0' + hour%10)
-		p[13] = ':'
-		p[14] = byte('0' + minute/10)
-		p[15] = byte('0' + minute%10)
-		p[16] = ':'
-		p[17] = byte('0' + sec/10)
-		p[18] = byte('0' + sec%10)
-	}
-	e.output = append(e.output, `{"time":"`...)
-	e.output = append(e.output, p[:19]...)
-	e.output = append(e.output, '.')
-	usec := now.Nanosecond() / 1000
-	e.output = append(e.output,
-		byte('0'+usec/100000),
-		byte('0'+usec/10000%10),
-		byte('0'+usec/1000%10),
-		byte('0'+usec/100%10),
-		byte('0'+usec/10%10),
-		byte('0'+usec%10),
-		'Z', '"', ',',
-	)
 }
 
-func (e *Event) writeInitialConsole(level Level, now time.Time) {
-	if e.includeTime {
-		e.output = appendTimestamp(e.output, now, e.config, false)
-	}
+func (e *Event) writeInitialConsole(level Level) {
 	if e.color {
 		e.output = append(e.output, ansiColourPrefix(level)...)
 	} else {
 		e.output = append(e.output, levelPrefix(level)...)
 	}
-	e.addCallers()
+	if e.captureCaller != 0 {
+		e.addCallers()
+	}
 	// everything appended from here on is caller-supplied
 	e.prefixLen = len(e.output)
 }

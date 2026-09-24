@@ -4,7 +4,6 @@ import (
 	"reflect"
 	"runtime"
 	"runtime/debug"
-	"strconv"
 	"strings"
 )
 
@@ -66,6 +65,17 @@ type callerData struct {
 	callerFuncLen uint
 	callerFile    [callerDataMaxLen]byte
 	callerFileLen uint
+	// pc is the record program counter whose resolution the two buffers
+	// hold, with pcFuncLen and pcFileLen the lengths it was stored with, or
+	// zero when they hold anything else. Events are pooled and a slog call
+	// site presents the same PC on every record, so the pooled event's last
+	// resolution is reused when the PC matches: the symbol-table lookups
+	// cost more than the rest of the record. Every other write to the
+	// buffers clears pc, so a match never reports stale text. Like the
+	// Event's timestamp cache, this is per-event state and needs no
+	// synchronisation.
+	pc                   uintptr
+	pcFuncLen, pcFileLen uint
 }
 
 // isFamilyPackage reports whether the fully qualified function name belongs
@@ -104,6 +114,13 @@ func isInternalFrame(name, file string) bool {
 // starts with "log." or "runtime." (such as "log.example.com/x") is still
 // reported as the caller.
 func isInfraFrame(name string) bool {
+	// Every infrastructure symbol starts with its package path and a dot.
+	// Application frames, the common case, fail this prefix test at once and
+	// skip the substring searches below, which measured as the larger cost of
+	// resolving a record PC.
+	if !strings.HasPrefix(name, "runtime.") && !strings.HasPrefix(name, "log.") && !strings.HasPrefix(name, "log/slog.") {
+		return false
+	}
 	dot := strings.LastIndexByte(name, '.')
 	if dot < 0 {
 		return false
@@ -163,18 +180,30 @@ func captureCallerPC(pc uintptr, callerDepth int, data *callerData) {
 	if pc == 0 {
 		return
 	}
-	pc--
-	fn := runtime.FuncForPC(pc)
+	if data.pc == pc {
+		// This pooled event last resolved the same call site and nothing
+		// has written the buffers since; only the lengths were reset.
+		data.callerFuncLen = data.pcFuncLen
+		data.callerFileLen = data.pcFileLen
+		return
+	}
+	lookup := pc - 1
+	fn := runtime.FuncForPC(lookup)
 	if fn == nil {
 		return
 	}
 	name := fn.Name()
-	file, line := fn.FileLine(pc)
+	file, line := fn.FileLine(lookup)
 	if isInfraFrame(name) || isInternalFrame(name, file) {
+		// The answer depends on the live stack, not on pc alone, so it is
+		// found afresh every time and never remembered.
 		captureCallerScan(callerDepth, data)
 		return
 	}
 	data.set(name, file, line)
+	data.pc = pc
+	data.pcFuncLen = data.callerFuncLen
+	data.pcFileLen = data.callerFileLen
 }
 
 // set stores the trimmed function name and "base:line" without allocating.
@@ -182,17 +211,39 @@ func captureCallerPC(pc uintptr, callerDepth int, data *callerData) {
 // file reference useful, so an overlong basename is cut to make room for the
 // complete ":line" suffix rather than the suffix being cut to a wrong number.
 func (data *callerData) set(name, file string, line int) {
+	// the buffers are about to hold something other than a remembered PC
+	data.pc = 0
 	name = trimMainModule(name)
 	data.callerFuncLen = uint(copy(data.callerFunc[:], name))
 	if index := strings.LastIndexByte(file, '/'); index >= 0 {
 		file = file[index+1:]
 	}
+	// The line is formatted in place, least significant digit first, the
+	// same text strconv would produce. A strconv call into scratch and a
+	// second copy measured as a fifth of the cost of resolving a record PC.
 	var digits [20]byte
-	suffix := strconv.AppendInt(digits[:0], int64(line), 10)
+	n := len(digits)
+	u := uint64(line)
+	if line < 0 {
+		u = uint64(-line)
+	}
+	for {
+		n--
+		digits[n] = byte('0' + u%10)
+		u /= 10
+		if u == 0 {
+			break
+		}
+	}
+	if line < 0 {
+		n--
+		digits[n] = '-'
+	}
+	suffix := digits[n:]
 	if limit := callerDataMaxLen - 1 - len(suffix); len(file) > limit {
 		file = file[:limit]
 	}
-	n := copy(data.callerFile[:], file)
+	n = copy(data.callerFile[:], file)
 	data.callerFile[n] = ':'
 	n++
 	n += copy(data.callerFile[n:], suffix)

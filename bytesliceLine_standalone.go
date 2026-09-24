@@ -26,8 +26,17 @@ type Event struct {
 	callerData      callerData
 	consumed        bool
 	buildErr        error
-	timeSecond      int64
 	level           Level
+	// The fields below survive pooling on purpose: they are a cache keyed on
+	// the clock, not on the record, and every Event that comes out of the
+	// pool is better off with it warm.
+	//
+	// timePrefix holds `{"time":"` followed by the UTC date-time of
+	// timeSecond, so a record in the same second as the last one copies 28
+	// bytes and formats six microsecond digits. invalidTimestampSecond means
+	// the prefix has never been built.
+	timeSecond int64
+	timePrefix [jsonTimePrefixLen]byte
 }
 
 func acquireEvent(l *Logger, cfg *loggerConfig) *Event {

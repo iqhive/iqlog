@@ -87,6 +87,7 @@ Guarantees and operations
 - [Writer Serialization](#writer-serialization)
 - [Writer Ownership](#writer-ownership)
 - [Performance Guidance](#performance-guidance)
+- [Benchmarks](#benchmarks)
 - [Migration And Compatibility](#migration-and-compatibility)
 - [Development](#development)
 
@@ -630,6 +631,15 @@ log := iqlog.MustNew(iqlog.Config{
 
 `Config.Now` can inject a clock for deterministic tests.
 
+When `Now` is left unset (or set to `time.Now` itself), the two fixed-width
+timestamps (`JSONTimeUTC` and the default console layout) are stamped from a
+single reading of the wall clock: on linux/amd64 that is `gettimeofday`
+through the vDSO, about half the cost of `time.Now`, which also reads the
+monotonic clock a timestamp never uses. Every stamp is the wall clock as the
+kernel reports it at that instant, truncated to the microsecond the field
+carries. Custom layouts and any other clock function are called for every
+record, so a nanosecond layout keeps its digits.
+
 ## Package-Level Logger
 
 Package functions route through `Default()`:
@@ -1030,6 +1040,55 @@ go test -run '^$' -bench . -benchmem -count=5
 
 For statistically meaningful comparisons, fix the CPU count for both runs and
 compare saved outputs with `benchstat`.
+
+## Benchmarks
+
+The comparative suite in [`bench/`](bench/) drives iqlog, `rs/zerolog`,
+`phuslu/log`, and the standard library through the same payloads: the same
+fields, the same message, no timestamp and no caller unless the row says so,
+and `io.Discard` as the destination. The numbers below were measured on
+2026-09-24, on the tree of the commit that added this section, with Go 1.27.1
+on an AMD EPYC 9474F, pinned to one core (`taskset -c 15`, `-cpu 1`), five
+runs each, medians in ns/op. Every cell
+is allocation-free unless it says otherwise.
+
+| Benchmark | iqlog | zerolog | phuslu/log | log/slog |
+|---|---|---|---|---|
+| Disabled record | 1.0 | 8.7 | 1.9 | 6.8 |
+| Typed event, three fields | 133 | 154 | 156 | 1216 (2 allocs) |
+| Typed event with UTC timestamp | 162 | 268 | 168 | n/a |
+| Formatted message, three fields | 168 | 300 (1 alloc) | 277 | 783 (1 alloc) |
+| Three fields plus a struct through `Any` | 251 | 734 (3 allocs) | 459 | 1353 |
+| slog handler, disabled | 20 | 20 | 21 | 21 |
+| slog handler, three attributes | 468 | 607 | 471 | 1106 (2 allocs) |
+| slog handler with timestamp | 474 | 608 | 543 | n/a |
+| slog handler, groups | 386 | 644 | 401 | 697 |
+| slog handler with source | 496 | n/a | 648 | 2295 (8 allocs) |
+| slog handler, console format | 469 | n/a | n/a | 1051 |
+
+Parallel benchmarks (`RunParallel`, eight cores, `taskset -c 8-15 ... -cpu 8`):
+
+| Benchmark | iqlog | zerolog | phuslu/log | log/slog |
+|---|---|---|---|---|
+| Typed event, three fields | 17 | 38 | 30 | n/a |
+| slog handler, three attributes | 59 | 82 | 71 | 325 (2 allocs) |
+
+Two rows are close: the slog handler with three attributes leads phuslu by
+about 1%, and the disabled slog handler is a three-way tie at the 20 ns floor
+that slog's own record construction sets for every handler. Both were
+confirmed with interleaved runs of prebuilt binaries on the same core, which
+hold their variance to about 1%. The host was shared with an unrelated job
+during these runs (load average about 19 on 16 cores), which mostly widens the
+competitors' allocating paths; pinning keeps the iqlog rows within a few
+percent between runs. The raw output is checked in as
+[`bench/results.txt`](bench/results.txt). Numbers depend on hardware, Go
+version, payload, and writer configuration, so measure in your own
+environment before relying on them:
+
+```bash
+cd bench
+taskset -c 15 go test -run '^$' -bench . -benchmem -count=5 -cpu 1 .
+```
 
 ## Migration And Compatibility
 

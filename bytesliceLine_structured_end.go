@@ -244,12 +244,10 @@ func (bsl *Event) writeFinalConsole(msg string, args ...interface{}) {
 }
 
 func (bsl *Event) writeFinalConsoleF(format string, args ...interface{}) {
-	// the growable appender keeps formatted output longer than maxLineLen
-	ba := acquireBytesAppender()
-	fmt.Fprintf(ba, format, args...)
-	bsl.output = append(bsl.output, ba.Bytes...)
-	releaseBytesAppender(ba)
-
+	// Formatted straight into the record: the whole-line sanitizer in finish
+	// escapes any control bytes the message carries, so no scratch copy is
+	// needed here.
+	bsl.output = appendFormatted(bsl.output, format, args)
 	bsl.output = append(bsl.output, '\n')
 
 	bsl.finish()
@@ -268,21 +266,17 @@ func (bsl *Event) writeFinalJSON(msg string, args ...interface{}) {
 }
 
 func (bsl *Event) writeFinalJSONF(format string, args ...interface{}) {
-	bsl.output = append(bsl.output, []byte(",\"message\":\"")...)
+	bsl.output = append(bsl.output, `,"message":"`...)
 
-	ba := acquireBytesAppender()
-	fmt.Fprintf(ba, format, args...)
-	bsl.output = appendJSONEscaped(bsl.output, unsafeString(ba.Bytes))
-	releaseBytesAppender(ba)
+	// Formatted straight into the record, then re-encoded in place only when
+	// a scan finds a byte a JSON string cannot carry verbatim. The common
+	// clean message costs one pass and no scratch buffer; the escaping copy
+	// is paid only by messages that need it.
+	from := len(bsl.output)
+	bsl.output = appendFormatted(bsl.output, format, args)
+	bsl.output = escapeJSONTail(bsl.output, from)
 
-	// bia := biapool.Get().(*byteIndexAppender)
-	// bia.Index = 0
-	// fmt.Fprintf(bia, format, args...)
-	// bsl.output = append(bsl.output, bia.Bytes[:bia.Index]...)
-	// biapool.Put(bia)
-
-	// if bsl.logger.newLine.Load() {
-	bsl.output = append(bsl.output, []byte("\"}\n")...)
+	bsl.output = append(bsl.output, "\"}\n"...)
 
 	bsl.finish()
 }

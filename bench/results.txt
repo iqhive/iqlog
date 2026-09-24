@@ -1,51 +1,71 @@
+# iqlog bench: 2026-09-24, tree of the commit that added this file, Go 1.27.1, taskset -c 15 -cpu 1 -count 5 (medians); Parallel rows: taskset -c 8-15 -cpu 8
 goos: linux
 goarch: amd64
 pkg: github.com/iqhive/iqlog/bench
-cpu: AMD EPYC 9474F 48-Core Processor               
-BenchmarkPhusluDisabled-64                      1000000000               1.915 ns/op           0 B/op          0 allocs/op
-BenchmarkIQLogDisabled-64                       1000000000               2.253 ns/op           0 B/op          0 allocs/op
-BenchmarkSlogDisabled-64                        1000000000               6.719 ns/op
-BenchmarkZerologDisabled-64                     1000000000               8.899 ns/op           0 B/op          0 allocs/op
+cpu: AMD EPYC 9474F 48-Core Processor
+BenchmarkSlogDisabled                            178652089          6.827 ns/op            0 B/op            0 allocs/op
+BenchmarkIQLogDisabled                          1000000000         0.9614 ns/op            0 B/op            0 allocs/op
+BenchmarkZerologDisabled                         137767675          8.727 ns/op            0 B/op            0 allocs/op
+BenchmarkPhusluDisabled                          626577904           1.92 ns/op            0 B/op            0 allocs/op
+BenchmarkSlogSimple                                1000000           1216 ns/op           16 B/op            2 allocs/op
+BenchmarkIQLogSimple                               9252292          132.9 ns/op            0 B/op            0 allocs/op
+BenchmarkZerologSimple                             8038578          153.9 ns/op            0 B/op            0 allocs/op
+BenchmarkPhusluSimple                              7725207          156.4 ns/op            0 B/op            0 allocs/op
+BenchmarkSlogPrintf                                1617926          783.4 ns/op           80 B/op            1 allocs/op
+BenchmarkIQLogPrintf                               7199692          167.6 ns/op            0 B/op            0 allocs/op
+BenchmarkZerologPrintf                             4169276          299.6 ns/op           48 B/op            1 allocs/op
+BenchmarkPhusluPrintf                              4351854          277.2 ns/op            0 B/op            0 allocs/op
+BenchmarkSlogAny                                    924146           1353 ns/op            0 B/op            0 allocs/op
+BenchmarkIQLogAny                                  4821258          251.3 ns/op            0 B/op            0 allocs/op
+BenchmarkZerologAny                                1676361          733.7 ns/op          224 B/op            3 allocs/op
+BenchmarkPhusluAny                                 2662624          459.2 ns/op            0 B/op            0 allocs/op
+BenchmarkIQLogSimpleWithTimestamp                  7416399          162.2 ns/op            0 B/op            0 allocs/op
+BenchmarkZerologSimpleWithTimestamp                4463917          267.8 ns/op            0 B/op            0 allocs/op
+BenchmarkPhusluSimpleWithTimestamp                 7177358          167.6 ns/op            0 B/op            0 allocs/op
+BenchmarkIQLogParallel                             9277789          129.5 ns/op            0 B/op            0 allocs/op
+BenchmarkZerologParallel                           7755344          157.2 ns/op            0 B/op            0 allocs/op
+BenchmarkPhusluParallel                            7763335          155.4 ns/op            0 B/op            0 allocs/op
+BenchmarkIQLogInfo                                18478795          65.11 ns/op            0 B/op            0 allocs/op
+BenchmarkIQLogPackageInfo                         16282880          73.63 ns/op            0 B/op            0 allocs/op
+BenchmarkCallerDirectDepth0                       17971768          67.55 ns/op            0 B/op            0 allocs/op
+BenchmarkCallerDirectDepth1                         395653           3054 ns/op          496 B/op            2 allocs/op
+BenchmarkCallerLegacyShimDepth0                   17834530          67.67 ns/op            0 B/op            0 allocs/op
+BenchmarkCallerLegacyShimDepth1                     345468           3352 ns/op          496 B/op            2 allocs/op
+BenchmarkCallerSlogPCDepth1                        3404079          356.2 ns/op            0 B/op            0 allocs/op
+BenchmarkIQLogLegacyConstructorInfo                8821614          136.9 ns/op            0 B/op            0 allocs/op
+BenchmarkIQLogLegacyInfoWith                      14229660          84.69 ns/op            0 B/op            0 allocs/op
+BenchmarkIQLogLegacyWarning                       17914363          67.18 ns/op            0 B/op            0 allocs/op
+BenchmarkIQLogLegacyLogWithFields                  2185070            550 ns/op          192 B/op            3 allocs/op
+BenchmarkSlogHandlerDisabled                      56137899          21.49 ns/op            0 B/op            0 allocs/op
+BenchmarkIQLogSlogHandlerDisabled                 59684979          20.18 ns/op            0 B/op            0 allocs/op
+BenchmarkZerologSlogHandlerDisabled               59191879          20.34 ns/op            0 B/op            0 allocs/op
+BenchmarkPhusluSlogHandlerDisabled                57697988          20.88 ns/op            0 B/op            0 allocs/op
+BenchmarkSlogHandlerSimple                         1000000           1106 ns/op           16 B/op            2 allocs/op
+BenchmarkIQLogSlogHandlerSimple                    2584711          468.4 ns/op            0 B/op            0 allocs/op
+BenchmarkZerologSlogHandlerSimple                  1984969          606.7 ns/op            0 B/op            0 allocs/op
+BenchmarkPhusluSlogHandlerSimple                   2538759          471.4 ns/op            0 B/op            0 allocs/op
+BenchmarkIQLogSlogHandlerSimpleWithTimestamp       2541124          474.4 ns/op            0 B/op            0 allocs/op
+BenchmarkZerologSlogHandlerSimpleWithTimestamp      1980410          607.8 ns/op            0 B/op            0 allocs/op
+BenchmarkPhusluSlogHandlerSimpleWithTimestamp      2232763          543.3 ns/op            0 B/op            0 allocs/op
+BenchmarkSlogHandlerWithSource                      527828           2295 ns/op          600 B/op            8 allocs/op
+BenchmarkIQLogSlogHandlerWithSource                2428420          496.4 ns/op            0 B/op            0 allocs/op
+BenchmarkPhusluSlogHandlerWithSource               1881453          648.4 ns/op            0 B/op            0 allocs/op
+BenchmarkSlogHandlerGrouped                        1742088          697.3 ns/op            0 B/op            0 allocs/op
+BenchmarkIQLogSlogHandlerGrouped                   3144210          385.8 ns/op            0 B/op            0 allocs/op
+BenchmarkZerologSlogHandlerGrouped                 1873028          644.1 ns/op            0 B/op            0 allocs/op
+BenchmarkPhusluSlogHandlerGrouped                  3055888          400.6 ns/op            0 B/op            0 allocs/op
+BenchmarkSlogHandlerConsole                        1000000           1051 ns/op            0 B/op            0 allocs/op
+BenchmarkIQLogSlogHandlerConsole                   2589546          468.7 ns/op            0 B/op            0 allocs/op
+BenchmarkSlogHandlerParallel                       1000000           1109 ns/op           16 B/op            2 allocs/op
+BenchmarkIQLogSlogHandlerParallel                  2563135          472.3 ns/op            0 B/op            0 allocs/op
+BenchmarkZerologSlogHandlerParallel                1937341          620.9 ns/op            0 B/op            0 allocs/op
+BenchmarkPhusluSlogHandlerParallel                 2533789          481.5 ns/op            0 B/op            0 allocs/op
 
-goos: linux
-goarch: amd64
-pkg: github.com/iqhive/iqlog/bench
-cpu: AMD EPYC 9474F 48-Core Processor               
-BenchmarkIQLogSimple-64                         81989342               143.6 ns/op
-BenchmarkZerologSimple-64                       71877546               163.6 ns/op             0 B/op          0 allocs/op
-BenchmarkPhusluSimple-64                        58870310               202.8 ns/op             0 B/op          0 allocs/op
-BenchmarkSlogSimple-64                          10207639              1171 ns/op
-
-goos: linux
-goarch: amd64
-pkg: github.com/iqhive/iqlog/bench
-cpu: AMD EPYC 9474F 48-Core Processor               
-BenchmarkIQLogPrintf-64                         44171035               270.0 ns/op
-BenchmarkZerologPrintf-64                       35939132               327.1 ns/op            48 B/op          1 allocs/op
-BenchmarkPhusluPrintf-64                        32145062               374.3 ns/op             0 B/op          0 allocs/op
-BenchmarkSlogPrintf-64                          16193246               744.2 ns/op
-
-goos: linux
-goarch: amd64
-pkg: github.com/iqhive/iqlog/bench
-cpu: AMD EPYC 9474F 48-Core Processor               
-BenchmarkIQLogAny-64                            24497982               476.1 ns/op
-BenchmarkPhusluAny-64                           16412431               719.4 ns/op           113 B/op          1 allocs/op
-BenchmarkZerologAny-64                          16436528               750.3 ns/op           225 B/op          3 allocs/op
-BenchmarkSlogAny-64                              9076539              1328 ns/op
-
-goos: linux
-goarch: amd64
-pkg: github.com/iqhive/iqlog/bench
-cpu: AMD EPYC 9474F 48-Core Processor               
-BenchmarkIQLogSimpleWithTimestamp-64            57923340               207.8 ns/op
-BenchmarkPhusluSimpleWithTimestamp-64           50179921               237.6 ns/op             0 B/op          0 allocs/op
-BenchmarkZerologSimpleWithTimestamp-64          43816539               271.2 ns/op             0 B/op          0 allocs/op
-
-goos: linux
-goarch: amd64
-pkg: github.com/iqhive/iqlog/bench
-cpu: AMD EPYC 9474F 48-Core Processor               
-BenchmarkPhusluParallel-64                      1000000000               4.037 ns/op           0 B/op          0 allocs/op
-BenchmarkIQLogParallel-64                       1000000000               4.765 ns/op           0 B/op          0 allocs/op
-BenchmarkZerologParallel-64                     1000000000               8.263 ns/op           0 B/op          0 allocs/op
+BenchmarkIQLogParallel-8                          72932826          16.73 ns/op            0 B/op            0 allocs/op
+BenchmarkZerologParallel-8                        56404714          37.85 ns/op            0 B/op            0 allocs/op
+BenchmarkPhusluParallel-8                         45213248          30.37 ns/op            0 B/op            0 allocs/op
+BenchmarkSlogHandlerParallel-8                     3893709          324.7 ns/op           16 B/op            2 allocs/op
+BenchmarkIQLogSlogHandlerParallel-8               19887582          59.33 ns/op            0 B/op            0 allocs/op
+BenchmarkZerologSlogHandlerParallel-8             14914134             82 ns/op            0 B/op            0 allocs/op
+BenchmarkPhusluSlogHandlerParallel-8              18958537          70.92 ns/op            0 B/op            0 allocs/op
+PASS
