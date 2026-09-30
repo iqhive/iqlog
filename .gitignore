@@ -9,3 +9,4 @@ target/
 .nope
 iqlog.test
 .vhs-bin/chromium-browser
+.fdx

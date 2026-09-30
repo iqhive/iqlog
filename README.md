@@ -1,5 +1,9 @@
 # iqlog
 
+<p align="center">
+  <img src="docs/hero.svg" width="836" alt="Animated terminal: iqlog resolves from hexadecimal noise; typed Go fields produce a JSON record; changing the level gate from INFO to DEBUG admits three then four records. An iqlog title card and the IQ Hive logo close the loop.">
+</p>
+
 Fast, low-allocation structured logging for Go.
 
 `iqlog` provides a small configuration-driven logger, fluent typed events,
@@ -8,51 +12,6 @@ and synchronous or buffered writers. The common disabled and typed structured
 paths are designed to remain allocation-free.
 
 > Requires Go 1.25 or newer.
-
-![iqlog: one typed log call and its colored console record](docs/hero.gif)
-
-<!-- VCR: HERO
-Render brief: "Signal Acquisition"
-Source tape: docs/hero.tape
-
-Canvas and timing:
-- 92 columns by 24 rows, monospace, approximately 12 seconds, 15 fps.
-- Use a near-black CRT background (#090b0a), warm ivory text (#d8d1b5), phosphor
-  green (#72f1a1), amber (#f1b85b), and restrained error red (#ff6b6b).
-- Add subtle scanlines, mild corner falloff, a one-pixel vertical roll at the
-  midpoint, and occasional horizontal chromatic displacement. Keep all text
-  readable. No fake browser chrome.
-
-Storyboard:
-1. Begin with two seconds of tape snow. A block cursor blinks in the upper-left.
-   The tracking label "CH 03  IQLOG // INPUT" resolves one character at a time
-   in the upper-right, while "SP" and a counter "00:00:00" appear along the
-   bottom edge.
-2. Type `$ go get github.com/iqhive/iqlog` at human speed. On Enter, let the line
-   jump upward as if the VCR tracking briefly slips.
-3. Type a compact Go event over three lines:
-     log.InfoEvent().
-         Str("service", "checkout").Int("port", 8080).
-         Msg("ready")
-   Highlight method names in green, values in amber, and punctuation in ivory.
-4. Split the terminal vertically with a noisy wipe. Keep source code on the left.
-   On the right, assemble this JSON record token by token rather than revealing
-   it all at once:
-     {"level":"INFO","service":"checkout","port":8080,"message":"ready"}
-   Briefly pulse each JSON field as its matching builder method is scanned on
-   the left. Draw a thin green signal trace between the pairs.
-5. Stamp three labels beneath the record with mechanical VCR OSD jitter:
-   "TYPED FIELDS", "0 ALLOCS HOT PATH", and "NDJSON OUTPUT". The allocation
-   statement is a design/property label, not a benchmark number.
-6. Rewind rapidly: counter digits run backward, lines collapse into static, and
-   the first empty frame returns exactly for a seamless loop.
-
-Accessibility and export:
-- Do not convey levels through color alone; retain the literal `INFO` label.
-- Supply an animated GIF/WebP and a still PNG showing the split source/output
-  frame. Suggested alt text: "A retro terminal transforms a typed iqlog event
-  into a JSON log record."
--->
 
 ## Contents
 
