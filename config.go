@@ -50,6 +50,30 @@ const (
 	JSONTimeCustom
 )
 
+// CallerPathMode selects how much of the caller's location a record
+// reports when Config.CallerDepth is set.
+type CallerPathMode uint8
+
+const (
+	// CallerPathRelative reports the function with its repository base
+	// removed: a function in github.com/org/repo/pkg/client reads
+	// "pkg/client.(*Client).Run client.go:42", and one in the repository's
+	// root package keeps its package name, "repo.Run". A module that is not
+	// hosted as host/owner/repository, such as go.uber.org/zap, has its
+	// module path removed instead. Standard-library functions are left
+	// unchanged. It is the default.
+	CallerPathRelative CallerPathMode = iota
+	// CallerPathLong reports the function's full import path:
+	// "github.com/org/repo/pkg/client.(*Client).Run client.go:42".
+	CallerPathLong
+	// CallerPathShort reports the function with only its package's own
+	// name: "client.(*Client).Run client.go:42".
+	CallerPathShort
+	// CallerPathFile reports no function at all, only the file and line:
+	// "client.go:42". JSON records omit the func key.
+	CallerPathFile
+)
+
 // Format selects the record encoding.
 type Format uint8
 
@@ -82,6 +106,13 @@ type Config struct {
 	// JSONTimeCustom to opt in.
 	JSONTimeMode JSONTimeMode
 	CallerDepth  int
+	// CallerPathMode selects how the caller's function is reported:
+	// relative to its repository (the zero value, CallerPathRelative), with
+	// its full import path (CallerPathLong), with only its package name
+	// (CallerPathShort), or not at all, leaving the file and line
+	// (CallerPathFile). It has no effect unless CallerDepth is set, except
+	// that CallerPathFile also drops EventAt's function.
+	CallerPathMode CallerPathMode
 	// Color forces ANSI colors for console output. Terminal writers are
 	// detected automatically unless DisableColor is set; Config reports the
 	// forced value, not the detected one, so a round-trip does not turn a
@@ -117,6 +148,7 @@ type loggerConfig struct {
 	timestampLayout string
 	jsonTimeMode    JSONTimeMode
 	callerDepth     int
+	callerPathMode  CallerPathMode
 	// color is the effective setting the console encoder reads: forced by
 	// colorForced, or detected on the destination when nothing overrides it.
 	// colorForced is what Config.Color asked for and what Config() reports.
@@ -183,6 +215,9 @@ func validateConfig(cfg Config) error {
 	}
 	if cfg.CallerDepth < 0 {
 		return errors.New("iqlog: caller depth must not be negative")
+	}
+	if cfg.CallerPathMode > CallerPathFile {
+		return errors.New("iqlog: invalid caller path mode")
 	}
 	if cfg.BufferSize < 0 {
 		return errors.New("iqlog: buffer size must not be negative")
@@ -324,7 +359,7 @@ func (l *Logger) Config() Config {
 		ConcurrentWriter: cfg.concurrentWriter,
 		EscapeFieldNames: cfg.escapeFieldNames,
 		IncludeTime:      cfg.includeTime, TimestampLayout: cfg.timestampLayout, JSONTimeMode: cfg.jsonTimeMode,
-		CallerDepth: cfg.callerDepth, Color: cfg.colorForced, DisableColor: cfg.disableColor,
+		CallerDepth: cfg.callerDepth, CallerPathMode: cfg.callerPathMode, Color: cfg.colorForced, DisableColor: cfg.disableColor,
 		ApplicationName: cfg.applicationName, SyslogHost: cfg.syslogHost, NativeLog: cfg.nativeLog,
 		ContextExtractor: cfg.contextExtractor, ExitFunc: cfg.exitFunc, Now: cfg.now,
 		WriterMode: cfg.writerMode, BufferSize: cfg.bufferSize, OverflowPolicy: cfg.overflowPolicy,
@@ -370,6 +405,7 @@ func (cfg Config) snapshot() *loggerConfig {
 		timestampLayout:  cfg.TimestampLayout,
 		jsonTimeMode:     cfg.JSONTimeMode,
 		callerDepth:      cfg.CallerDepth,
+		callerPathMode:   cfg.CallerPathMode,
 		color:            cfg.Color && !cfg.DisableColor,
 		colorForced:      cfg.Color,
 		disableColor:     cfg.DisableColor,

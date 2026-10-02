@@ -13,12 +13,22 @@ import (
 // the module path followed by a dot instead; mainModuleRootPrefix matches
 // those, and mainModuleRootTrim is how much to drop so they read "pkg.Func"
 // with the package's own name kept. All three are built once so the caller
-// paths do not rebuild strings for every record.
+// paths do not rebuild strings for every record. They serve a main module
+// that is not on a code host; one that is takes the host/owner/repository
+// cut like any other.
 var (
 	mainModulePrefix     string
 	mainModuleRootPrefix string
 	mainModuleRootTrim   int
 )
+
+// modulePaths holds the path of every module linked into the binary, so a
+// caller in a dependency module that is not on a code host, such as
+// go.uber.org/zap, is trimmed to its module root too. A module whose last
+// path element contains a dot is also stored in the escaped form the linker
+// gives its root package's symbols ("gopkg.in/yaml%2ev3"), so its root
+// package is found as well. Built once at init and only read afterwards.
+var modulePaths map[string]struct{}
 
 // familyPrefixes lists the import paths of this library and of its legacy
 // home. A frame whose function lives in one of these packages, or in any
@@ -30,7 +40,11 @@ var familyPrefixes = [...]string{
 }
 
 func init() {
-	if info, ok := debug.ReadBuildInfo(); ok && info.Main.Path != "" {
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return
+	}
+	if info.Main.Path != "" {
 		mainModulePrefix = info.Main.Path + "/"
 		// a single-element module path ("app") is already just the package
 		// name, so only multi-element paths need the root trimmed
@@ -39,16 +53,122 @@ func init() {
 			mainModuleRootTrim = i + 1
 		}
 	}
+	modulePaths = make(map[string]struct{}, len(info.Deps)+1)
+	addModulePath(info.Main.Path)
+	for _, dep := range info.Deps {
+		addModulePath(dep.Path)
+	}
 }
 
-// trimMainModule strips the main module path from a fully qualified function
-// name, leaving the package-relative form the caller fields report.
-func trimMainModule(name string) string {
+// addModulePath records path, and the escaped form its root package's
+// symbols carry when its last element contains a dot, in modulePaths.
+func addModulePath(path string) {
+	if path == "" {
+		return
+	}
+	modulePaths[path] = struct{}{}
+	last := strings.LastIndexByte(path, '/') + 1
+	if strings.IndexByte(path[last:], '.') >= 0 {
+		modulePaths[path[:last]+strings.ReplaceAll(path[last:], ".", "%2e")] = struct{}{}
+	}
+}
+
+// trimRepoPath is the CallerPathRelative form of a fully qualified function
+// name. A package on a code host loses host/owner/repository:
+// "github.com/org/repo/pkg/client.(*Client).Run" reads
+// "pkg/client.(*Client).Run", and a symbol in the repository's root package
+// keeps its package name, "repo.Run". Any other package loses the path of
+// the module it belongs to: the main module is matched first, then the
+// longest dependency module path that prefixes the package. A symbol from
+// no known module, such as the standard library's, is returned unchanged.
+// The result is a substring of name, so trimming never allocates.
+func trimRepoPath(name string) string {
+	if host := codeHostLen(name); host != 0 {
+		return trimHostedRepo(name, host)
+	}
 	if mainModulePrefix != "" && strings.HasPrefix(name, mainModulePrefix) {
 		return name[len(mainModulePrefix):]
 	}
 	if mainModuleRootPrefix != "" && strings.HasPrefix(name, mainModuleRootPrefix) {
 		return name[mainModuleRootTrim:]
+	}
+	// A package path with a single element ("main", "fmt") is already as
+	// short as it gets. Otherwise the package ends at the first dot after
+	// its last slash: the linker escapes dots in that element, and type
+	// arguments are elided to "[...]", so no slash follows the package.
+	slash := strings.LastIndexByte(name, '/')
+	if slash < 0 {
+		return name
+	}
+	dot := strings.IndexByte(name[slash+1:], '.')
+	if dot < 0 {
+		return name
+	}
+	pkg := name[:slash+1+dot]
+	if _, ok := modulePaths[pkg]; ok {
+		return name[slash+1:]
+	}
+	for end := slash; end > 0; end = strings.LastIndexByte(pkg[:end], '/') {
+		if _, ok := modulePaths[pkg[:end]]; ok {
+			return name[end+1:]
+		}
+	}
+	return name
+}
+
+// codeHostLen returns the length of the code-host prefix name starts with,
+// or zero. Import paths on these hosts always begin host/owner/repository,
+// and CallerPathRelative cuts that base off whichever module the package
+// belongs to, so a major-version suffix or a nested module stays visible:
+// "bitbucket.org/org/tool/v2/sub.F" reads "v2/sub.F". The prefixes are
+// constants so each comparison compiles inline.
+func codeHostLen(name string) int {
+	switch {
+	case strings.HasPrefix(name, "github.com/"):
+		return len("github.com/")
+	case strings.HasPrefix(name, "bitbucket.org/"):
+		return len("bitbucket.org/")
+	case strings.HasPrefix(name, "gitlab.com/"):
+		return len("gitlab.com/")
+	}
+	return 0
+}
+
+// trimHostedRepo strips host/owner/repository from name, which starts with a
+// code-host prefix hostLen bytes long. The function part of a symbol never
+// contains a slash, so one after the repository element marks a subpackage;
+// without one the symbol is in the repository's root package, which keeps
+// its package name. Both are forward scans, cheaper than finding the end of
+// the package.
+func trimHostedRepo(name string, hostLen int) string {
+	owner := strings.IndexByte(name[hostLen:], '/')
+	if owner < 0 {
+		return name
+	}
+	repo := hostLen + owner + 1
+	if end := strings.IndexByte(name[repo:], '/'); end >= 0 {
+		return name[repo+end+1:]
+	}
+	return name[repo:]
+}
+
+// trimPackagePath is the CallerPathShort form of a fully qualified function
+// name: the import path is dropped and the package's own name kept,
+// "client.(*Client).Run". The function part of a symbol never contains a
+// slash, so the last one ends the import path.
+func trimPackagePath(name string) string {
+	return name[strings.LastIndexByte(name, '/')+1:]
+}
+
+// callerFuncName is the function name stored for a caller under mode.
+// CallerPathFile never prints the name, but a stored name is what marks the
+// caller as present, so it is kept untrimmed.
+func callerFuncName(name string, mode CallerPathMode) string {
+	switch mode {
+	case CallerPathRelative:
+		return trimRepoPath(name)
+	case CallerPathShort:
+		return trimPackagePath(name)
 	}
 	return name
 }
@@ -73,9 +193,11 @@ type callerData struct {
 	// cost more than the rest of the record. Every other write to the
 	// buffers clears pc, so a match never reports stale text. Like the
 	// Event's timestamp cache, this is per-event state and needs no
-	// synchronisation.
+	// synchronisation. pcPathMode is the CallerPathMode the stored name was
+	// resolved under.
 	pc                   uintptr
 	pcFuncLen, pcFileLen uint
+	pcPathMode           CallerPathMode
 }
 
 // isFamilyPackage reports whether the fully qualified function name belongs
@@ -143,7 +265,9 @@ func isInfraFrame(name string) bool {
 // FuncForPC heap-allocates a descriptor for every PC inside an inlined
 // function, and the library's own wrappers between the entry point and this
 // function are routinely inlined.
-func captureCallerScan(callerDepth int, data *callerData) {
+//
+// mode is the Config.CallerPathMode the function name is stored under.
+func captureCallerScan(callerDepth int, mode CallerPathMode, data *callerData) {
 	if callerDepth <= 0 {
 		return
 	}
@@ -157,7 +281,7 @@ func captureCallerScan(callerDepth int, data *callerData) {
 		if frame.PC != 0 && !isInfraFrame(frame.Function) && !isInternalFrame(frame.Function, frame.File) {
 			remaining--
 			if remaining == 0 {
-				data.set(frame.Function, frame.File, frame.Line)
+				data.set(callerFuncName(frame.Function, mode), frame.File, frame.Line)
 				return
 			}
 		}
@@ -176,13 +300,15 @@ func captureCallerScan(callerDepth int, data *callerData) {
 // was not inlined. When the PC resolves to one of this library's own frames
 // the record was produced from inside the library, and the caller is found
 // by scanning the stack with captureCallerScan instead.
-func captureCallerPC(pc uintptr, callerDepth int, data *callerData) {
+func captureCallerPC(pc uintptr, callerDepth int, mode CallerPathMode, data *callerData) {
 	if pc == 0 {
 		return
 	}
-	if data.pc == pc {
-		// This pooled event last resolved the same call site and nothing
-		// has written the buffers since; only the lengths were reset.
+	if data.pc == pc && data.pcPathMode == mode {
+		// This pooled event last resolved the same call site in the same
+		// form and nothing has written the buffers since; only the lengths
+		// were reset. Events are pooled across loggers, so the form is part
+		// of the match.
 		data.callerFuncLen = data.pcFuncLen
 		data.callerFileLen = data.pcFileLen
 		return
@@ -197,23 +323,23 @@ func captureCallerPC(pc uintptr, callerDepth int, data *callerData) {
 	if isInfraFrame(name) || isInternalFrame(name, file) {
 		// The answer depends on the live stack, not on pc alone, so it is
 		// found afresh every time and never remembered.
-		captureCallerScan(callerDepth, data)
+		captureCallerScan(callerDepth, mode, data)
 		return
 	}
-	data.set(name, file, line)
+	data.set(callerFuncName(name, mode), file, line)
 	data.pc = pc
+	data.pcPathMode = mode
 	data.pcFuncLen = data.callerFuncLen
 	data.pcFileLen = data.callerFileLen
 }
 
-// set stores the trimmed function name and "base:line" without allocating.
+// set stores the function name and "base:line" without allocating.
 // Both are truncated to callerDataMaxLen. The line number is what makes the
 // file reference useful, so an overlong basename is cut to make room for the
 // complete ":line" suffix rather than the suffix being cut to a wrong number.
 func (data *callerData) set(name, file string, line int) {
 	// the buffers are about to hold something other than a remembered PC
 	data.pc = 0
-	name = trimMainModule(name)
 	data.callerFuncLen = uint(copy(data.callerFunc[:], name))
 	if index := strings.LastIndexByte(file, '/'); index >= 0 {
 		file = file[index+1:]

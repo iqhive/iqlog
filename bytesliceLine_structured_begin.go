@@ -84,13 +84,13 @@ func (l *Logger) newEventContextAt(ctx context.Context, level Level, origin *eve
 			e.callerData.callerFileLen = uint(copy(e.callerData.callerFile[:], origin.file))
 		} else if origin.pc != 0 && cfg.callerDepth > 0 {
 			e.captureCaller = 1
-			captureCallerPC(origin.pc, cfg.callerDepth, &e.callerData)
+			captureCallerPC(origin.pc, cfg.callerDepth, cfg.callerPathMode, &e.callerData)
 		} else if origin.fallback && cfg.callerDepth > 0 {
 			e.captureCaller = 1
-			captureCallerScan(cfg.callerDepth, &e.callerData)
+			captureCallerScan(cfg.callerDepth, cfg.callerPathMode, &e.callerData)
 		}
 	} else if cfg.callerDepth > 0 {
-		captureCallerScan(cfg.callerDepth, &e.callerData)
+		captureCallerScan(cfg.callerDepth, cfg.callerPathMode, &e.callerData)
 	}
 	// The timestamp opens the record for every encoder, so it is written
 	// before the level and caller. The clock is read as late as possible,
@@ -255,10 +255,20 @@ func (e *Event) addCallers() {
 	if e.captureCaller == 0 || e.callerData.callerFuncLen == 0 {
 		return
 	}
+	// CallerPathFile reports the file alone, so an explicit caller from
+	// EventAt that has no file has nothing to show in that form.
+	fileOnly := e.config.callerPathMode == CallerPathFile
+	if fileOnly && e.callerData.callerFileLen == 0 {
+		return
+	}
 	if e.jsonMode {
-		e.output = append(e.output, `,"func":"`...)
-		e.output = appendJSONEscaped(e.output, unsafeString(e.callerData.callerFunc[:e.callerData.callerFuncLen]))
-		e.output = append(e.output, `","file":"`...)
+		if fileOnly {
+			e.output = append(e.output, `,"file":"`...)
+		} else {
+			e.output = append(e.output, `,"func":"`...)
+			e.output = appendJSONEscaped(e.output, unsafeString(e.callerData.callerFunc[:e.callerData.callerFuncLen]))
+			e.output = append(e.output, `","file":"`...)
+		}
 		e.output = appendJSONEscaped(e.output, unsafeString(e.callerData.callerFile[:e.callerData.callerFileLen]))
 		e.output = append(e.output, '"')
 		return
@@ -269,8 +279,10 @@ func (e *Event) addCallers() {
 		e.output = append(e.output, '[')
 	}
 	start := len(e.output)
-	e.output = append(e.output, e.callerData.callerFunc[:e.callerData.callerFuncLen]...)
-	e.output = append(e.output, ' ')
+	if !fileOnly {
+		e.output = append(e.output, e.callerData.callerFunc[:e.callerData.callerFuncLen]...)
+		e.output = append(e.output, ' ')
+	}
 	e.output = append(e.output, e.callerData.callerFile[:e.callerData.callerFileLen]...)
 	// EventAt lets the caller supply these, and they land in the envelope,
 	// which the whole-line scan does not cover. The colour sequences above

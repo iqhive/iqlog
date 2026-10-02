@@ -3,6 +3,7 @@ package iqlog
 import (
 	"context"
 	"log/slog"
+	"reflect"
 	"runtime"
 	"strconv"
 	"strings"
@@ -123,5 +124,41 @@ func TestSlogHandlerCallerCacheConsole(t *testing.T) {
 			t.Fatalf("console record %q want suffix %q", got, want)
 		}
 		buf.Reset()
+	}
+}
+
+// Events are pooled across loggers, so loggers with different caller path
+// modes, alternating on one goroutine, share the remembered PC resolution;
+// each must still get its own form.
+func TestSlogHandlerCallerCacheKeepsPathForm(t *testing.T) {
+	pkg := reflect.TypeOf(Logger{}).PkgPath()
+	type site struct {
+		buf *syncBuffer
+		lg  *slog.Logger
+		fn  any // nil when no function is reported
+	}
+	var sites []site
+	for mode, fn := range map[CallerPathMode]any{
+		CallerPathRelative: pkg[strings.LastIndexByte(pkg, '/')+1:] + ".slogPCCacheSiteA",
+		CallerPathLong:     pkg + ".slogPCCacheSiteA",
+		CallerPathShort:    pkg[strings.LastIndexByte(pkg, '/')+1:] + ".slogPCCacheSiteA",
+		CallerPathFile:     nil,
+	} {
+		buf := &syncBuffer{}
+		lg := slog.New(MustNew(Config{Format: FormatJSON, Writer: buf, CallerDepth: 1, CallerPathMode: mode}).SlogHandler())
+		sites = append(sites, site{buf, lg, fn})
+	}
+	for i := 0; i < 3; i++ {
+		for _, s := range sites {
+			line := slogPCCacheSiteA(s.lg)
+			rec := lastJSONMap(t, s.buf)
+			if rec["func"] != s.fn {
+				t.Fatalf("round %d: func %v, want %v", i, rec["func"], s.fn)
+			}
+			if got, want := rec["file"], "slog_pc_cache_test.go:"+strconv.Itoa(line); got != want {
+				t.Fatalf("round %d: file %v, want %q", i, got, want)
+			}
+			s.buf.Reset()
+		}
 	}
 }

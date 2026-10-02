@@ -143,6 +143,7 @@ if err != nil {
 | `TimestampLayout` | Console/custom JSON time layout | Microsecond console layout |
 | `JSONTimeMode` | Disabled, UTC, or custom JSON timestamp | `JSONTimeDisabled` |
 | `CallerDepth` | Capture caller frames; also resolves the call site of `log/slog` records | Disabled |
+| `CallerPathMode` | Caller function form: repository-relative, full import path, package name only, or file only | `CallerPathRelative` |
 | `Color` | Force ANSI console color | Terminal auto-detection |
 | `DisableColor` | Disable forced and automatic color | `false` |
 | `ApplicationName` | Application metadata, including syslog and native log setup | Empty |
@@ -530,7 +531,34 @@ log := iqlog.MustNew(iqlog.Config{
 ```
 
 JSON records receive `func` and `file` keys. Console records show caller data in
-brackets. For adapters that already know the original call site, `EventAt`
+brackets:
+
+```text
+[2026-10-02T16:20:58.501382] ERRR [pkg/client.(*Client).runQoSTest client.go:3172] QoS test failed
+```
+
+`CallerPathMode` selects how much of the caller's import path is shown. The
+file is always the base name and line.
+
+| Mode | Console caller |
+| --- | --- |
+| `CallerPathLong` | `[github.com/org/repo/pkg/client.(*Client).runQoSTest client.go:3172]` |
+| `CallerPathRelative` (default) | `[pkg/client.(*Client).runQoSTest client.go:3172]` |
+| `CallerPathShort` | `[client.(*Client).runQoSTest client.go:3172]` |
+| `CallerPathFile` | `[client.go:3172]` |
+
+`CallerPathRelative` cuts host, owner, and repository off a package on
+`github.com`, `bitbucket.org`, or `gitlab.com`, so
+`bitbucket.org/org/tool/v2/sub.F` reads `v2/sub.F`, and a function in the
+repository's root package keeps its package name, `repo.Run`. A module hosted
+elsewhere, such as `go.uber.org/zap`, loses its module path as recorded in the
+binary's build information. Standard-library functions are left unchanged.
+`CallerPathShort` keeps only the package's own name, whatever the host or
+module. `CallerPathFile` drops the function entirely, and JSON records omit the
+`func` key. Explicit callers passed to `EventAt` are reported as given, except
+that `CallerPathFile` shows only their file, or nothing when the file is empty.
+
+For adapters that already know the original call site, `EventAt`
 accepts explicit function and file strings:
 
 ```go

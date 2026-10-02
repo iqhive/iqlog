@@ -58,8 +58,8 @@ func TestExportedAPISnapshot(t *testing.T) {
 	}
 	sort.Strings(actual)
 	canonical := []string{
-		"type Config", "type Event", "type Format", "type JSONTimeMode", "type Level", "type Logger", "type OverflowPolicy", "type WriterMode",
-		"var ErrClosed", "var ErrWriteDropped", "const FormatConsole", "const FormatJSON", "const JSONTimeUTC", "const JSONTimeDisabled", "const JSONTimeCustom", "const OverflowBlock", "const OverflowDrop", "const OverflowSync", "const WriterAsync", "const WriterRing", "const WriterSync",
+		"type CallerPathMode", "type Config", "type Event", "type Format", "type JSONTimeMode", "type Level", "type Logger", "type OverflowPolicy", "type WriterMode",
+		"var ErrClosed", "var ErrWriteDropped", "const CallerPathRelative", "const CallerPathLong", "const CallerPathShort", "const CallerPathFile", "const FormatConsole", "const FormatJSON", "const JSONTimeUTC", "const JSONTimeDisabled", "const JSONTimeCustom", "const OverflowBlock", "const OverflowDrop", "const OverflowSync", "const WriterAsync", "const WriterRing", "const WriterSync",
 		"const LevelUnknown", "const LevelTrace", "const LevelDebug", "const LevelInfo", "const LevelWarn", "const LevelError", "const LevelPanic", "const LevelFatal",
 		"func New", "func MustNew", "func Default", "func SetDefault", "func Enabled", "func Dropped", "func ParseLevel", "func LastWriteError", "func InstallEventLogSource", "func RemoveEventLogSource", "func SlogHandler",
 		"func Trace", "func Tracef", "func Traceln", "func Debug", "func Debugf", "func Debugln", "func Info", "func Infof", "func Infoln", "func Warn", "func Warnf", "func Warnln", "func Error", "func Errorf", "func Errorln", "func Panic", "func Panicf", "func Panicln", "func Fatal", "func Fatalf", "func Fatalln", "func Print", "func Printf", "func Println", "func Log", "func Logf", "func Logln", "func LogContext", "func LogContextf", "func WithContext", "func WithFields", "func WithError",

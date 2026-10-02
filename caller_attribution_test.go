@@ -32,7 +32,7 @@ func closureLine(t *testing.T, fn func(*Logger)) (name string, line int) {
 		t.Fatal("closure has no function")
 	}
 	_, line = f.FileLine(f.Entry())
-	return trimMainModule(f.Name()), line
+	return trimRepoPath(f.Name()), line
 }
 
 func TestCallerAttributionEntryPoints(t *testing.T) {
@@ -312,7 +312,7 @@ func TestSlogCallerFallsBackForInternalPC(t *testing.T) {
 func TestCaptureCallerPCSkipsInfraFrame(t *testing.T) {
 	pc := reflect.ValueOf(runtime.Callers).Pointer()
 	var data callerData
-	captureCallerPC(pc, 1, &data)
+	captureCallerPC(pc, 1, CallerPathRelative, &data)
 	if strings.Contains(string(data.callerFunc[:data.callerFuncLen]), "runtime") {
 		t.Fatalf("runtime caller was emitted: func=%q file=%q", data.callerFunc[:data.callerFuncLen], data.callerFile[:data.callerFileLen])
 	}
@@ -401,5 +401,121 @@ func TestCallerAttributionFramePredicates(t *testing.T) {
 				t.Errorf("isInfraFrame(%q) = %v, want %v", tc.function, got, tc.wantInfra)
 			}
 		})
+	}
+}
+
+// CallerPathMode selects the caller's form: repository-relative by default,
+// the full import path, the package name alone, or no function at all. The
+// test's own package is a repository root, so its relative and short forms
+// coincide.
+func TestCallerPathModes(t *testing.T) {
+	pkg := reflect.TypeOf(Logger{}).PkgPath()
+	fn := ".TestCallerPathModes"
+	for _, tc := range []struct {
+		mode CallerPathMode
+		fn   string // "" when no function is reported
+	}{
+		{CallerPathRelative, pkg[strings.LastIndexByte(pkg, '/')+1:] + fn},
+		{CallerPathLong, pkg + fn},
+		{CallerPathShort, pkg[strings.LastIndexByte(pkg, '/')+1:] + fn},
+		{CallerPathFile, ""},
+	} {
+		buf := &syncBuffer{}
+		l := MustNew(Config{Format: FormatJSON, Writer: buf, CallerDepth: 1, CallerPathMode: tc.mode})
+		l.Info("m")
+		rec := lastJSONMap(t, buf)
+		if got, present := rec["func"]; tc.fn == "" && present || tc.fn != "" && got != tc.fn {
+			t.Errorf("json mode %d: func %v, want %q", tc.mode, got, tc.fn)
+		}
+		if file, _ := rec["file"].(string); !strings.HasPrefix(file, "caller_attribution_test.go:") {
+			t.Errorf("json mode %d: file %q, want the basename", tc.mode, file)
+		}
+
+		buf.Reset()
+		l = MustNew(Config{Writer: buf, DisableColor: true, CallerDepth: 1, CallerPathMode: tc.mode})
+		l.Info("m")
+		want := "INFO [caller_attribution_test.go:"
+		if tc.fn != "" {
+			want = "INFO [" + tc.fn + " caller_attribution_test.go:"
+		}
+		if got := buf.String(); !strings.HasPrefix(got, want) {
+			t.Errorf("console mode %d: %q, want prefix %q", tc.mode, got, want)
+		}
+	}
+}
+
+// A frame below a dependency repository's root renders in each
+// CallerPathMode through the real encoder. The frame is synthetic, so the
+// result does not depend on the test binary's build information.
+func TestCallerPathModesRenderRepositoryFrame(t *testing.T) {
+	const (
+		fn   = "github.com/iqhive/netsplain/pkg/client.(*Client).DiscoverMTUWithHintAndProgress"
+		file = "/build/netsplain/pkg/client/client.go"
+		line = 1676
+	)
+	for _, tc := range []struct {
+		mode          CallerPathMode
+		console, json string
+	}{
+		{
+			CallerPathLong,
+			"[github.com/iqhive/netsplain/pkg/client.(*Client).DiscoverMTUWithHintAndProgress client.go:1676] ",
+			`,"func":"github.com/iqhive/netsplain/pkg/client.(*Client).DiscoverMTUWithHintAndProgress","file":"client.go:1676"`,
+		},
+		{
+			CallerPathRelative,
+			"[pkg/client.(*Client).DiscoverMTUWithHintAndProgress client.go:1676] ",
+			`,"func":"pkg/client.(*Client).DiscoverMTUWithHintAndProgress","file":"client.go:1676"`,
+		},
+		{
+			CallerPathShort,
+			"[client.(*Client).DiscoverMTUWithHintAndProgress client.go:1676] ",
+			`,"func":"client.(*Client).DiscoverMTUWithHintAndProgress","file":"client.go:1676"`,
+		},
+		{
+			CallerPathFile,
+			"[client.go:1676] ",
+			`,"file":"client.go:1676"`,
+		},
+	} {
+		for _, jsonMode := range []bool{false, true} {
+			e := &Event{config: &loggerConfig{callerPathMode: tc.mode}, captureCaller: 1, jsonMode: jsonMode}
+			e.callerData.set(callerFuncName(fn, tc.mode), file, line)
+			e.addCallers()
+			want := tc.console
+			if jsonMode {
+				want = tc.json
+			}
+			if got := string(e.output); got != want {
+				t.Errorf("mode %d json=%v: %s, want %s", tc.mode, jsonMode, got, want)
+			}
+		}
+	}
+}
+
+// EventAt's explicit caller is reported as given in every mode that shows a
+// function. CallerPathFile shows its file alone, and nothing when it has no
+// file.
+func TestCallerPathModesKeepEventAtText(t *testing.T) {
+	for _, mode := range []CallerPathMode{CallerPathRelative, CallerPathLong, CallerPathShort} {
+		buf := &syncBuffer{}
+		l := MustNew(Config{Writer: buf, DisableColor: true, CallerPathMode: mode})
+		l.EventAt(LevelInfo, "github.com/org/repo/worker.run", "worker.go:84").Msg("a")
+		if got, want := buf.String(), "INFO [github.com/org/repo/worker.run worker.go:84] a\n"; got != want {
+			t.Errorf("mode %d: %q, want %q", mode, got, want)
+		}
+	}
+	buf := &syncBuffer{}
+	l := MustNew(Config{Writer: buf, DisableColor: true, CallerPathMode: CallerPathFile})
+	l.EventAt(LevelInfo, "github.com/org/repo/worker.run", "worker.go:84").Msg("a")
+	l.EventAt(LevelInfo, "github.com/org/repo/worker.run", "").Msg("b")
+	if got, want := buf.String(), "INFO [worker.go:84] a\nINFO b\n"; got != want {
+		t.Fatalf("file mode console %q, want %q", got, want)
+	}
+	buf.Reset()
+	l = MustNew(Config{Format: FormatJSON, Writer: buf, CallerPathMode: CallerPathFile})
+	l.EventAt(LevelInfo, "github.com/org/repo/worker.run", "worker.go:84").Msg("a")
+	if got, want := buf.String(), `{"level":"INFO","file":"worker.go:84","message":"a"}`+"\n"; got != want {
+		t.Fatalf("file mode json %q, want %q", got, want)
 	}
 }

@@ -10,10 +10,13 @@
 // Caller capture, context extraction, custom timestamps, and colour are
 // optional and cost nothing until they are switched on. CallerDepth N reports
 // the N-th frame at or above the library boundary, where 1 is the direct
-// caller; if fewer frames exist, no caller is emitted. The bounded scan examines
-// at most 32 frames, so deeper callers are reported as absent. iqlog-family frames,
-// including the legacy bitbucket.org/iqhive/iqlog/v3 wrapper, are never
-// reported. [Logger.EventAt] requires a non-empty function; a file without a
+// caller; if fewer frames exist, no caller is emitted. [Config.CallerPathMode]
+// reports the function relative to its repository ("pkg/client.(*Client).Run")
+// by default, with its full import path, with its package name alone
+// ("client.(*Client).Run"), or not at all, leaving the file and line. The
+// bounded scan examines at most 32 frames, so deeper callers are reported as
+// absent. iqlog-family frames, including the legacy
+// bitbucket.org/iqhive/iqlog/v3 wrapper, are never reported. [Logger.EventAt] requires a non-empty function; a file without a
 // function is ignored, and empty function and file values suppress the caller.
 //
 // Package-level functions such as [Info] and [InfoEvent] write through the

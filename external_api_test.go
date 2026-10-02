@@ -56,7 +56,7 @@ func TestExportedNamedTypesAreIntentional(t *testing.T) {
 		}
 	}
 	sort.Strings(names)
-	want := []string{"Config", "Event", "Format", "JSONTimeMode", "Level", "Logger", "OverflowPolicy", "WriterMode"}
+	want := []string{"CallerPathMode", "Config", "Event", "Format", "JSONTimeMode", "Level", "Logger", "OverflowPolicy", "WriterMode"}
 	if len(names) != len(want) {
 		t.Fatalf("exported types = %v, want %v", names, want)
 	}

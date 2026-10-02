@@ -17,6 +17,7 @@ func TestConfigValidationAndRoundTrip(t *testing.T) {
 		"format": {Format: 99}, "depth": {CallerDepth: -1}, "size": {BufferSize: -1},
 		"mode": {WriterMode: WriterMode(99)}, "policy": {OverflowPolicy: OverflowPolicy(99)}, "json-time": {JSONTimeMode: JSONTimeMode(99)},
 		"custom-time": {Format: FormatJSON, JSONTimeMode: JSONTimeCustom}, "typed-nil": {Writer: typedNil},
+		"caller-path": {CallerPathMode: CallerPathMode(99)},
 	} {
 		t.Run(name, func(t *testing.T) {
 			if err := l.SetConfig(cfg); err == nil {

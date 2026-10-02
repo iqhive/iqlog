@@ -648,27 +648,78 @@ func TestCallerLineNumberSurvivesLongBasename(t *testing.T) {
 	}
 }
 
-func TestTrimMainModuleCoversRootPackage(t *testing.T) {
-	savePrefix, saveRoot, saveTrim := mainModulePrefix, mainModuleRootPrefix, mainModuleRootTrim
-	defer func() { mainModulePrefix, mainModuleRootPrefix, mainModuleRootTrim = savePrefix, saveRoot, saveTrim }()
+func TestTrimRepoPathCoversReposModulesAndRootPackages(t *testing.T) {
+	savePrefix, saveRoot, saveTrim, saveModules := mainModulePrefix, mainModuleRootPrefix, mainModuleRootTrim, modulePaths
+	defer func() {
+		mainModulePrefix, mainModuleRootPrefix, mainModuleRootTrim, modulePaths = savePrefix, saveRoot, saveTrim, saveModules
+	}()
 	mainModulePrefix, mainModuleRootPrefix, mainModuleRootTrim = "example.com/app/", "example.com/app.", len("example.com/")
+	modulePaths = map[string]struct{}{}
+	for _, path := range []string{"example.com/app", "github.com/iqhive/netsplain", "github.com/iqhive/netsplain/tools", "bitbucket.org/iqhive/tool/v2", "go.example.org/lib", "go.example.org/lib/nested", "gopkg.in/yaml.v3", "local"} {
+		addModulePath(path)
+	}
 	for in, want := range map[string]string{
+		// main module
 		"example.com/app.RootLog":           "app.RootLog",
 		"example.com/app.(*T).Method":       "app.(*T).Method",
 		"example.com/app/internal/x.SubLog": "internal/x.SubLog",
 		"example.com/app/cmd/app.main":      "cmd/app.main",
 		"example.com/apple.Other":           "example.com/apple.Other",
-		"github.com/iqhive/iqlog.Info":      "github.com/iqhive/iqlog.Info",
 		"main.main":                         "main.main",
 		"example.com/app.RootLog.func1":     "app.RootLog.func1",
 		"example.com/app/internal/x.F[...]": "internal/x.F[...]",
+		// code hosts lose host/owner/repository, whatever the module
+		"github.com/iqhive/netsplain/pkg/client.(*Client).runQoSTestWithRequest": "pkg/client.(*Client).runQoSTestWithRequest",
+		"github.com/iqhive/netsplain.Run":                                        "netsplain.Run",
+		"github.com/iqhive/netsplain/pkg/client.F[...].func1":                    "pkg/client.F[...].func1",
+		"github.com/iqhive/netsplain/tools/gen.F":                                "tools/gen.F",
+		"bitbucket.org/iqhive/tool/v2/sub.F":                                     "v2/sub.F",
+		"bitbucket.org/iqhive/tool/v2.F":                                         "v2.F",
+		"github.com/other/repo/pkg/x.F":                                          "pkg/x.F",
+		"github.com/other/repo.F":                                                "repo.F",
+		"github.com/other/repo.js/x.F":                                           "x.F",
+		"github.com/other/repo%2ejs.F":                                           "repo%2ejs.F",
+		"gitlab.com/group/proj/a/b.F":                                            "a/b.F",
+		"github.com/owneronly.F":                                                 "github.com/owneronly.F",
+		// other dependency modules lose their module path
+		"go.example.org/lib/http2.(*Framer).Write": "http2.(*Framer).Write",
+		"go.example.org/lib/nested/deep.F":         "deep.F",
+		"go.example.org/lib/nested.F":              "nested.F",
+		"gopkg.in/yaml%2ev3.Marshal":               "yaml%2ev3.Marshal",
+		"gopkg.in/yaml.v3/sub.F":                   "sub.F",
+		"local/pkg.F":                              "pkg.F",
+		// anything else is left alone
+		"net/http.(*conn).serve":           "net/http.(*conn).serve",
+		"fmt.Println":                      "fmt.Println",
+		"example.org/unknown/pkg.F":        "example.org/unknown/pkg.F",
+		"example.com/app-other/x.F":        "example.com/app-other/x.F",
+		"github.com/iqhive/netsplainx/y.F": "y.F",
+		"no/function/here":                 "no/function/here",
 	} {
-		if got := trimMainModule(in); got != want {
-			t.Errorf("trimMainModule(%q) = %q, want %q", in, got, want)
+		if got := callerFuncName(in, CallerPathRelative); got != want {
+			t.Errorf("callerFuncName(%q, CallerPathRelative) = %q, want %q", in, got, want)
+		}
+		for _, mode := range []CallerPathMode{CallerPathLong, CallerPathFile} {
+			if got := callerFuncName(in, mode); got != in {
+				t.Errorf("callerFuncName(%q, %d) = %q, want it unchanged", in, mode, got)
+			}
+		}
+	}
+	for in, want := range map[string]string{
+		"github.com/iqhive/netsplain/pkg/client.(*Client).Run": "client.(*Client).Run",
+		"github.com/iqhive/netsplain.Run":                      "netsplain.Run",
+		"bitbucket.org/iqhive/tool/v2/sub.F":                   "sub.F",
+		"example.com/app/internal/x.F[...].func1":              "x.F[...].func1",
+		"gopkg.in/yaml%2ev3.Marshal":                           "yaml%2ev3.Marshal",
+		"net/http.(*conn).serve":                               "http.(*conn).serve",
+		"main.main":                                            "main.main",
+	} {
+		if got := callerFuncName(in, CallerPathShort); got != want {
+			t.Errorf("callerFuncName(%q, CallerPathShort) = %q, want %q", in, got, want)
 		}
 	}
 	// this module's own root package is trimmed to its package name
-	mainModulePrefix, mainModuleRootPrefix, mainModuleRootTrim = savePrefix, saveRoot, saveTrim
+	mainModulePrefix, mainModuleRootPrefix, mainModuleRootTrim, modulePaths = savePrefix, saveRoot, saveTrim, saveModules
 	buf := &syncBuffer{}
 	l := MustNew(Config{Format: FormatJSON, Writer: buf, CallerDepth: 1})
 	l.Info("here")
@@ -852,5 +903,34 @@ func TestConcurrentCloseWaitsForDrain(t *testing.T) {
 	}
 	if err := l.Flush(); !errors.Is(err, ErrClosed) {
 		t.Fatalf("Flush after Close: %v", err)
+	}
+}
+
+// BenchmarkTrimRepoPath measures the default caller-name trim for a frame on
+// a code host, in a main or dependency module elsewhere, and in no module.
+func BenchmarkTrimRepoPath(b *testing.B) {
+	savePrefix, saveRoot, saveTrim, saveModules := mainModulePrefix, mainModuleRootPrefix, mainModuleRootTrim, modulePaths
+	b.Cleanup(func() {
+		mainModulePrefix, mainModuleRootPrefix, mainModuleRootTrim, modulePaths = savePrefix, saveRoot, saveTrim, saveModules
+	})
+	mainModulePrefix, mainModuleRootPrefix, mainModuleRootTrim = "example.com/app/", "example.com/app.", len("example.com/")
+	modulePaths = map[string]struct{}{}
+	addModulePath("example.com/app")
+	for i := 0; i < 100; i++ {
+		addModulePath("github.com/vendor" + strconv.Itoa(i) + "/lib")
+	}
+	addModulePath("go.example.org/lib")
+	for _, bc := range []struct{ name, fn string }{
+		{"hosted", "github.com/iqhive/netsplain/pkg/client.(*Client).runQoSTestWithRequest"},
+		{"main", "example.com/app/internal/server.(*Server).handle"},
+		{"module", "go.example.org/lib/http2.(*Framer).Write"},
+		{"stdlib", "net/http.(*conn).serve"},
+		{"package-main", "main.main"},
+	} {
+		b.Run(bc.name, func(b *testing.B) {
+			for b.Loop() {
+				_ = trimRepoPath(bc.fn)
+			}
+		})
 	}
 }

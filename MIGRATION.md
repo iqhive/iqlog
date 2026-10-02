@@ -29,6 +29,12 @@ no caller is emitted. iqlog never reports its own package-family frames,
 including the legacy `bitbucket.org/iqhive/iqlog/v3` wrapper, so applications
 using that shim are attributed to application code.
 
+Caller function names are reported relative to their repository:
+`github.com/org/repo/pkg/client.(*Client).Run` reads
+`pkg/client.(*Client).Run`. Set `Config.CallerPathMode` to `CallerPathLong` to
+keep the full import path, to `CallerPathShort` for the package name alone,
+`client.(*Client).Run`, or to `CallerPathFile` for the file and line only.
+
 `EventAt` emits caller output only when its function argument is non-empty. A
 file without a function is ignored; empty function and file arguments suppress
 caller output.
