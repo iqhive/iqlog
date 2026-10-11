@@ -208,9 +208,9 @@
 <g class="a k52"><g class="c1"><text x="650" y="104" textLength="10">2</text><text x="680" y="104" textLength="10">6</text><text x="590" y="148" textLength="30">4 0</text><text x="650" y="148" textLength="10">d</text><text x="610" y="170" textLength="10">b</text><text x="660" y="170" textLength="10">8</text><text x="640" y="236" textLength="10">1</text><text x="640" y="258" textLength="20">5f</text><text x="680" y="258" textLength="10">3</text></g></g>
 <g class="a l k53"><path class="g29" d="M590 110h60v22h-60zM570 176h60v22h-60z"/><g class="c29"><text x="590" y="126" textLength="60">35518f</text><text x="570" y="192" textLength="60">323551</text></g></g>
 <g class="a k54"><g class="c1"><text x="670" y="38" textLength="20">62</text><text x="660" y="82" textLength="10">b</text><text x="660" y="126" textLength="20">ad</text><text x="650" y="148" textLength="10">0</text><text x="640" y="192" textLength="20">8f</text><text x="640" y="258" textLength="20">4f</text><text x="680" y="258" textLength="10">4</text></g></g>
-<g class="a k55"><g class="c2"><text x="80" y="324" textLength="280">reflection-free typed fields</text></g></g>
-<g class="a k56"><g class="c2"><text x="80" y="324" textLength="450">reflection-free typed fields · console + JSON</text></g></g>
-<g class="a l k57"><g class="c2"><text x="80" y="324" textLength="640">reflection-free typed fields · console + JSON · slog integration</text></g></g>
+<g class="a k55"><g class="c2"><text x="50" y="324" textLength="140">lightning fast</text></g></g>
+<g class="a k56"><g class="c2"><text x="50" y="324" textLength="450">lightning fast · reflection-free typed fields</text></g></g>
+<g class="a l k57"><g class="c2"><text x="50" y="324" textLength="690">lightning fast · reflection-free typed fields · console + JSON + slog</text></g></g>
 <g class="a l k58"><g class="c9"><text x="240" y="390" textLength="10">$</text></g><g class="c0"><text x="260" y="390" textLength="300">go get github.com/iqhive/iqlog</text></g></g>
 <g class="a k59"><g class="c2"><text x="30" y="38" textLength="350">01 / typed fields → one JSON record</text><text x="30" y="82" textLength="410">// Format: iqlog.FormatJSON, Writer: &amp;out</text></g></g>
 <g class="a k60"><path class="g10" d="M30 110h10v22h-10z"/><g class="c10"><text x="30" y="126" textLength="10">▏</text></g></g>

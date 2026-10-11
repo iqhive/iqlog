@@ -6,6 +6,10 @@
 
 Fast, low-allocation structured logging for Go.
 
+## Badges
+
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+
 `iqlog` provides a small configuration-driven logger, fluent typed events,
 console and newline-delimited JSON output, optional caller and context fields,
 and synchronous or buffered writers. The common disabled and typed structured
@@ -1118,7 +1122,14 @@ cd bench
 go test -bench . -benchmem -count=5
 ```
 
-## License
+## Licence and trademarks
 
-No license file is currently included in this repository. Add one before relying
-on the project under specific redistribution terms.
+The first-party software in this repository is licensed under the
+[Apache License, Version 2.0](LICENSE). Third-party components and any
+files with separate licence notices remain subject to their respective
+terms.
+
+The Apache licence does not grant general permission to use IQ Hive
+trademarks. See [Trademarks](TRADEMARKS.md).
+
+See [Contributing](CONTRIBUTING.md) for contribution terms and guidance.
